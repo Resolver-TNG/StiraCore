@@ -1,0 +1,3 @@
+# CI trial only (diagnostic): the dependency versions the dev venv was tested with
+strands-agents==1.59.0
+strands-agents-tools==0.8.9
