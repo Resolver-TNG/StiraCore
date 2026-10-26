@@ -4,10 +4,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const vm = require('node:vm');
 
 const ROOT = path.join(__dirname, '..');
-const load = (name) => import(path.join(ROOT, 'dashboard', 'stage', 'js', name));
+const load = (name) => import(pathToFileURL(path.join(ROOT, 'dashboard', 'stage', 'js', name)).href);
 const CAT = {
   ja: JSON.parse(fs.readFileSync(path.join(ROOT, 'dashboard/static/i18n/catalog.ja.json'), 'utf8')),
   en: JSON.parse(fs.readFileSync(path.join(ROOT, 'dashboard/static/i18n/catalog.en.json'), 'utf8')),

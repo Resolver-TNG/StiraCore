@@ -4,9 +4,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const ROOT = path.join(__dirname, '..', 'dashboard', 'stage');
-const load = (name) => import(path.join(ROOT, 'js', name));
+const load = (name) => import(pathToFileURL(path.join(ROOT, 'js', name)).href);
 const N = (values) => ({ type: 'neural', values });
 const T = { type: 'turn.start' };
 const start = (id, kind, name, extra = {}) => ({ type: 'tool.start', id, kind, name, ...extra });
@@ -319,7 +320,7 @@ test('drones launch from and land beside her on their own side (docks), clear of
   assert.deepEqual(droneDock([228, 94], [362, 148], null), [362, 148], 'no docks: the single dock');
   // the docks (a drone 25 x 19 and its bubble above) lie off her body at rest
   const { decodePng } = require('./stage_png.cjs');
-  const { CharRig, NEUTRAL_FRAME } = await import(path.join(STAGE, 'js', 'char_rig.js'));
+  const { CharRig, NEUTRAL_FRAME } = await import(pathToFileURL(path.join(STAGE, 'js', 'char_rig.js')).href);
   const pm = JSON.parse(fs.readFileSync(path.join(STAGE, 'assets', 'char', 'parts.json'), 'utf8'));
   const pa = decodePng(fs.readFileSync(path.join(STAGE, 'assets', 'char', 'parts.png')));
   const px = new CharRig(pm, pa).compose({ ...NEUTRAL_FRAME }).pixels;

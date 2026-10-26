@@ -6,29 +6,41 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const ROOT = path.join(__dirname, '..');
 const STAGE = path.join(ROOT, 'dashboard', 'stage', 'js');
-const load = (name) => import(path.join(STAGE, name));
+const load = (name) => import(pathToFileURL(path.join(STAGE, name)).href);
 const core = require('../dashboard/static/js/chat_core.js');
-const SAMPLES = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/research/stage-main-ui-2026-10-17/samples-real.json'), 'utf8')).samples;
+// Real model replies (research data). docs/research/ is not in the public snapshot
+// (release-exclude.txt): there the checks on them are skipped with this reason, the synthetic
+// cases still run.
+const SAMPLES_FILE = 'docs/research/stage-main-ui-2026-10-17/samples-real.json';
+const SAMPLES = fs.existsSync(path.join(ROOT, SAMPLES_FILE))
+  ? JSON.parse(fs.readFileSync(path.join(ROOT, SAMPLES_FILE), 'utf8')).samples
+  : null;
+const NO_SAMPLES = `${SAMPLES_FILE} is not in this checkout (research data, left out of the public snapshot)`;
+// A subtest on the real replies, skipped with the reason when they are absent.
+const withSamples = (ctx, name, fn) => ctx.test(name, { skip: SAMPLES ? false : NO_SAMPLES }, () => fn(SAMPLES));
 const ja = JSON.parse(fs.readFileSync(path.join(ROOT, 'dashboard/static/i18n/catalog.ja.json'), 'utf8'));
 const en = JSON.parse(fs.readFileSync(path.join(ROOT, 'dashboard/static/i18n/catalog.en.json'), 'utf8'));
 const t = (key, vars = {}) => String(ja[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k]));
 
 // --- the rule ---------------------------------------------------------------------------------
-test('classify: the design table (docs/stage-main-ui.md §5.2), real and synthetic replies', async () => {
+test('classify: the design table (docs/stage-main-ui.md §5.2), real and synthetic replies', async (ctx) => {
   const { classify } = await load('markdown.js');
-  const real = SAMPLES.find((s) => s.id === 'real-1');
-  const c = classify(real.text);
-  assert.equal(c.mode, 'board');
-  assert.deepEqual(c.counts.code, 3);
-  assert.deepEqual(c.counts.table, 1);
-  assert.deepEqual(c.counts.heading, 4);
-  assert.ok(c.lead && c.lead.startsWith('コーヒーのついでに'), 'the first short paragraph is the lead');
-  assert.ok(c.blocks.length && c.blocks[0].t !== 'p' || c.blocks[0].rows, 'the board holds the rest');
-  const short = SAMPLES.find((s) => s.id === 'real-2');
-  if (short) assert.equal(classify(short.text).mode, 'line', short.text);
+  await withSamples(ctx, 'the real replies', (samples) => {
+    const real = samples.find((s) => s.id === 'real-1');
+    const c = classify(real.text);
+    assert.equal(c.mode, 'board');
+    assert.deepEqual(c.counts.code, 3);
+    assert.deepEqual(c.counts.table, 1);
+    assert.deepEqual(c.counts.heading, 4);
+    assert.ok(c.lead && c.lead.startsWith('コーヒーのついでに'), 'the first short paragraph is the lead');
+    assert.ok(c.blocks.length && c.blocks[0].t !== 'p' || c.blocks[0].rows, 'the board holds the rest');
+    const short = samples.find((s) => s.id === 'real-2');
+    if (short) assert.equal(classify(short.text).mode, 'line', short.text);
+  });
   const cases = [
     ['こんにちは。今日もよろしくお願いします。', 'line', []],
     ['詳しくは https://example.com を見てください。', 'line', []],
@@ -55,12 +67,14 @@ test('classify: the design table (docs/stage-main-ui.md §5.2), real and synthet
   }
 });
 
-test('classify is deterministic and independent of anything but the text', async () => {
+test('classify is deterministic and independent of anything but the text', async (ctx) => {
   const { classify } = await load('markdown.js');
-  for (const s of SAMPLES) {
-    const a = JSON.stringify(classify(s.text));
-    for (let i = 0; i < 3; i += 1) assert.equal(JSON.stringify(classify(s.text)), a);
-  }
+  await withSamples(ctx, 'the real replies', (samples) => {
+    for (const s of samples) {
+      const a = JSON.stringify(classify(s.text));
+      for (let i = 0; i < 3; i += 1) assert.equal(JSON.stringify(classify(s.text)), a);
+    }
+  });
   // a seeded random corpus: the same input, the same answer
   let seed = 7;
   const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
@@ -266,11 +280,13 @@ test('renderer: tables ruled and focusable for sideways scroll; headings start a
   assert.deepEqual([...headingLevels([{ t: 'h', level: 6 }, { t: 'h', level: 2 }])], [[2, 3], [6, 4]]);
 });
 
-test('highlighter: tokens join back to the code, for every language and the real replies', async () => {
+test('highlighter: tokens join back to the code, for every language and the real replies', async (ctx) => {
   const { highlight, parse } = await load('markdown.js');
-  const codes = SAMPLES.flatMap((s) => parse(s.text).filter((b) => b.t === 'code'));
-  assert.ok(codes.length >= 3);
-  for (const b of codes) assert.equal(highlight(b.text, b.lang).map((x) => x.v).join(''), b.text);
+  await withSamples(ctx, 'the real replies', (samples) => {
+    const codes = samples.flatMap((s) => parse(s.text).filter((b) => b.t === 'code'));
+    assert.ok(codes.length >= 3);
+    for (const b of codes) assert.equal(highlight(b.text, b.lang).map((x) => x.v).join(''), b.text);
+  });
   const py = highlight('def f(x):\n    return "a" + 1  # c', 'python');
   const kinds = Object.fromEntries(py.filter((x) => x.k !== 'text').map((x) => [x.v.trim(), x.k]));
   assert.equal(kinds.def, 'kw');
@@ -323,7 +339,7 @@ test('board progress: 270 ms ease-out down and up; reduced motion jumps', async 
   assert.equal(stepProgress(0.5, 0, 1), 0);
 });
 
-test('board actions: replace when not pinned, hold when pinned, update the reply in flight', async () => {
+test('board actions: replace when not pinned, hold when pinned, update the reply in flight', async (ctx) => {
   const { boardAction, boardStats, boardTitle } = await load('board.js');
   const { classify } = await load('markdown.js');
   assert.equal(boardAction({ pinned: false, open: false, currentKey: null, key: 'a' }), 'open');
@@ -332,8 +348,10 @@ test('board actions: replace when not pinned, hold when pinned, update the reply
   assert.equal(boardAction({ pinned: true, open: true, currentKey: 'a', key: 'b', explicit: true }), 'replace');
   assert.equal(boardAction({ pinned: true, open: true, currentKey: 'a', key: 'a' }), 'update');
   assert.equal(boardAction({ pinned: false, open: false, currentKey: 'a', key: 'a' }), 'keep');
-  const c = classify(SAMPLES[0].text);
-  assert.equal(boardStats(c, t), `見出し 4 · コード 3 · 表 1 · ${c.counts.visible} 字`);
+  await withSamples(ctx, 'board stats of a real reply', (samples) => {
+    const c = classify(samples[0].text);
+    assert.equal(boardStats(c, t), `見出し 4 · コード 3 · 表 1 · ${c.counts.visible} 字`);
+  });
   assert.equal(boardTitle(classify('## タイトル\n\n本文'), t), 'タイトル');
   assert.equal(boardTitle(classify('```\nx\n```'), t), ja['stage.board_title']);
 });
@@ -615,7 +633,7 @@ test('languages: inherited names (constructor, __proto__, toString) are not lang
   assert.equal(langOf('ts'), 'js');
 });
 
-test('the end of a reply is classified from scratch: the board rolls up when the final text is a line', async () => {
+test('the end of a reply is classified from scratch: the board rolls up when the final text is a line', async (ctx) => {
   const { classify, classifyStream } = await load('markdown.js');
   const { replyView } = await load('talk.js');
   const { finalBoardAction } = await load('board.js');
@@ -632,9 +650,12 @@ test('the end of a reply is classified from scratch: the board rolls up when the
   assert.equal(finalBoardAction({ finalMode: 'line', boardKey: 'other', key: 'k', open: true, pinned: false }), 'keep');
   assert.equal(finalBoardAction({ finalMode: 'board', boardKey: 'k', key: 'k', open: true, pinned: false }), 'keep');
   // for every real and synthetic reply the end result equals the log's
-  for (const s of [...SAMPLES.map((x) => x.text), HOSTILE, prefix, final, '1\n2\n3\n4\n5', '- a\n- b']) {
+  for (const s of [HOSTILE, prefix, final, '1\n2\n3\n4\n5', '- a\n- b']) {
     assert.equal(replyView(s, null, t).mode, classify(s).mode);
   }
+  await withSamples(ctx, 'the real replies', (samples) => {
+    for (const s of samples) assert.equal(replyView(s.text, null, t).mode, classify(s.text).mode);
+  });
 });
 
 test('/new: refused with images, any case, surrounding spaces; the shared sender refuses it too', async () => {

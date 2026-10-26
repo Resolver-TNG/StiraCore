@@ -258,7 +258,9 @@ def run_smoke(port: int = 0, timeout: float = 120.0) -> Result:
     started = time.monotonic()
     deadline = started + timeout
     port = port or free_port()
-    scratch = Path(tempfile.mkdtemp(prefix="stira-smoke-"))
+    # The real path: on macOS the temp root /var/folders is reached through the /var -> /private/var
+    # link, and the memory store refuses any symbolic link in its path (MemoryStore._reject_symlinks).
+    scratch = Path(os.path.realpath(tempfile.mkdtemp(prefix="stira-smoke-")))
     result = Result(port=port, scratch=scratch, status={path: 0 for path in PATHS})
     data_dir = scratch / "data"
     for sub in ("home", "tmp", "no-aws"):

@@ -5,6 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 let JSDOM = null;
 try {
@@ -14,7 +15,7 @@ try {
 }
 const ROOT = path.join(__dirname, '..');
 const STAGE = path.join(ROOT, 'dashboard', 'stage', 'js');
-const load = (name) => import(path.join(STAGE, name));
+const load = (name) => import(pathToFileURL(path.join(STAGE, name)).href);
 const CAT = {
   ja: JSON.parse(fs.readFileSync(path.join(ROOT, 'dashboard/static/i18n/catalog.ja.json'), 'utf8')),
   en: JSON.parse(fs.readFileSync(path.join(ROOT, 'dashboard/static/i18n/catalog.en.json'), 'utf8')),

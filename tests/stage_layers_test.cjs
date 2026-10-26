@@ -5,9 +5,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const ROOT = path.join(__dirname, '..', 'dashboard', 'stage');
-const load = (name) => import(path.join(ROOT, 'js', name));
+const load = (name) => import(pathToFileURL(path.join(ROOT, 'js', name)).href);
 
 async function setup(extra = []) {
   const { buildCatalog, CATALOG } = await load('catalog.js');
@@ -126,7 +127,8 @@ test('each layer keeps its own parallax: room < character < props in front', asy
 });
 
 test('scene.js places the room from roomFrame() only and the character by its own depth', () => {
-  const src = fs.readFileSync(path.join(ROOT, 'js', 'scene.js'), 'utf8');
+  // LF only: a Windows checkout (core.autocrlf) has CRLF line ends
+  const src = fs.readFileSync(path.join(ROOT, 'js', 'scene.js'), 'utf8').replace(/\r\n/g, '\n');
   const update = src.slice(src.indexOf('  update(frame) {'), src.indexOf('    // character\n'));
   // #350: the board's aside input (a UI progress, not a character channel) is the only addition
   assert.match(update, /roomFrame\(pose, ch, this\.time, this\.parallax, this\.aside\)/);

@@ -5,10 +5,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const ROOT = path.join(__dirname, '..');
 const STAGE = path.join(ROOT, 'dashboard', 'stage', 'js');
-const load = (name) => import(path.join(STAGE, name));
+const load = (name) => import(pathToFileURL(path.join(STAGE, name)).href);
 const core = require('../dashboard/static/js/chat_core.js');
 
 // --- typewriter ----------------------------------------------------------------------------

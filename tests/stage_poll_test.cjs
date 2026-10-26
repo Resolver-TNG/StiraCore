@@ -8,10 +8,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const poll = require('../dashboard/static/js/poll.js');
 
 const STAGE = path.join(__dirname, '..', 'dashboard', 'stage', 'js');
-const load = (name) => import(path.join(STAGE, name));
+const load = (name) => import(pathToFileURL(path.join(STAGE, name)).href);
 const TURNS = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'stage_turn_events.json'), 'utf8'));
 const PENDING = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'stage_hitl_pending.json'), 'utf8'));
 const NEURAL = { trust: 0.5, curiosity: 0.5, vigilance: 0.1, attachment: 0.5, stability: 0.7, satisfaction: 0.5 };

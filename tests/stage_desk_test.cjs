@@ -4,10 +4,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { decodePng } = require('./stage_png.cjs');
 
 const STAGE = path.join(__dirname, '..', 'dashboard', 'stage');
-const load = (name) => import(path.join(STAGE, 'js', name));
+const load = (name) => import(pathToFileURL(path.join(STAGE, 'js', name)).href);
 const META = JSON.parse(fs.readFileSync(path.join(STAGE, 'assets', 'char', 'desk.json'), 'utf8'));
 const ATLAS = decodePng(fs.readFileSync(path.join(STAGE, 'assets', 'char', 'desk.png')));
 const PARTS = JSON.parse(fs.readFileSync(path.join(STAGE, 'assets', 'char', 'parts.json'), 'utf8'));

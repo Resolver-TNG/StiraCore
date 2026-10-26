@@ -12,7 +12,8 @@ const ja = JSON.parse(fs.readFileSync(path.join(ROOT, 'dashboard/static/i18n/cat
 const en = JSON.parse(fs.readFileSync(path.join(ROOT, 'dashboard/static/i18n/catalog.en.json'), 'utf8'));
 const tja = (key, vars) => String(ja[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => (vars && k in vars ? vars[k] : `{${k}}`));
 const t = (key, vars) => (vars ? `${key}(${JSON.stringify(vars)})` : key);
-const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+// LF only: a Windows checkout (core.autocrlf) has CRLF line ends
+const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
 
 const json = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 function fakeFetch(outcomes) {
