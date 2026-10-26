@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% set nav_active = 'artifacts' %}
+{% block title %}成果物 — StiraCore{% endblock %}{% block title_key %}title.artifacts{% endblock %}
+{% block css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/artifacts.css') }}">
+{% endblock %}
+{% block head_extra %}
+  <script defer src="{{ url_for('static', filename='js/artifacts.js') }}"></script>
+{% endblock %}
+{% block content %}
+{# #454 (ADR 0020): what file_write / editor wrote into the workspace, by version. Bodies come
+   from the registry's snapshot; an HTML preview is a sandboxed document (allow-scripts only). #}
+<div class="artifacts-page">
+  <header class="page-header">
+    <h1><span data-i18n="artifacts.title">成果物</span></h1>
+    <p class="artifacts-lead"><span data-i18n="artifacts.lead">エージェントがファイルツール（file_write / editor）で作業ディレクトリに書いたファイルを、版ごとに記録しています。作業ディレクトリの外・シンボリックリンク・保護された場所・隠しファイルは記録しません。</span></p>
+  </header>
+
+  <div class="artifacts-layout">
+    <section class="card artifacts-list-panel" aria-labelledby="list-title">
+      <h2 id="list-title"><span data-i18n="artifacts.list">一覧（新しい順）</span></h2>
+      <div class="artifacts-filters">
+        <label for="filter-kind"><span data-i18n="artifacts.kind">種類</span></label>
+        <select id="filter-kind" class="select">
+          <option value="" data-i18n="artifacts.kind_all">すべて</option>
+          <option value="html" data-i18n="artifacts.kind_html">HTML</option>
+          <option value="markdown" data-i18n="artifacts.kind_markdown">Markdown</option>
+          <option value="image" data-i18n="artifacts.kind_image">画像</option>
+          <option value="code" data-i18n="artifacts.kind_code">コード</option>
+          <option value="text" data-i18n="artifacts.kind_text">テキスト</option>
+          <option value="other" data-i18n="artifacts.kind_other">その他</option>
+        </select>
+        <label for="filter-turn"><span data-i18n="artifacts.turn">ターン</span></label>
+        <input id="filter-turn" class="input" type="text" autocomplete="off" spellcheck="false" placeholder="ターン ID" data-i18n-placeholder="artifacts.turn_placeholder">
+        <label for="filter-q"><span data-i18n="artifacts.search">パスで探す</span></label>
+        <input id="filter-q" class="input" type="search" autocomplete="off" spellcheck="false">
+      </div>
+      <p id="list-warnings" class="artifacts-warning" role="status" hidden></p>
+      <p id="list-empty" class="empty" hidden><span data-i18n="artifacts.empty">まだ成果物はありません</span></p>
+      <ul id="artifact-list" class="artifact-list"></ul>
+    </section>
+
+    <section class="card artifacts-detail" aria-labelledby="detail-title">
+      <h2 id="detail-title" tabindex="-1"><span data-i18n="artifacts.select">成果物を選んでください</span></h2>
+      <div id="detail" hidden>
+        <p id="detail-meta" class="muted"></p>
+        <fieldset class="artifact-labels">
+          <legend><span data-i18n="artifacts.labels">ラベル（付けられるのは人だけです）</span></legend>
+          <label><input type="checkbox" name="label" value="stable"> <span data-i18n="artifacts.label_stable">安定版</span></label>
+          <label><input type="checkbox" name="label" value="experimental"> <span data-i18n="artifacts.label_experimental">実験版</span></label>
+          <label><input type="checkbox" name="label" value="latest"> <span data-i18n="artifacts.label_latest">最新</span></label>
+          <button id="save-labels" type="button" class="btn btn-secondary"><span data-i18n="artifacts.save_labels">ラベルを保存</span></button>
+          <span id="label-status" class="muted" role="status"></span>
+        </fieldset>
+        <div id="checks" class="artifact-checks" hidden></div>
+
+        <h3><span data-i18n="artifacts.versions">版</span></h3>
+        <div class="artifact-versions-wrap" tabindex="0" role="region" aria-label="版の一覧" data-i18n-aria-label="artifacts.versions_region">
+          <table class="table artifact-versions">
+            <thead>
+              <tr>
+                <th scope="col"><span data-i18n="artifacts.col_version">版</span></th>
+                <th scope="col"><span data-i18n="artifacts.col_turn">ターン</span></th>
+                <th scope="col"><span data-i18n="artifacts.col_op">操作</span></th>
+                <th scope="col"><span data-i18n="artifacts.col_size">サイズ</span></th>
+                <th scope="col"><span data-i18n="artifacts.col_time">時刻</span></th>
+                <th scope="col"><span data-i18n="artifacts.col_actions">表示</span></th>
+              </tr>
+            </thead>
+            <tbody id="version-rows"></tbody>
+          </table>
+        </div>
+
+        <h3 id="preview-title"><span data-i18n="artifacts.preview">プレビュー</span></h3>
+        <div id="preview" class="artifact-preview"></div>
+        <h3 id="diff-title" hidden><span data-i18n="artifacts.diff">差分</span></h3>
+        <div id="diff" class="artifact-diff" hidden></div>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,85 @@
+{
+ "size": [
+  278,
+  278
+ ],
+ "eyeBox": [
+  110,
+  89,
+  58,
+  14
+ ],
+ "mouthBox": [
+  126,
+  117,
+  22,
+  11
+ ],
+ "blushBox": [
+  113,
+  102,
+  52,
+  9
+ ],
+ "sweatBox": [
+  166,
+  78,
+  9,
+  13
+ ],
+ "eyeVariants": [
+  "open",
+  "closed",
+  "half",
+  "up",
+  "happy",
+  "wide",
+  "down"
+ ],
+ "mouthVariants": [
+  "neutral",
+  "smile",
+  "grin",
+  "flat",
+  "frown",
+  "open"
+ ],
+ "mugTop": [
+  127,
+  168
+ ],
+ "layers": [
+  {
+   "id": 0,
+   "name": "body",
+   "z": 1.0
+  },
+  {
+   "id": 1,
+   "name": "head",
+   "z": 1.12
+  },
+  {
+   "id": 2,
+   "name": "ear_l",
+   "z": 1.06
+  },
+  {
+   "id": 3,
+   "name": "ear_r",
+   "z": 1.06
+  },
+  {
+   "id": 4,
+   "name": "arm_mug",
+   "z": 1.2
+  },
+  {
+   "id": 5,
+   "name": "hair",
+   "z": 1.0,
+   "rig": "hair.json"
+  }
+ ],
+ "colours": 35
+}

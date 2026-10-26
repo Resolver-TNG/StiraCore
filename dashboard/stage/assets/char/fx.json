@@ -1,0 +1,149 @@
+{
+ "version": 1,
+ "size": [
+  278,
+  278
+ ],
+ "fx": {
+  "blush.soft.l": {
+   "ox": -6,
+   "oy": 8,
+   "w": 11,
+   "h": 5,
+   "ax": 55,
+   "ay": 270,
+   "anchor": "eye_l",
+   "slot": "blush"
+  },
+  "blush.soft.r": {
+   "ox": -4,
+   "oy": 8,
+   "w": 11,
+   "h": 5,
+   "ax": 67,
+   "ay": 270,
+   "anchor": "eye_r",
+   "slot": "blush"
+  },
+  "blush.strong.l": {
+   "ox": -8,
+   "oy": 7,
+   "w": 13,
+   "h": 6,
+   "ax": 27,
+   "ay": 270,
+   "anchor": "eye_l",
+   "slot": "blush"
+  },
+  "blush.strong.r": {
+   "ox": -5,
+   "oy": 7,
+   "w": 13,
+   "h": 6,
+   "ax": 41,
+   "ay": 270,
+   "anchor": "eye_r",
+   "slot": "blush"
+  },
+  "blush.nose": {
+   "ox": -2,
+   "oy": -16,
+   "w": 11,
+   "h": 3,
+   "ax": 87,
+   "ay": 270,
+   "anchor": "mouth",
+   "slot": "blush"
+  },
+  "sweat.drop": {
+   "ox": 13,
+   "oy": -18,
+   "w": 9,
+   "h": 10,
+   "ax": 17,
+   "ay": 270,
+   "anchor": "eye_r",
+   "slot": "fx"
+  },
+  "sweat.fly": {
+   "ox": -46,
+   "oy": -33,
+   "w": 16,
+   "h": 11,
+   "ax": 0,
+   "ay": 270,
+   "anchor": "eye_l",
+   "slot": "fx"
+  },
+  "anger": {
+   "ox": 23,
+   "oy": -64,
+   "w": 15,
+   "h": 15,
+   "ax": 225,
+   "ay": 180,
+   "anchor": "eye_r",
+   "slot": "fx"
+  },
+  "tear.l": {
+   "ox": 4,
+   "oy": 7,
+   "w": 3,
+   "h": 5,
+   "ax": 79,
+   "ay": 270,
+   "anchor": "eye_l",
+   "slot": "blush"
+  },
+  "tear.r": {
+   "ox": -6,
+   "oy": 7,
+   "w": 3,
+   "h": 5,
+   "ax": 83,
+   "ay": 270,
+   "anchor": "eye_r",
+   "slot": "blush"
+  },
+  "gloom": {
+   "ox": -12,
+   "oy": -13,
+   "w": 62,
+   "h": 22,
+   "ax": 162,
+   "ay": 180,
+   "anchor": "eye_l",
+   "slot": "blush"
+  },
+  "sparkle.1": {
+   "ox": -54,
+   "oy": -84,
+   "w": 161,
+   "h": 89,
+   "ax": 0,
+   "ay": 0,
+   "anchor": "eye_l",
+   "slot": "fx"
+  },
+  "sparkle.2": {
+   "ox": -54,
+   "oy": -84,
+   "w": 161,
+   "h": 89,
+   "ax": 0,
+   "ay": 90,
+   "anchor": "eye_l",
+   "slot": "fx"
+  },
+  "sparkle.3": {
+   "ox": -54,
+   "oy": -84,
+   "w": 161,
+   "h": 89,
+   "ax": 0,
+   "ay": 180,
+   "anchor": "eye_l",
+   "slot": "fx"
+  }
+ }
+}

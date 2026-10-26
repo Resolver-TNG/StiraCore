@@ -1,0 +1,30 @@
+/* Memory browser, on the shared shell (#183). Tokens only. */
+.memory-page { max-width: 960px; margin: 0 auto; padding: var(--space-2) var(--space-6) var(--space-8); }
+.memory-page h1 { font-size: var(--font-size-xl); margin: 0 0 var(--space-4); }
+.tabs { display: flex; gap: var(--space-1); margin-bottom: var(--space-4); }
+.tab-btn {
+  flex: 1; padding: 10px; cursor: pointer; font: inherit; font-size: var(--font-size-md);
+  background: var(--color-surface); color: var(--color-text-muted);
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+.tab-btn.active {
+  background: var(--color-surface-raised); color: var(--color-accent);
+  border-bottom: 2px solid var(--color-accent);
+}
+.search-bar { margin-bottom: var(--space-4); }
+#entry-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.entry {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); padding: var(--space-3) var(--space-4); cursor: pointer;
+}
+.entry:hover, .entry:focus-visible { border-color: var(--color-accent); }
+.entry-key { color: var(--color-accent); font-weight: 600; font-size: 13px; }
+.entry-content { color: var(--color-text-muted); font-size: 13px; margin-top: var(--space-1); }
+.entry-content.expanded { color: var(--color-text); white-space: pre-wrap; }
+.entry-meta { margin-top: 6px; font-size: var(--font-size-xs); color: var(--color-text-muted); display: none; }
+.entry.open .entry-meta { display: block; }
+.memory-page .empty { color: var(--color-text-muted); text-align: center; padding: 40px; }
+@media (max-width: 600px) {
+  .memory-page { padding: var(--space-4); }
+  .tabs { flex-direction: column; }
+}

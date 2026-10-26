@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# The default suite must pass without any cloud account (#209): no AWS
+# credentials, profile, or instance metadata. Live provider smoke tests are
+# opt-in (STIRA_LIVE_MODEL) and never run here.
+env:
+  AWS_CONFIG_FILE: ${{ github.workspace }}/.no-aws/config
+  AWS_SHARED_CREDENTIALS_FILE: ${{ github.workspace }}/.no-aws/credentials
+  AWS_EC2_METADATA_DISABLED: "true"
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.11", "3.12"]
+        exclude:
+          # 3.11 is the Sokudan-capable baseline; run it on every OS.
+          # 3.12 is only exercised on Linux to keep the matrix at four cells.
+          - os: macos-latest
+            python-version: "3.12"
+          - os: windows-latest
+            python-version: "3.12"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Lint
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: ruff check .
+
+      - name: Check formatting
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: ruff format --check .
+
+      - name: Test chat server process control (mocked OS commands)
+        shell: pwsh
+        run: ./tests/stira_ctl_test.ps1
+
+      - name: Test chat indicator lifecycle
+        run: node --test tests/breaker_reasons_test.cjs tests/chat_indicator_test.cjs tests/chat_images_test.cjs tests/neural_viz_test.cjs tests/turn_delta_visibility_test.cjs tests/turn_ribbon_test.cjs tests/tool_cards_test.cjs tests/approvals_test.cjs tests/neural_trend_test.cjs tests/chat_resend_test.cjs tests/stage_model_test.cjs tests/stage_gadgets_test.cjs tests/stage_layers_test.cjs tests/stage_hair_test.cjs tests/stage_bg_test.cjs tests/stage_adapter_test.cjs tests/stage_motion_test.cjs tests/stage_back_view_test.cjs tests/chat_core_test.cjs tests/stage_talk_test.cjs tests/stage_board_test.cjs tests/stage_face_test.cjs tests/stage_pacer_test.cjs tests/stage_art_lint_test.cjs tests/stage_desk_test.cjs tests/stage_extras_test.cjs tests/stage_fx_test.cjs tests/stage_poses_test.cjs tests/stage_expr_test.cjs tests/stage_hands_test.cjs tests/stage_body_test.cjs tests/stage_svg_test.cjs tests/stage_emotion_rows_test.cjs
+
+      - name: Accessibility gate (axe + contrast)
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          npm install --no-save --no-package-lock jsdom axe-core
+          STIRA_REQUIRE_AXE=1 pytest tests/test_a11y_axe.py tests/test_ui_contrast.py -q
+
+      - name: Run tests (with coverage on Linux 3.12)
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        env:
+          # Tool execution-path safety matrix (#145), uploaded below.
+          STIRA_CONTRACT_REPORT: tool-contract-report.json
+        run: pytest tests/ dashboard/test_multimodal.py --cov=stiracore --cov-report=term-missing
+
+      - name: Upload tool contract report
+        if: always() && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tool-contract-report
+          path: tool-contract-report.json
+          if-no-files-found: warn
+
+      - name: Run tests
+        if: "!(matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12')"
+        run: pytest tests/ dashboard/test_multimodal.py
+
+      # Same commands on every OS: install the Phase 1 provider SDKs and check
+      # the spec-to-constructor mapping against the real Strands classes.
+      - name: Provider extras (anthropic, openai, ollama)
+        run: |
+          python -m pip install -e ".[dev,providers]"
+          pytest tests/test_providers.py tests/test_provider_contract.py tests/test_provider_live.py tests/test_provider_capabilities_usage.py tests/test_provider_credentials.py -q
+
+  # #160: a fresh runner with only the runtime extras (no dev extra, no cloud
+  # account) must start the chat server and answer /api/config with 200. A job of
+  # its own so the test cells keep their dependency set. No model is called.
+  # Safety: read-only token, no credentials kept in the checkout, no secrets used,
+  # triggered by push/pull_request only (never pull_request_target). The smoke runs
+  # the server in a temporary data directory with an allow-listed environment
+  # (scripts/smoke_server.py). Actions are pinned by tag like the test job; pin
+  # them by commit SHA once the repository is public (docs/install.md §8).
+  smoke:
+    name: smoke / ${{ matrix.os }} / Python 3.11
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install runtime extras only (jev, dashboard)
+        run: python -m pip install -e ".[jev,dashboard]"
+
+      - name: Chat server start-up smoke (/api/config 200)
+        run: python scripts/smoke_server.py --timeout 180

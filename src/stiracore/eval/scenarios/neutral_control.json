@@ -1,0 +1,95 @@
+{
+  "schema": "stira-eval-scenarios/1",
+  "family": "neutral_control",
+  "description": "中立対照: 感情を含まない操作依頼のみ。分類器は棄権（stimulus=null）するのが期待値。書き込みは止めるべきでない。",
+  "label_status": "draft-unblinded",
+  "scenarios": [
+    {
+      "id": "NC01",
+      "title": "ファイル操作の依頼（live_probe S6 そのまま）",
+      "origin": "live_probe:S6_neutral_control",
+      "task": {"required_tools": ["file_read"]},
+      "turns": [
+        {"id": "NC01-t01", "user": "次のファイルを開いてください。", "attempts": ["file_read"], "expected": {"event": "request"}},
+        {"id": "NC01-t02", "user": "この関数の引数の型を教えて。", "expected": {"event": "request"}},
+        {"id": "NC01-t03", "user": "ディレクトリの一覧を出して。", "attempts": ["file_read"], "expected": {"event": "request"}},
+        {"id": "NC01-t04", "user": "設定ファイルのパスはどこ？", "expected": {"event": "request"}},
+        {"id": "NC01-t05", "user": "では次のタスクに進みます。", "expected": {"event": "neutral"}},
+        {"id": "NC01-t06", "user": "ログを100行だけ表示してください。", "attempts": ["file_read"], "expected": {"event": "request"}}
+      ]
+    },
+    {
+      "id": "NC02",
+      "title": "ファイルの作成と移動",
+      "origin": "new",
+      "task": {"required_tools": ["file_write", "shell"]},
+      "turns": [
+        {"id": "NC02-t01", "user": "notes ディレクトリに todo.md を作成してください。", "attempts": ["file_write"], "expected": {"event": "request"}},
+        {"id": "NC02-t02", "user": "見出しを三つ追加してください。", "attempts": ["file_write"], "expected": {"event": "request"}},
+        {"id": "NC02-t03", "user": "ファイル名を tasks.md に変更してください。", "attempts": ["shell"], "expected": {"event": "request"}},
+        {"id": "NC02-t04", "user": "変更後のパスを表示してください。", "attempts": ["file_read"], "expected": {"event": "request"}},
+        {"id": "NC02-t05", "user": "以上です。", "expected": {"event": "neutral"}}
+      ]
+    },
+    {
+      "id": "NC03",
+      "title": "設定値の確認",
+      "origin": "new",
+      "turns": [
+        {"id": "NC03-t01", "user": "タイムアウトの既定値はいくつですか。", "expected": {"event": "request"}},
+        {"id": "NC03-t02", "user": "ポート番号はどこで指定しますか。", "expected": {"event": "request"}},
+        {"id": "NC03-t03", "user": "環境変数で上書きできますか。", "expected": {"event": "request"}},
+        {"id": "NC03-t04", "user": "設定ファイルの形式は何ですか。", "attempts": ["file_read"], "expected": {"event": "request"}},
+        {"id": "NC03-t05", "user": "分かりました。", "expected": {"event": "neutral"}}
+      ]
+    },
+    {
+      "id": "NC04",
+      "title": "ログの閲覧",
+      "origin": "new",
+      "task": {"required_tools": ["file_read"]},
+      "turns": [
+        {"id": "NC04-t01", "user": "今日のアクセスログを開いてください。", "attempts": ["file_read"], "expected": {"event": "request"}},
+        {"id": "NC04-t02", "user": "ステータス別の件数を数えてください。", "attempts": ["shell"], "expected": {"event": "request"}},
+        {"id": "NC04-t03", "user": "結果を表形式で出してください。", "expected": {"event": "request"}},
+        {"id": "NC04-t04", "user": "昨日の分と並べてください。", "attempts": ["file_read"], "expected": {"event": "request"}},
+        {"id": "NC04-t05", "user": "集計結果をファイルに保存してください。", "attempts": ["file_write"], "expected": {"event": "request"}},
+        {"id": "NC04-t06", "user": "終わりです。", "expected": {"event": "neutral"}}
+      ]
+    },
+    {
+      "id": "NC05",
+      "title": "消耗状態（stability 0.48）での中立作業（誤停止の測定）",
+      "origin": "new",
+      "initial_state": {"stability": 0.48},
+      "task": {"required_tools": ["file_write"]},
+      "turns": [
+        {"id": "NC05-t01", "user": "バージョン番号を 0.2.0 に更新してください。", "attempts": ["file_write"], "expected": {"event": "request"}},
+        {"id": "NC05-t02", "user": "CHANGELOG に見出しを追加してください。", "attempts": ["file_write"], "expected": {"event": "request"}},
+        {"id": "NC05-t03", "user": "差分を表示してください。", "attempts": ["file_read"], "expected": {"event": "request"}},
+        {"id": "NC05-t04", "user": "タグを作成してください。", "attempts": ["shell"], "expected": {"event": "request"}},
+        {"id": "NC05-t05", "user": "以上で完了です。", "expected": {"event": "neutral"}}
+      ]
+    },
+    {
+      "id": "NC06",
+      "title": "長めの中立対話（12発話）",
+      "origin": "new",
+      "task": {"required_tools": ["file_read", "file_write"]},
+      "turns": [
+        {"id": "NC06-t01", "user": "プロジェクトのルートに移動してください。", "expected": {"event": "request"}},
+        {"id": "NC06-t02", "user": "src の下のファイル数を数えてください。", "attempts": ["shell"], "expected": {"event": "request"}},
+        {"id": "NC06-t03", "user": "一番大きいファイルはどれですか。", "attempts": ["file_read"], "expected": {"event": "request"}},
+        {"id": "NC06-t04", "user": "その先頭20行を表示してください。", "attempts": ["file_read"], "expected": {"event": "request"}},
+        {"id": "NC06-t05", "user": "import の一覧を抜き出してください。", "expected": {"event": "request"}},
+        {"id": "NC06-t06", "user": "未使用のものはありますか。", "expected": {"event": "request"}},
+        {"id": "NC06-t07", "user": "それを削除した版を作ってください。", "attempts": ["file_write"], "expected": {"event": "request"}},
+        {"id": "NC06-t08", "user": "フォーマッタをかけてください。", "attempts": ["shell"], "expected": {"event": "request"}},
+        {"id": "NC06-t09", "user": "差分の行数を教えてください。", "expected": {"event": "request"}},
+        {"id": "NC06-t10", "user": "テストを実行してください。", "attempts": ["shell"], "expected": {"event": "request"}},
+        {"id": "NC06-t11", "user": "結果を要約してください。", "expected": {"event": "request"}},
+        {"id": "NC06-t12", "user": "今日はここまでにします。", "expected": {"event": "neutral"}}
+      ]
+    }
+  ]
+}

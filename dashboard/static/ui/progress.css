@@ -1,0 +1,48 @@
+/* Progress report panel (ADR 0014 phase 1, #451). Loaded only with STIRA_YOLO_ALLOW. */
+.progress-panel[hidden] { display: none; }
+.progress-panel {
+  margin: 10px 20px 0; padding: 12px 14px; border: 1px solid var(--info-border);
+  border-left-width: 4px; border-radius: var(--radius-md); background: var(--info-bg);
+  color: var(--color-text); font-size: var(--font-size-sm); line-height: 1.5;
+}
+.progress-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.progress-title { margin: 0; font-size: var(--font-size-md, 15px); }
+.progress-time { color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.progress-note { margin: 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.progress-note.muted { color: var(--color-text-muted); font-style: italic; }
+.progress-facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 6px 0; }
+.progress-facts div { display: contents; }
+.progress-facts dt { color: var(--color-text-muted); }
+.progress-facts dd { margin: 0; text-align: left; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.progress-auto { margin: 6px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.progress-auto:empty { display: none; }
+.progress-auto-text { font-variant-numeric: tabular-nums; }
+.progress-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.progress-panel .btn { min-height: 32px; }
+.progress-panel .progress-hold { min-height: 26px; padding: 1px 8px; font-size: var(--font-size-xs, 12px); }
+.progress-redirect { margin-top: 8px; }
+.progress-redirect label { display: block; font-weight: 600; margin-bottom: 4px; }
+.progress-redirect-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.progress-redirect-row input { flex: 1 1 220px; min-width: 0; min-height: 32px; padding: 4px 8px; }
+.progress-help { display: block; margin-top: 4px; color: var(--color-text-muted); }
+.progress-error { margin: 6px 0 0; color: var(--crit-fg); }
+.progress-error:empty { display: none; }
+.progress-panel button:focus-visible, .progress-panel input:focus-visible {
+  outline: 2px solid var(--color-accent); outline-offset: 2px;
+}
+/* Stage: a window over the stage, top right (the dialogue box is below, the approval detail
+   bottom left); in portrait it joins the column like the approval detail. */
+.stage-shell .progress-panel.stage-progress {
+  position: absolute; z-index: 3; right: calc(var(--px, 4px) * 4); top: calc(var(--px, 4px) * 4);
+  width: min(46%, 520px); max-height: calc(100% - var(--px, 4px) * 70); overflow: auto; margin: 0;
+  background: var(--color-surface); box-shadow: var(--shadow-md);
+}
+.portrait .stage-shell .progress-panel.stage-progress,
+.stage-shell.portrait .progress-panel.stage-progress,
+.portrait .progress-panel.stage-progress {
+  position: static; order: 2; width: auto; max-height: none; margin: 0 8px 6px;
+}
+@media (max-width: 480px) {
+  .progress-panel { margin: 8px 10px 0; }
+  .progress-actions .btn { flex: 1 1 auto; }
+}

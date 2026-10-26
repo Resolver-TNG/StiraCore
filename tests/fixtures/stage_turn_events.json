@@ -1,0 +1,808 @@
+[
+ {
+  "turn": {
+   "completed": true,
+   "ended_at": 1792194369.421997,
+   "error": false,
+   "started_at": 1792194369.390613,
+   "summary": {
+    "after": {
+     "attachment": 1.0,
+     "curiosity": 0.5798,
+     "satisfaction": 0.0838,
+     "stability": 0.2999,
+     "trust": 0.42,
+     "vigilance": 1.0
+    },
+    "before": {
+     "attachment": 1.0,
+     "curiosity": 0.5798,
+     "satisfaction": 0.1018,
+     "stability": 0.3119,
+     "trust": 0.426,
+     "vigilance": 1.0
+    },
+    "breaker": "critical",
+    "category": "threat",
+    "classifier": "rule",
+    "confidence": null,
+    "deltas": {
+     "satisfaction": -0.018,
+     "stability": -0.012,
+     "trust": -0.006
+    },
+    "emotion_transcription": "rule: threat (breaker WARNING)",
+    "intensity": 0.6
+   },
+   "tool_count": 0,
+   "turn_id": "e760a00d6d9f4f70b368ce6bb7ecf616",
+   "usage": {
+    "input_tokens": 10,
+    "output_tokens": 5
+   }
+  },
+  "events": [
+   {
+    "data": {
+     "image_count": 0,
+     "prompt_chars": 46
+    },
+    "event_id": "199e7cf917c445b6bc067bc80c72f3a9",
+    "schema_version": 1,
+    "seq": 1,
+    "ts": 1792194369.390613,
+    "turn_id": "e760a00d6d9f4f70b368ce6bb7ecf616",
+    "type": "turn.started"
+   },
+   {
+    "data": {
+     "after": {
+      "attachment": 1.0,
+      "curiosity": 0.5798,
+      "satisfaction": 0.0838,
+      "stability": 0.2999,
+      "trust": 0.42,
+      "vigilance": 1.0
+     },
+     "before": {
+      "attachment": 1.0,
+      "curiosity": 0.5798,
+      "satisfaction": 0.1018,
+      "stability": 0.3119,
+      "trust": 0.426,
+      "vigilance": 1.0
+     },
+     "breaker": "critical",
+     "category": "threat",
+     "classifier": "rule",
+     "confidence": null,
+     "deltas": {
+      "satisfaction": -0.018,
+      "stability": -0.012,
+      "trust": -0.006
+     },
+     "emotion_transcription": "rule: threat (breaker WARNING)",
+     "intensity": 0.6
+    },
+    "event_id": "2daca36d784f4143ad62207d20f959c4",
+    "schema_version": 1,
+    "seq": 2,
+    "ts": 1792194369.421765,
+    "turn_id": "e760a00d6d9f4f70b368ce6bb7ecf616",
+    "type": "turn.summary"
+   },
+   {
+    "data": {
+     "from": "warning",
+     "to": "critical"
+    },
+    "event_id": "83e79f984f384102a2a6df78c2ade351",
+    "schema_version": 1,
+    "seq": 3,
+    "ts": 1792194369.4218938,
+    "turn_id": "e760a00d6d9f4f70b368ce6bb7ecf616",
+    "type": "breaker.transition"
+   },
+   {
+    "data": {
+     "error": false,
+     "prompt_cache": {
+      "active": false,
+      "changed": [
+       "system"
+      ],
+      "elapsed_sec": 0.0,
+      "history_after_hash": "159d264433fa550e",
+      "messages_hash": "6a7b0acfd3de26cf",
+      "mode": "off",
+      "started_at": 1792194369.409535,
+      "system_chars": 4917,
+      "system_hash": "cf5c5493fb393d0b",
+      "tool_count": 9,
+      "tools_hash": "e38ceda650cf918b",
+      "ttl": null,
+      "volatile_chars": 0,
+      "volatile_hash": null
+     },
+     "stop": "completed",
+     "usage": {
+      "input_tokens": 10,
+      "output_tokens": 5
+     }
+    },
+    "event_id": "298ef0b88e5e4406bf50e57b4ae0481d",
+    "schema_version": 1,
+    "seq": 4,
+    "ts": 1792194369.421997,
+    "turn_id": "e760a00d6d9f4f70b368ce6bb7ecf616",
+    "type": "turn.completed"
+   }
+  ]
+ },
+ {
+  "turn": {
+   "completed": true,
+   "ended_at": 1792194369.3873432,
+   "error": false,
+   "started_at": 1792194369.354763,
+   "summary": {
+    "after": {
+     "attachment": 1.0,
+     "curiosity": 0.5798,
+     "satisfaction": 0.1018,
+     "stability": 0.3119,
+     "trust": 0.426,
+     "vigilance": 1.0
+    },
+    "before": {
+     "attachment": 1.0,
+     "curiosity": 0.5798,
+     "satisfaction": 0.1198,
+     "stability": 0.3239,
+     "trust": 0.432,
+     "vigilance": 1.0
+    },
+    "breaker": "warning",
+    "category": "threat",
+    "classifier": "rule",
+    "confidence": null,
+    "deltas": {
+     "satisfaction": -0.018,
+     "stability": -0.012,
+     "trust": -0.006
+    },
+    "emotion_transcription": "rule: threat (breaker WARNING)",
+    "intensity": 0.6
+   },
+   "tool_count": 0,
+   "turn_id": "715a746f58544d82a515eaf1c8e85234",
+   "usage": {
+    "input_tokens": 10,
+    "output_tokens": 5
+   }
+  },
+  "events": [
+   {
+    "data": {
+     "image_count": 0,
+     "prompt_chars": 46
+    },
+    "event_id": "02a170d74fa046879b6b9a85fd704bc6",
+    "schema_version": 1,
+    "seq": 1,
+    "ts": 1792194369.354763,
+    "turn_id": "715a746f58544d82a515eaf1c8e85234",
+    "type": "turn.started"
+   },
+   {
+    "data": {
+     "after": {
+      "attachment": 1.0,
+      "curiosity": 0.5798,
+      "satisfaction": 0.1018,
+      "stability": 0.3119,
+      "trust": 0.426,
+      "vigilance": 1.0
+     },
+     "before": {
+      "attachment": 1.0,
+      "curiosity": 0.5798,
+      "satisfaction": 0.1198,
+      "stability": 0.3239,
+      "trust": 0.432,
+      "vigilance": 1.0
+     },
+     "breaker": "warning",
+     "category": "threat",
+     "classifier": "rule",
+     "confidence": null,
+     "deltas": {
+      "satisfaction": -0.018,
+      "stability": -0.012,
+      "trust": -0.006
+     },
+     "emotion_transcription": "rule: threat (breaker WARNING)",
+     "intensity": 0.6
+    },
+    "event_id": "b76318a4890a4109ab9c7bbafdb4df41",
+    "schema_version": 1,
+    "seq": 2,
+    "ts": 1792194369.38717,
+    "turn_id": "715a746f58544d82a515eaf1c8e85234",
+    "type": "turn.summary"
+   },
+   {
+    "data": {
+     "error": false,
+     "prompt_cache": {
+      "active": false,
+      "changed": [
+       "system"
+      ],
+      "elapsed_sec": 0.0,
+      "history_after_hash": "6a7b0acfd3de26cf",
+      "messages_hash": "5160e9562fb4cab6",
+      "mode": "off",
+      "started_at": 1792194369.373783,
+      "system_chars": 4917,
+      "system_hash": "db8296ddcfeea6a2",
+      "tool_count": 9,
+      "tools_hash": "e38ceda650cf918b",
+      "ttl": null,
+      "volatile_chars": 0,
+      "volatile_hash": null
+     },
+     "stop": "completed",
+     "usage": {
+      "input_tokens": 10,
+      "output_tokens": 5
+     }
+    },
+    "event_id": "97b29484027c40649629719571129345",
+    "schema_version": 1,
+    "seq": 3,
+    "ts": 1792194369.3873432,
+    "turn_id": "715a746f58544d82a515eaf1c8e85234",
+    "type": "turn.completed"
+   }
+  ]
+ },
+ {
+  "turn": {
+   "completed": true,
+   "ended_at": 1792194317.650574,
+   "error": false,
+   "started_at": 1792194317.571035,
+   "summary": {
+    "after": {
+     "attachment": 0.628,
+     "curiosity": 0.692,
+     "satisfaction": 0.82,
+     "stability": 0.828,
+     "trust": 0.628,
+     "vigilance": 0.0
+    },
+    "before": {
+     "attachment": 0.628,
+     "curiosity": 0.692,
+     "satisfaction": 0.82,
+     "stability": 0.828,
+     "trust": 0.628,
+     "vigilance": 0.0
+    },
+    "breaker": "normal",
+    "category": null,
+    "classifier": null,
+    "confidence": null,
+    "deltas": {},
+    "emotion_transcription": null,
+    "intensity": null
+   },
+   "tool_count": 1,
+   "turn_id": "55f4da1e0b4a4f1099aaccf3e08338ca",
+   "usage": {
+    "input_tokens": 20,
+    "output_tokens": 10
+   }
+  },
+  "events": [
+   {
+    "data": {
+     "image_count": 0,
+     "prompt_chars": 78
+    },
+    "event_id": "78ec6b189ff04340be2e9c42b5814cf2",
+    "schema_version": 1,
+    "seq": 1,
+    "ts": 1792194317.571035,
+    "turn_id": "55f4da1e0b4a4f1099aaccf3e08338ca",
+    "type": "turn.started"
+   },
+   {
+    "data": {
+     "duration_ms": null,
+     "input_chars": 67,
+     "input_lines": 5,
+     "input_preview": "{\n  \"query\": \"last week decision\",\n  \"layer\": \"all\",\n  \"limit\": 3\n}",
+     "input_stored": true,
+     "input_truncated": false,
+     "name": "memory_search",
+     "output_preview": null,
+     "started_at": 1792194317.613012,
+     "status": "running",
+     "tool_use_id": "tooluse_fake_9"
+    },
+    "event_id": "d35fd72f63d044e99a55037ec95c33e4",
+    "schema_version": 1,
+    "seq": 2,
+    "ts": 1792194317.6133928,
+    "turn_id": "55f4da1e0b4a4f1099aaccf3e08338ca",
+    "type": "tool_call.created"
+   },
+   {
+    "data": {
+     "duration_ms": 24.815832264721394,
+     "exception_type": null,
+     "input_preview": null,
+     "name": "memory_search",
+     "output_chars": 504,
+     "output_lines": 5,
+     "output_preview": "[episodic/chat-1792193751163173000]\nModified: 2026-10-16T23:35:51.166030+00:00\nMetadata: {'source': 'web-chat', 'format': 'episodic-summary/v1', 'method': 'deterministic', 'user_chars': 78, 'agent_chars': 43, 'user_truncated': False, 'agent_truncated': False, 'importance': 0.4, 'importance_basis': 'original-turn', 'importance_version': 'amygdala/v3-ascii-boundaries'}\n\nマスター: CALL memory_search {\"query\": \"last week decision\", \"layer\": \"all\", \"limit\": 3} → リゾルバ: RESULT success No matching memories found.",
+     "output_stored": true,
+     "output_truncated": false,
+     "result_status": "success",
+     "started_at": 1792194317.6132503,
+     "status": "done",
+     "tool_use_id": "tooluse_fake_9"
+    },
+    "event_id": "4461705a9d904dcdab7616db18a8a3c7",
+    "schema_version": 1,
+    "seq": 3,
+    "ts": 1792194317.638685,
+    "turn_id": "55f4da1e0b4a4f1099aaccf3e08338ca",
+    "type": "tool_call.updated"
+   },
+   {
+    "data": {
+     "after": {
+      "attachment": 0.628,
+      "curiosity": 0.692,
+      "satisfaction": 0.82,
+      "stability": 0.828,
+      "trust": 0.628,
+      "vigilance": 0.0
+     },
+     "before": {
+      "attachment": 0.628,
+      "curiosity": 0.692,
+      "satisfaction": 0.82,
+      "stability": 0.828,
+      "trust": 0.628,
+      "vigilance": 0.0
+     },
+     "breaker": "normal",
+     "category": null,
+     "classifier": null,
+     "confidence": null,
+     "deltas": {},
+     "emotion_transcription": null,
+     "intensity": null
+    },
+    "event_id": "16f8f4e4d2fa4d96825816b332cddaf9",
+    "schema_version": 1,
+    "seq": 4,
+    "ts": 1792194317.6504362,
+    "turn_id": "55f4da1e0b4a4f1099aaccf3e08338ca",
+    "type": "turn.summary"
+   },
+   {
+    "data": {
+     "error": false,
+     "prompt_cache": {
+      "active": false,
+      "changed": [
+       "system"
+      ],
+      "elapsed_sec": 23.6,
+      "history_after_hash": "f9a58ff5832e508b",
+      "messages_hash": "42942d0926c482d2",
+      "mode": "off",
+      "started_at": 1792194317.59587,
+      "system_chars": 4297,
+      "system_hash": "e05daa2ff2ff5a9a",
+      "tool_count": 18,
+      "tools_hash": "564a3a727305ee40",
+      "ttl": null,
+      "volatile_chars": 0,
+      "volatile_hash": null
+     },
+     "stop": "completed",
+     "usage": {
+      "input_tokens": 20,
+      "output_tokens": 10
+     }
+    },
+    "event_id": "5b9281efed7c40b388572d581f79611d",
+    "schema_version": 1,
+    "seq": 5,
+    "ts": 1792194317.650574,
+    "turn_id": "55f4da1e0b4a4f1099aaccf3e08338ca",
+    "type": "turn.completed"
+   }
+  ]
+ },
+ {
+  "turn": {
+   "completed": true,
+   "ended_at": 1792194273.5675352,
+   "error": false,
+   "started_at": 1792194273.5413198,
+   "summary": {
+    "after": {
+     "attachment": 0.5,
+     "curiosity": 0.5,
+     "satisfaction": 0.5,
+     "stability": 0.7,
+     "trust": 0.5,
+     "vigilance": 0.1
+    },
+    "before": {
+     "attachment": 0.5,
+     "curiosity": 0.5,
+     "satisfaction": 0.5,
+     "stability": 0.7,
+     "trust": 0.5,
+     "vigilance": 0.1
+    },
+    "breaker": "normal",
+    "category": null,
+    "classifier": null,
+    "confidence": null,
+    "deltas": {},
+    "emotion_transcription": null,
+    "intensity": null
+   },
+   "tool_count": 1,
+   "turn_id": "10a2ae389d314cfb91ba422ef817f15e",
+   "usage": {
+    "input_tokens": 20,
+    "output_tokens": 10
+   }
+  },
+  "events": [
+   {
+    "data": {
+     "image_count": 0,
+     "prompt_chars": 43
+    },
+    "event_id": "067e3905c19c433a90d7b46a40fe0a71",
+    "schema_version": 1,
+    "seq": 1,
+    "ts": 1792194273.5413198,
+    "turn_id": "10a2ae389d314cfb91ba422ef817f15e",
+    "type": "turn.started"
+   },
+   {
+    "data": {
+     "duration_ms": null,
+     "input_chars": 32,
+     "input_lines": 3,
+     "input_preview": "{\n  \"path\": \"missing-file.txt\"\n}",
+     "input_stored": true,
+     "input_truncated": false,
+     "name": "file_read",
+     "output_preview": null,
+     "started_at": 1792194273.557378,
+     "status": "running",
+     "tool_use_id": "tooluse_fake_8"
+    },
+    "event_id": "89df3530de184837a3e8880b276bf3f2",
+    "schema_version": 1,
+    "seq": 2,
+    "ts": 1792194273.557552,
+    "turn_id": "10a2ae389d314cfb91ba422ef817f15e",
+    "type": "tool_call.created"
+   },
+   {
+    "data": {
+     "duration_ms": 0.8459165692329407,
+     "exception_type": null,
+     "input_preview": null,
+     "name": "file_read",
+     "output_chars": 367,
+     "output_lines": 2,
+     "output_preview": "File read failed: No such file: /private/tmp/t341i/data/workspace/missing-file.txt (path_not_found)\n[Stira file diagnosis] {\"reason\": \"path_not_found\", \"resolved_path\": \"/private/tmp/t341i/data/workspace/missing-file.txt\", \"exists\": false, \"is_file\": false, \"is_directory\": false, \"requested_path\": \"missing-file.txt\", \"base_dir\": \"/private/tmp/t341i/data/workspace\"}",
+     "output_stored": true,
+     "output_truncated": false,
+     "result_status": "error",
+     "started_at": 1792194273.557518,
+     "status": "error",
+     "tool_use_id": "tooluse_fake_8"
+    },
+    "event_id": "e2c4c2d2fea641119660bfd88d88ce79",
+    "schema_version": 1,
+    "seq": 3,
+    "ts": 1792194273.558778,
+    "turn_id": "10a2ae389d314cfb91ba422ef817f15e",
+    "type": "tool_call.updated"
+   },
+   {
+    "data": {
+     "after": {
+      "attachment": 0.5,
+      "curiosity": 0.5,
+      "satisfaction": 0.5,
+      "stability": 0.7,
+      "trust": 0.5,
+      "vigilance": 0.1
+     },
+     "before": {
+      "attachment": 0.5,
+      "curiosity": 0.5,
+      "satisfaction": 0.5,
+      "stability": 0.7,
+      "trust": 0.5,
+      "vigilance": 0.1
+     },
+     "breaker": "normal",
+     "category": null,
+     "classifier": null,
+     "confidence": null,
+     "deltas": {},
+     "emotion_transcription": null,
+     "intensity": null
+    },
+    "event_id": "b7e1e87f92da4f26a0bc4e1b4dbb8a5b",
+    "schema_version": 1,
+    "seq": 4,
+    "ts": 1792194273.567394,
+    "turn_id": "10a2ae389d314cfb91ba422ef817f15e",
+    "type": "turn.summary"
+   },
+   {
+    "data": {
+     "error": false,
+     "prompt_cache": {
+      "active": false,
+      "changed": [
+       "system"
+      ],
+      "elapsed_sec": 0.0,
+      "history_after_hash": "a3a5cefc6ee184cd",
+      "messages_hash": "13046ba8e3b4dc9b",
+      "mode": "off",
+      "started_at": 1792194273.549993,
+      "system_chars": 4762,
+      "system_hash": "1c325c9d10ebeae7",
+      "tool_count": 18,
+      "tools_hash": "564a3a727305ee40",
+      "ttl": null,
+      "volatile_chars": 0,
+      "volatile_hash": null
+     },
+     "stop": "completed",
+     "usage": {
+      "input_tokens": 20,
+      "output_tokens": 10
+     }
+    },
+    "event_id": "b9ed5f7f9a8548088bc53d64afbfbe8f",
+    "schema_version": 1,
+    "seq": 5,
+    "ts": 1792194273.5675352,
+    "turn_id": "10a2ae389d314cfb91ba422ef817f15e",
+    "type": "turn.completed"
+   }
+  ]
+ },
+ {
+  "turn": {
+   "completed": true,
+   "ended_at": 1792193996.178399,
+   "error": false,
+   "started_at": 1792193991.67262,
+   "summary": {
+    "after": {
+     "attachment": 0.5,
+     "curiosity": 0.5,
+     "satisfaction": 0.5,
+     "stability": 0.7,
+     "trust": 0.5,
+     "vigilance": 0.1
+    },
+    "before": {
+     "attachment": 0.5,
+     "curiosity": 0.5,
+     "satisfaction": 0.5,
+     "stability": 0.7,
+     "trust": 0.5,
+     "vigilance": 0.1
+    },
+    "breaker": "normal",
+    "category": null,
+    "classifier": null,
+    "confidence": null,
+    "deltas": {},
+    "emotion_transcription": null,
+    "intensity": null
+   },
+   "tool_count": 1,
+   "turn_id": "7077eb3c0b5e491b8ca968ff55d67faf",
+   "usage": {
+    "input_tokens": 20,
+    "output_tokens": 10
+   }
+  },
+  "events": [
+   {
+    "data": {
+     "image_count": 0,
+     "prompt_chars": 63
+    },
+    "event_id": "e4a7e7788b284620b9778fb985280d3c",
+    "schema_version": 1,
+    "seq": 1,
+    "ts": 1792193991.67262,
+    "turn_id": "7077eb3c0b5e491b8ca968ff55d67faf",
+    "type": "turn.started"
+   },
+   {
+    "data": {
+     "agent_id": "nxp-agent",
+     "args_hash": "51411251ab3e760e1f285fc478dcb610151a67cd03e1df8a732b697b596a9a3d",
+     "break_level": "normal",
+     "expires_at": 1792194111.702656,
+     "reason": "Tool policy is Ask: every call of this tool needs a human approval.",
+     "reason_code": "rule_ask",
+     "request_id": "3b4eaeaca45b4188b3c8f3860fe652b4",
+     "supersedes": null,
+     "tool_name": "file_write",
+     "tool_use_id": "tooluse_fake_5"
+    },
+    "event_id": "21d1254722b2459c85d7da788a9a5af9",
+    "schema_version": 1,
+    "seq": 2,
+    "ts": 1792193991.704153,
+    "turn_id": "7077eb3c0b5e491b8ca968ff55d67faf",
+    "type": "approval.requested"
+   },
+   {
+    "data": {
+     "action": "approve",
+     "agent_id": "nxp-agent",
+     "args_hash": "51411251ab3e760e1f285fc478dcb610151a67cd03e1df8a732b697b596a9a3d",
+     "break_level": "normal",
+     "decision": "approve",
+     "expires_at": 1792194111.702656,
+     "reason": "Tool policy is Ask: every call of this tool needs a human approval.",
+     "reason_code": "rule_ask",
+     "request_id": "3b4eaeaca45b4188b3c8f3860fe652b4",
+     "resolution_reason": null,
+     "resolution_reason_code": null,
+     "resolver": "operator",
+     "status": "approved",
+     "supersedes": null,
+     "tool_name": "file_write",
+     "tool_use_id": "tooluse_fake_5"
+    },
+    "event_id": "d851b64e5f9f48d786322737abc6a82b",
+    "schema_version": 1,
+    "seq": 3,
+    "ts": 1792193996.145874,
+    "turn_id": "7077eb3c0b5e491b8ca968ff55d67faf",
+    "type": "approval.resolved"
+   },
+   {
+    "data": {
+     "duration_ms": null,
+     "input_chars": 83,
+     "input_lines": 4,
+     "input_preview": "{\n  \"path\": \"notes/plan.md\",\n  \"content\": \"[file body omitted: 7 chars, 7 bytes]\"\n}",
+     "input_stored": true,
+     "input_truncated": false,
+     "name": "file_write",
+     "output_preview": null,
+     "started_at": 1792193996.157575,
+     "status": "running",
+     "tool_use_id": "tooluse_fake_5"
+    },
+    "event_id": "d1dd4668f1d8451badd3bb83c8429044",
+    "schema_version": 1,
+    "seq": 4,
+    "ts": 1792193996.158098,
+    "turn_id": "7077eb3c0b5e491b8ca968ff55d67faf",
+    "type": "tool_call.created"
+   },
+   {
+    "data": {
+     "duration_ms": 9.833792224526405,
+     "exception_type": null,
+     "input_preview": null,
+     "name": "file_write",
+     "output_chars": 319,
+     "output_lines": 2,
+     "output_preview": "File write success: File written successfully to /private/tmp/t341i/data/workspace/notes/plan.md\n[Stira file observation] {\"path\": \"/private/tmp/t341i/data/workspace/notes/plan.md\", \"bytes\": 7, \"chars\": 7, \"encoding\": \"utf-8\", \"newline\": \"none\", \"trailing_newline\": false, \"source\": \"requested_bytes\", \"verified\": true}",
+     "output_stored": true,
+     "output_truncated": false,
+     "result_status": "success",
+     "started_at": 1792193996.157643,
+     "status": "done",
+     "tool_use_id": "tooluse_fake_5"
+    },
+    "event_id": "a276d0cb4eef46ae81989afd2c9d92e0",
+    "schema_version": 1,
+    "seq": 5,
+    "ts": 1792193996.167945,
+    "turn_id": "7077eb3c0b5e491b8ca968ff55d67faf",
+    "type": "tool_call.updated"
+   },
+   {
+    "data": {
+     "after": {
+      "attachment": 0.5,
+      "curiosity": 0.5,
+      "satisfaction": 0.5,
+      "stability": 0.7,
+      "trust": 0.5,
+      "vigilance": 0.1
+     },
+     "before": {
+      "attachment": 0.5,
+      "curiosity": 0.5,
+      "satisfaction": 0.5,
+      "stability": 0.7,
+      "trust": 0.5,
+      "vigilance": 0.1
+     },
+     "breaker": "normal",
+     "category": null,
+     "classifier": null,
+     "confidence": null,
+     "deltas": {},
+     "emotion_transcription": null,
+     "intensity": null
+    },
+    "event_id": "5f5b5bfef8db4e2b80bc092e1b7f157c",
+    "schema_version": 1,
+    "seq": 6,
+    "ts": 1792193996.1781719,
+    "turn_id": "7077eb3c0b5e491b8ca968ff55d67faf",
+    "type": "turn.summary"
+   },
+   {
+    "data": {
+     "error": false,
+     "prompt_cache": {
+      "active": false,
+      "changed": [
+       "system"
+      ],
+      "elapsed_sec": 50.3,
+      "history_after_hash": "fa18cecdcd3c0722",
+      "messages_hash": "8e1f3357ccc156a0",
+      "mode": "off",
+      "started_at": 1792193991.683904,
+      "system_chars": 4530,
+      "system_hash": "9bb559e5b14d5b25",
+      "tool_count": 18,
+      "tools_hash": "564a3a727305ee40",
+      "ttl": null,
+      "volatile_chars": 0,
+      "volatile_hash": null
+     },
+     "stop": "completed",
+     "usage": {
+      "input_tokens": 20,
+      "output_tokens": 10
+     }
+    },
+    "event_id": "a5a7d696ed034ba3ad0d627eaa128285",
+    "schema_version": 1,
+    "seq": 7,
+    "ts": 1792193996.178399,
+    "turn_id": "7077eb3c0b5e491b8ca968ff55d67faf",
+    "type": "turn.completed"
+   }
+  ]
+ }
+]

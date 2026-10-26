@@ -1,0 +1,69 @@
+# StiraCore chat server as a systemd system service (docs/deploy-ec2.md).
+# Copy to /etc/systemd/system/stiracore.service and adjust the paths below:
+#   /opt/stira/StiraCore = the checkout (also the data directory's parent)
+#   User=stira            = a dedicated, non-login user that owns the checkout's .local/
+# Then: sudo systemctl daemon-reload && sudo systemctl enable --now stiracore
+# The server binds 127.0.0.1 only (STIRA_HOST is not set). Do not add STIRA_ALLOW_REMOTE here.
+[Unit]
+Description=StiraCore chat server (stira_server)
+Documentation=https://github.com/Resolver-TNG/StiraCore/blob/main/docs/deploy-ec2.md
+After=network-online.target
+Wants=network-online.target
+# If the data directory is a mount point of its own volume, never start without it
+# (an unmounted volume would otherwise start on an empty directory of the root disk).
+RequiresMountsFor=/opt/stira/StiraCore/.local/stira
+# Stop retrying after 5 failed starts in 5 minutes.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=stira
+Group=stira
+# Configuration files are read relative to the working directory (.local/stira/).
+WorkingDirectory=/opt/stira/StiraCore
+# Optional; root:root 0600. No AWS key belongs in it when an instance role is attached.
+EnvironmentFile=-/etc/stiracore/stira.env
+Environment=PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PYTHONUTF8=1
+SyslogIdentifier=stiracore
+ExecStart=/opt/stira/StiraCore/.venv/bin/python /opt/stira/StiraCore/dashboard/stira_server.py
+
+# SIGTERM runs the server's bounded stops (<= 9 s in total); then exit status 0.
+KillSignal=SIGTERM
+TimeoutStopSec=20
+# Restart after a crash or a kill, not after a clean stop. Exit status 2 (credentials
+# missing), 3 (data directory owned by another server) and 4 (port in use) are
+# configuration problems: retrying cannot fix them.
+Restart=on-failure
+RestartSec=5
+RestartPreventExitStatus=2 3 4
+
+# Files created by the server are owner-only.
+UMask=0077
+
+# Hardening. The only writable path is the checkout's .local/ (data directory, configuration).
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/stira/StiraCore/.local
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

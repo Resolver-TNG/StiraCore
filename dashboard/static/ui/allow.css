@@ -1,0 +1,48 @@
+/* Session allowances: badge, list and log lines (ADR 0025 §7). Loaded on the chat and Stage. */
+.allow-slot[hidden] { display: none; }
+.allow-slot { min-width: 0; max-width: 100%; }
+.page-header .allow-slot { flex: 0 1 auto; margin-left: auto; }
+.page-header .yolo-slot + .allow-slot { margin-left: 0; }
+.allow-badge {
+  position: relative; display: grid; gap: 4px; min-width: 0; max-width: 100%;
+  font-size: var(--font-size-sm); line-height: 1.4;
+}
+.allow-toggle { padding: 2px 10px; min-height: 28px; font-size: var(--font-size-sm); white-space: nowrap; border-color: var(--info-border); }
+.allow-toggle[aria-expanded="true"] { background: var(--info-bg); }
+.allow-toggle:focus-visible, .allow-revoke:focus-visible, .allow-revoke-all:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.allow-panel {
+  display: grid; gap: 6px; min-width: min(420px, 90vw); max-width: 90vw; padding: 8px 10px;
+  border: 1px solid var(--info-border); border-radius: var(--radius-md);
+  background: var(--color-surface-raised); color: var(--color-text);
+}
+.allow-panel[hidden] { display: none; }
+.allow-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.allow-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-width: 0; }
+.allow-text { font-family: var(--font-mono, ui-monospace, monospace); overflow-wrap: anywhere; min-width: 0; }
+.allow-meta { color: var(--color-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.allow-revoke { margin-left: auto; padding: 2px 8px; min-height: 26px; font-size: var(--font-size-xs); }
+.allow-revoke-all { justify-self: start; padding: 2px 10px; min-height: 28px; font-size: var(--font-size-sm); }
+.allow-note { margin: 0; color: var(--color-text-muted); font-size: var(--font-size-xs); }
+/* the automatic-answer line in the chat log (the YOLO line's look, the info tone) */
+.conversation .allow-line {
+  align-self: stretch; margin: 2px 0; padding: 3px 10px; border-left: 3px solid var(--info-border);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: var(--info-bg);
+  color: var(--color-text); font-size: var(--font-size-sm); line-height: 1.45;
+  font-family: var(--font-mono, ui-monospace, monospace); overflow-wrap: anywhere;
+}
+.conversation .allow-line-summary { font-family: inherit; font-style: italic; }
+/* the approval card: the two buttons, the class line and the not-offered line */
+.approval-allow[hidden], .approval-allow-reason[hidden], .approval-allow-full[hidden] { display: none; }
+.approval-allow { display: grid; gap: 4px; margin-top: 6px; }
+.approval-allow-actions { flex-wrap: wrap; }
+.approval-allow-class { margin: 0; font-family: var(--font-mono, ui-monospace, monospace); overflow-wrap: anywhere; }
+.approval-allow-full, .approval-allow-reason { margin: 4px 0 0; }
+/* Stage: next to the YOLO badge at the top edge of the dialogue box */
+.stage-shell .textbox > .allow-slot {
+  position: relative; align-self: flex-end; max-width: 100%; margin: 0 0 4px; z-index: 2;
+}
+.stage-shell .allow-panel { position: absolute; right: 0; bottom: calc(100% + 4px); background: var(--color-surface); }
+.portrait .stage-shell .textbox > .allow-slot { align-self: stretch; }
+@media (max-width: 480px) {
+  .page-header .allow-slot { flex-basis: 100%; margin-left: 0; }
+}

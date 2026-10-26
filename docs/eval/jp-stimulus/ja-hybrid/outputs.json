@@ -1,0 +1,1691 @@
+{
+ "classifiers": {
+  "ja-hybrid": {
+   "backend": "mecab",
+   "chunk_chars": 400,
+   "emotion_layer": "mlask",
+   "fallback": null,
+   "max_chars": 4000,
+   "name": "ja-hybrid",
+   "on_missing": "error",
+   "reason": null
+  },
+  "ja-hybrid-patterns-only": {
+   "backend": "mecab",
+   "chunk_chars": 400,
+   "emotion_layer": "off",
+   "fallback": null,
+   "max_chars": 4000,
+   "name": "ja-hybrid",
+   "on_missing": "rule",
+   "reason": null
+  }
+ },
+ "predictions": {
+  "ja-hybrid": {
+   "u001": {
+    "category": "achievement",
+    "discourse_tags": [
+     "resolved"
+    ],
+    "intensity": 0.5
+   },
+   "u002": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure"
+    ],
+    "intensity": null
+   },
+   "u003": {
+    "category": "loss",
+    "discourse_tags": [],
+    "intensity": 0.8
+   },
+   "u004": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.8
+   },
+   "u005": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u006": {
+    "category": "loss",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u007": {
+    "category": "threat",
+    "discourse_tags": [
+     "frustration"
+    ],
+    "intensity": 0.2
+   },
+   "u008": {
+    "category": "uncertainty",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u009": {
+    "category": "none",
+    "discourse_tags": [
+     "criticism"
+    ],
+    "intensity": null
+   },
+   "u010": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.5
+   },
+   "u011": {
+    "category": "threat",
+    "discourse_tags": [
+     "failure",
+     "frustration"
+    ],
+    "intensity": 0.8
+   },
+   "u012": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u013": {
+    "category": "connection",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u014": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u015": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u016": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u017": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.2
+   },
+   "u018": {
+    "category": "none",
+    "discourse_tags": [
+     "resolved"
+    ],
+    "intensity": null
+   },
+   "u019": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u020": {
+    "category": "uncertainty",
+    "discourse_tags": [],
+    "intensity": 0.8
+   },
+   "u021": {
+    "category": "threat",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u022": {
+    "category": "connection",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u023": {
+    "category": "loss",
+    "discourse_tags": [],
+    "intensity": 0.8
+   },
+   "u024": {
+    "category": "none",
+    "discourse_tags": [
+     "resolved"
+    ],
+    "intensity": null
+   },
+   "u025": {
+    "category": "uncertainty",
+    "discourse_tags": [
+     "frustration"
+    ],
+    "intensity": 0.5
+   },
+   "u026": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u027": {
+    "category": "uncertainty",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u028": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u029": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u030": {
+    "category": "none",
+    "discourse_tags": [
+     "criticism"
+    ],
+    "intensity": null
+   },
+   "u031": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure"
+    ],
+    "intensity": null
+   },
+   "u032": {
+    "category": "loss",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u033": {
+    "category": "threat",
+    "discourse_tags": [],
+    "intensity": 0.8
+   },
+   "u034": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.5
+   },
+   "u035": {
+    "category": "loss",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u036": {
+    "category": "threat",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u037": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u038": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u039": {
+    "category": "uncertainty",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u040": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u041": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u042": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u043": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u044": {
+    "category": "none",
+    "discourse_tags": [
+     "resolved"
+    ],
+    "intensity": null
+   },
+   "u045": {
+    "category": "none",
+    "discourse_tags": [
+     "resolved"
+    ],
+    "intensity": null
+   },
+   "u046": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.8
+   },
+   "u047": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.8
+   },
+   "u048": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u049": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.8
+   },
+   "u050": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u051": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u052": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u053": {
+    "category": "uncertainty",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u054": {
+    "category": "none",
+    "discourse_tags": [
+     "resolved"
+    ],
+    "intensity": null
+   },
+   "u055": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.8
+   },
+   "u056": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u057": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.8
+   },
+   "u058": {
+    "category": "threat",
+    "discourse_tags": [
+     "frustration"
+    ],
+    "intensity": 0.2
+   },
+   "u059": {
+    "category": "connection",
+    "discourse_tags": [],
+    "intensity": 0.8
+   },
+   "u060": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.8
+   },
+   "u061": {
+    "category": "none",
+    "discourse_tags": [
+     "resolved"
+    ],
+    "intensity": null
+   },
+   "u062": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u063": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u064": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u065": {
+    "category": "loss",
+    "discourse_tags": [],
+    "intensity": 0.8
+   },
+   "u066": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.5
+   },
+   "u067": {
+    "category": "threat",
+    "discourse_tags": [
+     "failure",
+     "frustration"
+    ],
+    "intensity": 0.5
+   },
+   "u068": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u069": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u070": {
+    "category": "threat",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u071": {
+    "category": "joy",
+    "discourse_tags": [
+     "resolved"
+    ],
+    "intensity": 0.8
+   },
+   "u072": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u073": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.2
+   },
+   "u074": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u075": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u076": {
+    "category": "loss",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u077": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.5
+   },
+   "u078": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u079": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.5
+   },
+   "u080": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure"
+    ],
+    "intensity": null
+   },
+   "u081": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.5
+   },
+   "u082": {
+    "category": "achievement",
+    "discourse_tags": [
+     "frustration"
+    ],
+    "intensity": 0.5
+   },
+   "u083": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u084": {
+    "category": "threat",
+    "discourse_tags": [
+     "failure",
+     "escalated"
+    ],
+    "intensity": 0.8
+   },
+   "u085": {
+    "category": "none",
+    "discourse_tags": [
+     "criticism"
+    ],
+    "intensity": null
+   },
+   "u086": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u087": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u088": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u089": {
+    "category": "threat",
+    "discourse_tags": [
+     "failure",
+     "frustration"
+    ],
+    "intensity": 0.8
+   },
+   "u090": {
+    "category": "loss",
+    "discourse_tags": [],
+    "intensity": 0.8
+   },
+   "u091": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u092": {
+    "category": "loss",
+    "discourse_tags": [],
+    "intensity": 0.8
+   },
+   "u093": {
+    "category": "none",
+    "discourse_tags": [
+     "criticism"
+    ],
+    "intensity": null
+   },
+   "u094": {
+    "category": "threat",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": 0.5
+   },
+   "u095": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u096": {
+    "category": "threat",
+    "discourse_tags": [],
+    "intensity": 0.8
+   },
+   "u097": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u098": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u099": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u100": {
+    "category": "uncertainty",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u101": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.2
+   },
+   "u102": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u103": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure"
+    ],
+    "intensity": null
+   },
+   "u104": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u105": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure"
+    ],
+    "intensity": null
+   },
+   "u106": {
+    "category": "connection",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u107": {
+    "category": "threat",
+    "discourse_tags": [
+     "frustration"
+    ],
+    "intensity": 0.2
+   },
+   "u108": {
+    "category": "uncertainty",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u109": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u110": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u111": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.8
+   },
+   "u112": {
+    "category": "none",
+    "discourse_tags": [
+     "criticism"
+    ],
+    "intensity": null
+   },
+   "u113": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u114": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u115": {
+    "category": "threat",
+    "discourse_tags": [
+     "failure",
+     "frustration"
+    ],
+    "intensity": 0.5
+   },
+   "u116": {
+    "category": "uncertainty",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u117": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure"
+    ],
+    "intensity": null
+   },
+   "u118": {
+    "category": "connection",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u119": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure"
+    ],
+    "intensity": null
+   },
+   "u120": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u121": {
+    "category": "threat",
+    "discourse_tags": [
+     "failure",
+     "escalated"
+    ],
+    "intensity": 0.8
+   },
+   "u122": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure"
+    ],
+    "intensity": null
+   },
+   "u123": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u124": {
+    "category": "threat",
+    "discourse_tags": [
+     "frustration"
+    ],
+    "intensity": 0.5
+   },
+   "u125": {
+    "category": "threat",
+    "discourse_tags": [
+     "failure",
+     "escalated"
+    ],
+    "intensity": 0.8
+   },
+   "u126": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u127": {
+    "category": "threat",
+    "discourse_tags": [
+     "frustration"
+    ],
+    "intensity": 0.5
+   },
+   "u128": {
+    "category": "none",
+    "discourse_tags": [
+     "criticism"
+    ],
+    "intensity": null
+   },
+   "u129": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u130": {
+    "category": "connection",
+    "discourse_tags": [],
+    "intensity": 0.8
+   },
+   "u131": {
+    "category": "none",
+    "discourse_tags": [
+     "criticism"
+    ],
+    "intensity": null
+   },
+   "u132": {
+    "category": "none",
+    "discourse_tags": [
+     "failure",
+     "resolved"
+    ],
+    "intensity": null
+   },
+   "u133": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u134": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u135": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.2
+   },
+   "u136": {
+    "category": "threat",
+    "discourse_tags": [
+     "frustration"
+    ],
+    "intensity": 0.8
+   },
+   "u137": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.8
+   },
+   "u138": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.8
+   },
+   "u139": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure",
+     "resolved"
+    ],
+    "intensity": null
+   },
+   "u140": {
+    "category": "threat",
+    "discourse_tags": [
+     "frustration"
+    ],
+    "intensity": 0.2
+   }
+  },
+  "ja-hybrid-patterns-only": {
+   "u001": {
+    "category": "achievement",
+    "discourse_tags": [
+     "resolved"
+    ],
+    "intensity": 0.5
+   },
+   "u002": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure"
+    ],
+    "intensity": null
+   },
+   "u003": {
+    "category": "loss",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u004": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.2
+   },
+   "u005": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u006": {
+    "category": "loss",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u007": {
+    "category": "threat",
+    "discourse_tags": [
+     "frustration"
+    ],
+    "intensity": 0.2
+   },
+   "u008": {
+    "category": "uncertainty",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u009": {
+    "category": "none",
+    "discourse_tags": [
+     "criticism"
+    ],
+    "intensity": null
+   },
+   "u010": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.5
+   },
+   "u011": {
+    "category": "threat",
+    "discourse_tags": [
+     "failure",
+     "frustration"
+    ],
+    "intensity": 0.5
+   },
+   "u012": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u013": {
+    "category": "connection",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u014": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u015": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u016": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u017": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u018": {
+    "category": "none",
+    "discourse_tags": [
+     "resolved"
+    ],
+    "intensity": null
+   },
+   "u019": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u020": {
+    "category": "uncertainty",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u021": {
+    "category": "threat",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u022": {
+    "category": "connection",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u023": {
+    "category": "loss",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u024": {
+    "category": "none",
+    "discourse_tags": [
+     "resolved"
+    ],
+    "intensity": null
+   },
+   "u025": {
+    "category": "uncertainty",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u026": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u027": {
+    "category": "uncertainty",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u028": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u029": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u030": {
+    "category": "none",
+    "discourse_tags": [
+     "criticism"
+    ],
+    "intensity": null
+   },
+   "u031": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure"
+    ],
+    "intensity": null
+   },
+   "u032": {
+    "category": "loss",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u033": {
+    "category": "threat",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u034": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.5
+   },
+   "u035": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u036": {
+    "category": "threat",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u037": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.2
+   },
+   "u038": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u039": {
+    "category": "uncertainty",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u040": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u041": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u042": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u043": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u044": {
+    "category": "none",
+    "discourse_tags": [
+     "resolved"
+    ],
+    "intensity": null
+   },
+   "u045": {
+    "category": "none",
+    "discourse_tags": [
+     "resolved"
+    ],
+    "intensity": null
+   },
+   "u046": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u047": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u048": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u049": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.2
+   },
+   "u050": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u051": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u052": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u053": {
+    "category": "uncertainty",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u054": {
+    "category": "none",
+    "discourse_tags": [
+     "resolved"
+    ],
+    "intensity": null
+   },
+   "u055": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.5
+   },
+   "u056": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u057": {
+    "category": "connection",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u058": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.2
+   },
+   "u059": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u060": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.5
+   },
+   "u061": {
+    "category": "none",
+    "discourse_tags": [
+     "resolved"
+    ],
+    "intensity": null
+   },
+   "u062": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u063": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u064": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u065": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u066": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.5
+   },
+   "u067": {
+    "category": "threat",
+    "discourse_tags": [
+     "failure",
+     "frustration"
+    ],
+    "intensity": 0.5
+   },
+   "u068": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u069": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.2
+   },
+   "u070": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u071": {
+    "category": "joy",
+    "discourse_tags": [
+     "resolved"
+    ],
+    "intensity": 0.2
+   },
+   "u072": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u073": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u074": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u075": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u076": {
+    "category": "loss",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u077": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.5
+   },
+   "u078": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u079": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.5
+   },
+   "u080": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure"
+    ],
+    "intensity": null
+   },
+   "u081": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.5
+   },
+   "u082": {
+    "category": "achievement",
+    "discourse_tags": [
+     "frustration"
+    ],
+    "intensity": 0.5
+   },
+   "u083": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u084": {
+    "category": "threat",
+    "discourse_tags": [
+     "failure",
+     "escalated"
+    ],
+    "intensity": 0.8
+   },
+   "u085": {
+    "category": "none",
+    "discourse_tags": [
+     "criticism"
+    ],
+    "intensity": null
+   },
+   "u086": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u087": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u088": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u089": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u090": {
+    "category": "loss",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u091": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u092": {
+    "category": "loss",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u093": {
+    "category": "none",
+    "discourse_tags": [
+     "criticism"
+    ],
+    "intensity": null
+   },
+   "u094": {
+    "category": "threat",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": 0.5
+   },
+   "u095": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u096": {
+    "category": "threat",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u097": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u098": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u099": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u100": {
+    "category": "uncertainty",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u101": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.2
+   },
+   "u102": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u103": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure"
+    ],
+    "intensity": null
+   },
+   "u104": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u105": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure"
+    ],
+    "intensity": null
+   },
+   "u106": {
+    "category": "connection",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u107": {
+    "category": "loss",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u108": {
+    "category": "uncertainty",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u109": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u110": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u111": {
+    "category": "threat",
+    "discourse_tags": [
+     "escalated"
+    ],
+    "intensity": 0.5
+   },
+   "u112": {
+    "category": "none",
+    "discourse_tags": [
+     "criticism"
+    ],
+    "intensity": null
+   },
+   "u113": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u114": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u115": {
+    "category": "none",
+    "discourse_tags": [
+     "failure"
+    ],
+    "intensity": null
+   },
+   "u116": {
+    "category": "uncertainty",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u117": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure"
+    ],
+    "intensity": null
+   },
+   "u118": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u119": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure"
+    ],
+    "intensity": null
+   },
+   "u120": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u121": {
+    "category": "threat",
+    "discourse_tags": [
+     "failure",
+     "escalated"
+    ],
+    "intensity": 0.8
+   },
+   "u122": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure"
+    ],
+    "intensity": null
+   },
+   "u123": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u124": {
+    "category": "threat",
+    "discourse_tags": [
+     "frustration"
+    ],
+    "intensity": 0.5
+   },
+   "u125": {
+    "category": "threat",
+    "discourse_tags": [
+     "failure",
+     "escalated"
+    ],
+    "intensity": 0.8
+   },
+   "u126": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u127": {
+    "category": "threat",
+    "discourse_tags": [
+     "frustration"
+    ],
+    "intensity": 0.2
+   },
+   "u128": {
+    "category": "none",
+    "discourse_tags": [
+     "criticism"
+    ],
+    "intensity": null
+   },
+   "u129": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u130": {
+    "category": "connection",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u131": {
+    "category": "none",
+    "discourse_tags": [
+     "criticism"
+    ],
+    "intensity": null
+   },
+   "u132": {
+    "category": "none",
+    "discourse_tags": [
+     "failure",
+     "resolved"
+    ],
+    "intensity": null
+   },
+   "u133": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u134": {
+    "category": "achievement",
+    "discourse_tags": [],
+    "intensity": 0.5
+   },
+   "u135": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u136": {
+    "category": "threat",
+    "discourse_tags": [
+     "frustration"
+    ],
+    "intensity": 0.2
+   },
+   "u137": {
+    "category": "joy",
+    "discourse_tags": [],
+    "intensity": 0.2
+   },
+   "u138": {
+    "category": "none",
+    "discourse_tags": [],
+    "intensity": null
+   },
+   "u139": {
+    "category": "none",
+    "discourse_tags": [
+     "pressure",
+     "resolved"
+    ],
+    "intensity": null
+   },
+   "u140": {
+    "category": "threat",
+    "discourse_tags": [
+     "frustration"
+    ],
+    "intensity": 0.2
+   }
+  }
+ },
+ "schema": "stira-jp-hybrid-outputs/1",
+ "versions": {
+  "ipadic": "1.0.0",
+  "mecab-python3": "1.0.12",
+  "mlask-official": "0.5.0",
+  "pyahocorasick": "2.3.1"
+ }
+}

@@ -1,0 +1,28 @@
+# Paths left out of the public snapshot (scripts/make_release_snapshot.py, docs/release.md).
+# One pattern per line. "dir/" = everything under dir; otherwise fnmatch on the path
+# relative to the repository root, or on the file name when the pattern has no "/".
+# Only tracked files are copied, so untracked local state never enters the snapshot.
+
+# internal research, probes, reviews and operations notes
+docs/research/
+reviews/
+337c_probe.sh
+AGENTS.md
+# unmerged proposals (PR #389 and later proposal tools)
+dashboard/stage/tools/proposals/
+# one-off development-loop scripts (model-driven batch fixes and reviews)
+scripts/fix_*.py
+scripts/implement_*.py
+scripts/*_review.py
+scripts/research_gui.py
+scripts/strands_direct.py
+# agent memory and local state, should any be tracked by mistake
+memory/
+.worktrees/
+.local/
+*.local
+.env
+.env.*
+node_modules/
+eval_out/
+.venv/

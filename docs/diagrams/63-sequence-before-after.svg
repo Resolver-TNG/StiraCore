@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 300" font-family="system-ui,-apple-system,'Segoe UI',sans-serif">
+  <style>
+    :root{
+      --bg:#ffffff; --card:#f6f8fa; --text:#1f2328; --muted:#656d76; --border:#d0d7de;
+      --accent:#0969da; --ok:#1a7f37; --warn:#9a6700; --danger:#cf222e;
+      --accentbg:#ddf4ff; --okbg:#dafbe1; --dangerbg:#ffebe9;
+    }
+    @media (prefers-color-scheme: dark){
+      :root{
+        --bg:#0d1117; --card:#161b22; --text:#e6edf3; --muted:#8b949e; --border:#30363d;
+        --accent:#4493f8; --ok:#3fb950; --warn:#d29922; --danger:#f85149;
+        --accentbg:#0c2d6b; --okbg:#0f5323; --dangerbg:#67060c;
+      }
+    }
+    .bg{fill:var(--bg)} .card{fill:var(--card)} .txt{fill:var(--text)} .mut{fill:var(--muted)}
+    .acc{fill:var(--accent)} .ok{fill:var(--ok)} .warn{fill:var(--warn)} .dgr{fill:var(--danger)}
+    .sacc{stroke:var(--accent)} .sok{stroke:var(--ok)} .sdgr{stroke:var(--danger)}
+    .sbd{stroke:var(--border)} .smut{stroke:var(--muted)} .stxt{stroke:var(--text)}
+  </style>
+  <rect class="bg" x="0" y="0" width="680" height="300" rx="10"/>
+  <text class="txt" x="20" y="30" font-size="15" font-weight="700">Stira #63 — Neural State 凍結バグ (Before / After)</text>
+  <text class="mut" x="20" y="47" font-size="11">post_turn が常に stimulus=None を渡すため状態が init 値で凍結 → 会話から stimulus を導出する経路を追加</text>
+
+  <!-- BEFORE -->
+  <rect class="card sbd" x="20" y="60" width="310" height="220" rx="8" stroke-width="1"/>
+  <text class="dgr" x="34" y="80" font-size="12" font-weight="700">BEFORE — 凍結する経路</text>
+  <g transform="translate(28,90)">
+    <text class="mut" x="30" y="12" text-anchor="middle" font-size="9">User</text>
+    <text class="mut" x="135" y="12" text-anchor="middle" font-size="9">NXPAgent</text>
+    <text class="mut" x="255" y="12" text-anchor="middle" font-size="9">Neural State</text>
+    <line class="sbd" x1="30" y1="18" x2="30" y2="180" stroke-width="1"/>
+    <line class="sbd" x1="135" y1="18" x2="135" y2="180" stroke-width="1"/>
+    <line class="sbd" x1="255" y1="18" x2="255" y2="180" stroke-width="1"/>
+    <line class="stxt" x1="30" y1="40" x2="132" y2="40" stroke-width="1.4"/>
+    <polygon class="txt" points="132,40 125,37 125,43"/>
+    <text class="txt" x="38" y="35" font-size="9">会話メッセージ</text>
+    <path class="stxt" d="M135 58 h28 v14 h-28" fill="none" stroke-width="1.2"/>
+    <polygon class="txt" points="135,72 142,69 142,75"/>
+    <text class="txt" x="146" y="55" font-size="9">__call__</text>
+    <line class="sdgr" x1="135" y1="94" x2="253" y2="94" stroke-width="1.6"/>
+    <polygon class="dgr" points="253,94 246,91 246,97"/>
+    <text class="dgr" x="140" y="89" font-size="9" font-weight="700">post_turn(stimulus=None)</text>
+    <rect x="218" y="106" width="74" height="30" rx="4" fill="var(--dangerbg)" class="sdgr" stroke-width="1"/>
+    <text class="dgr" x="255" y="118" text-anchor="middle" font-size="8.5">更新なし</text>
+    <text class="dgr" x="255" y="130" text-anchor="middle" font-size="8.5">init値で凍結</text>
+    <line class="smut" x1="253" y1="158" x2="32" y2="158" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <polygon class="mut" points="32,158 39,155 39,161"/>
+    <text class="mut" x="55" y="153" font-size="9">GUI は凍結値を正しく表示</text>
+    <text class="mut" x="40" y="175" font-size="8.5" font-style="italic">→ 表示バグではなく入力経路の欠落</text>
+  </g>
+
+  <!-- AFTER -->
+  <rect class="card sbd" x="350" y="60" width="310" height="220" rx="8" stroke-width="1"/>
+  <text class="ok" x="364" y="80" font-size="12" font-weight="700">AFTER — 修正後の経路</text>
+  <g transform="translate(358,90)">
+    <text class="mut" x="24" y="12" text-anchor="middle" font-size="9">User</text>
+    <text class="mut" x="110" y="12" text-anchor="middle" font-size="9">NXPAgent</text>
+    <text class="acc" x="190" y="12" text-anchor="middle" font-size="8.5">detector</text>
+    <text class="mut" x="272" y="12" text-anchor="middle" font-size="8.5">Neural St.</text>
+    <line class="sbd" x1="24" y1="18" x2="24" y2="182" stroke-width="1"/>
+    <line class="sbd" x1="110" y1="18" x2="110" y2="182" stroke-width="1"/>
+    <line class="sacc" x1="190" y1="18" x2="190" y2="182" stroke-width="1" stroke-dasharray="3 2"/>
+    <line class="sbd" x1="272" y1="18" x2="272" y2="182" stroke-width="1"/>
+    <line class="stxt" x1="24" y1="36" x2="107" y2="36" stroke-width="1.4"/>
+    <polygon class="txt" points="107,36 100,33 100,39"/>
+    <text class="txt" x="28" y="31" font-size="9">会話メッセージ</text>
+    <line class="sacc" x1="110" y1="56" x2="188" y2="56" stroke-width="1.5"/>
+    <polygon class="acc" points="188,56 181,53 181,59"/>
+    <text class="acc" x="112" y="51" font-size="7.5">detect(msg,resp,breaker)</text>
+    <rect x="156" y="66" width="70" height="40" rx="4" fill="var(--accentbg)" class="sacc"/>
+    <text class="acc" x="191" y="79" text-anchor="middle" font-size="7.5">regex 導出</text>
+    <text class="acc" x="191" y="90" text-anchor="middle" font-size="7">gratitude→connection</text>
+    <text class="acc" x="191" y="100" text-anchor="middle" font-size="7">error→threat …</text>
+    <line class="sacc" x1="188" y1="120" x2="112" y2="120" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <polygon class="acc" points="112,120 119,117 119,123"/>
+    <text class="acc" x="114" y="115" font-size="8">stimulus (or None)</text>
+    <line class="sok" x1="110" y1="142" x2="270" y2="142" stroke-width="1.6"/>
+    <polygon class="ok" points="270,142 263,139 263,145"/>
+    <text class="ok" x="114" y="137" font-size="7.5" font-weight="700">post_turn(stimulus, intensity)</text>
+    <rect x="242" y="154" width="62" height="28" rx="4" fill="var(--okbg)" class="sok"/>
+    <text class="ok" x="273" y="166" text-anchor="middle" font-size="7.5">状態更新</text>
+    <text class="ok" x="273" y="177" text-anchor="middle" font-size="7.5">会話に反応</text>
+  </g>
+</svg>

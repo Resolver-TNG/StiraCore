@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 290" font-family="system-ui,-apple-system,'Segoe UI',sans-serif">
+  <style>
+    :root{--bg:#fff;--card:#f6f8fa;--text:#1f2328;--muted:#656d76;--border:#d0d7de;--accent:#0969da;--ok:#1a7f37;--warn:#9a6700;--danger:#cf222e;--accentbg:#ddf4ff;--okbg:#dafbe1;--warnbg:#fff8c5;--elev:#eaeef2;--muts:#424a53;--bdstrong:#8b949e}
+    @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--card:#161b22;--text:#e6edf3;--muted:#8b949e;--border:#30363d;--accent:#4493f8;--ok:#3fb950;--warn:#d29922;--danger:#f85149;--accentbg:#0c2d6b;--okbg:#0f5323;--warnbg:#4b3d00;--elev:#1c2129;--muts:#9198a1;--bdstrong:#6e7681}}
+    .bg{fill:var(--bg)}.card{fill:var(--card)}.txt{fill:var(--text)}.mut{fill:var(--muted)}.acc{fill:var(--accent)}.ok{fill:var(--ok)}.warn{fill:var(--warn)}.dgr{fill:var(--danger)}
+    .sacc{stroke:var(--accent)}.sbd{stroke:var(--border)}.sok{stroke:var(--ok)}.swarn{stroke:var(--warn)}.smut{stroke:var(--muts)}.sbds{stroke:var(--bdstrong)}.sdgr{stroke:var(--danger)}
+  </style>
+  <defs><marker id="p" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><polygon points="0,1 8,4 0,7" fill="var(--accent)"/></marker>
+  <marker id="pm" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><polygon points="0,1 8,4 0,7" fill="var(--muts)"/></marker></defs>
+  <rect class="bg" x="0" y="0" width="660" height="290" rx="10"/>
+  <text class="txt" x="20" y="26" font-size="15" font-weight="700">Stira 1ターンの処理パイプライン</text>
+  <text class="mut" x="20" y="43" font-size="10.5">agent/nxp_agent.py __call__ が pre_turn → モデル実行 → detect_stimulus → post_turn を回す</text>
+
+  <g transform="translate(0,8)">
+    <!-- pre_turn -->
+    <rect x="10" y="70" width="118" height="66" rx="7" class="card sbd" stroke-width="1.5"/>
+    <text class="txt" x="69" y="88" text-anchor="middle" font-size="9.5" font-weight="700">pre_turn()</text>
+    <text class="mut" x="69" y="101" text-anchor="middle" font-size="7">apply_decay</text>
+    <text class="mut" x="69" y="111" text-anchor="middle" font-size="7">update_bc_window</text>
+    <text class="mut" x="69" y="121" text-anchor="middle" font-size="7">→ BreakResult(level,</text>
+    <text class="mut" x="69" y="130" text-anchor="middle" font-size="7">actions)</text>
+    <line class="sacc" x1="128" y1="103" x2="152" y2="103" stroke-width="1.6" marker-end="url(#p)"/>
+
+    <!-- model turn -->
+    <rect x="154" y="70" width="118" height="66" rx="7" class="card sbd" stroke-width="1.5"/>
+    <text class="txt" x="213" y="88" text-anchor="middle" font-size="9.5" font-weight="700">モデル実行</text>
+    <text class="mut" x="213" y="101" text-anchor="middle" font-size="7">Strands Agent(prompt)</text>
+    <text class="mut" x="213" y="111" text-anchor="middle" font-size="7">tools は actions で</text>
+    <text class="mut" x="213" y="121" text-anchor="middle" font-size="7">フィルタ (BLOCK_WRITES</text>
+    <text class="mut" x="213" y="130" text-anchor="middle" font-size="7">/CONFIRM/HALT)</text>
+    <line class="sacc" x1="272" y1="103" x2="296" y2="103" stroke-width="1.6" marker-end="url(#p)"/>
+
+    <!-- detect -->
+    <rect x="298" y="70" width="118" height="66" rx="7" fill="var(--accentbg)" class="sacc" stroke-width="1.5"/>
+    <text class="acc" x="357" y="88" text-anchor="middle" font-size="9" font-weight="700">detect_stimulus()</text>
+    <text class="acc" x="357" y="101" text-anchor="middle" font-size="7">breaker/tool/文面を</text>
+    <text class="acc" x="357" y="111" text-anchor="middle" font-size="7">regex 判定 (zero-LLM)</text>
+    <text class="acc" x="357" y="122" text-anchor="middle" font-size="7">→ (category,intensity)</text>
+    <text class="acc" x="357" y="131" text-anchor="middle" font-size="7">or None</text>
+    <line class="sacc" x1="416" y1="103" x2="440" y2="103" stroke-width="1.6" marker-end="url(#p)"/>
+
+    <!-- post_turn -->
+    <rect x="442" y="70" width="118" height="66" rx="7" class="card sbd" stroke-width="1.5"/>
+    <text class="txt" x="501" y="88" text-anchor="middle" font-size="9.5" font-weight="700">post_turn()</text>
+    <text class="mut" x="501" y="101" text-anchor="middle" font-size="7">stimulus 有→</text>
+    <text class="mut" x="501" y="111" text-anchor="middle" font-size="7">apply_stimulus</text>
+    <text class="mut" x="501" y="121" text-anchor="middle" font-size="7">(EMOTION_MATRIX)</text>
+    <text class="mut" x="501" y="130" text-anchor="middle" font-size="7">None→無更新(安全側)</text>
+    <line class="sacc" x1="560" y1="103" x2="584" y2="103" stroke-width="1.6" marker-end="url(#p)"/>
+
+    <!-- state -->
+    <rect x="586" y="76" width="64" height="54" rx="7" fill="var(--okbg)" class="sok" stroke-width="1.5"/>
+    <text class="ok" x="618" y="96" text-anchor="middle" font-size="8" font-weight="700">Neural</text>
+    <text class="ok" x="618" y="107" text-anchor="middle" font-size="8" font-weight="700">State</text>
+    <text class="ok" x="618" y="119" text-anchor="middle" font-size="6.5">6次元 + save()</text>
+
+    <!-- feedback: state -> pre_turn (next turn decay/breaker) -->
+    <path class="smut" d="M618 130 v40 h-549 v-32" fill="none" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#pm)"/>
+    <text class="mut" x="345" y="182" text-anchor="middle" font-size="8">次ターンの pre_turn が同じ state に decay/breaker 評価をかける（ヒステリシス）</text>
+
+    <!-- #63 callout on detect -->
+    <rect x="298" y="16" width="200" height="40" rx="6" fill="var(--warnbg)" class="swarn"/>
+    <text class="warn" x="398" y="32" text-anchor="middle" font-size="8.5" font-weight="700">#63 で追加したのがこの detect ステージ</text>
+    <text class="warn" x="398" y="45" text-anchor="middle" font-size="8">以前は post_turn(stimulus=None) 固定で state 凍結</text>
+    <path class="swarn" d="M357 56 v12" fill="none" stroke-width="1.2" stroke-dasharray="3 2" marker-end="url(#p)"/>
+  </g>
+</svg>

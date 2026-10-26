@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stage — Re:Solver</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="stage.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <main id="app" class="app">
+    <div id="stage" class="stage">
+      <canvas id="view" class="view" role="img" aria-label="Re:Solver in the lab (pixel-art scene)"></canvas>
+      <div id="choices" class="choices" role="group" aria-label="choices" hidden></div>
+      <section id="approval-detail" class="approval-detail" hidden aria-labelledby="approval-detail-title">
+        <h2 id="approval-detail-title" class="approval-detail-title"></h2>
+        <dl id="approval-facts" class="approval-facts"></dl>
+        <pre id="approval-args" class="approval-args" tabindex="0"></pre>
+        <p id="approval-error" class="approval-error" role="alert"></p>
+      </section>
+      <section id="textbox" class="textbox">
+        <div id="nameplate" class="nameplate">Re:Solver</div>
+        <p id="line" class="line" aria-live="polite"></p>
+        <div class="foot">
+          <span id="hint" class="hint"></span>
+          <span class="buttons">
+            <span id="conn" class="conn" role="status" data-state="unknown"></span>
+            <a id="btn-exit" class="mini" href="/chat" hidden></a>
+            <button id="btn-raw" class="mini" type="button" aria-pressed="false" aria-controls="raw">Raw</button>
+            <button id="btn-lang" class="mini" type="button">English</button>
+          </span>
+        </div>
+      </section>
+    </div>
+    <section id="raw" class="raw" hidden aria-labelledby="raw-title">
+      <h1 id="raw-title"></h1>
+      <div class="raw-grid">
+        <div id="raw-state"></div>
+        <div id="raw-pose"></div>
+        <div id="raw-log"></div>
+        <div id="raw-drift"></div>
+      </div>
+    </section>
+    <aside id="debug" class="debug" hidden aria-label="debug"></aside>
+  </main>
+</body>
+</html>

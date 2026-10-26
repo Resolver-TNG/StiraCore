@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 400" font-family="system-ui,-apple-system,'Segoe UI',sans-serif">
+  <style>
+    :root{--bg:#fff;--card:#f6f8fa;--text:#1f2328;--muted:#656d76;--border:#d0d7de;--accent:#0969da;--ok:#1a7f37;--warn:#9a6700;--danger:#cf222e;--info:#8250df;--okbg:#dafbe1;--warnbg:#fff8c5;--dangerbg:#ffebe9;--infobg:#fbefff;--muts:#424a53}
+    @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--card:#161b22;--text:#e6edf3;--muted:#8b949e;--border:#30363d;--accent:#4493f8;--ok:#3fb950;--warn:#d29922;--danger:#f85149;--info:#bc8cff;--okbg:#0f5323;--warnbg:#4b3d00;--dangerbg:#67060c;--infobg:#2d1e40;--muts:#9198a1}}
+    .bg{fill:var(--bg)}.txt{fill:var(--text)}.mut{fill:var(--muted)}.ok{fill:var(--ok)}.warn{fill:var(--warn)}.dgr{fill:var(--danger)}.info{fill:var(--info)}.acc{fill:var(--accent)}
+    .smut{stroke:var(--muts)}.sok{stroke:var(--ok)}.swarn{stroke:var(--warn)}.sdgr{stroke:var(--danger)}.sinfo{stroke:var(--info)}.sbd{stroke:var(--border)}
+    code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  </style>
+  <defs>
+    <marker id="m" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><polygon points="0,1 8,4 0,7" fill="var(--muts)"/></marker>
+    <marker id="mok" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><polygon points="0,1 8,4 0,7" fill="var(--ok)"/></marker>
+    <marker id="mi" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><polygon points="0,1 8,4 0,7" fill="var(--info)"/></marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="660" height="400" rx="10"/>
+  <text class="txt" x="20" y="26" font-size="15" font-weight="700">Stira Circuit Breaker — 状態遷移 (BreakLevel)</text>
+  <text class="mut" x="20" y="43" font-size="10.5">core/engine.py — pre_turn() が stability と bc_score から評価。entry/exit 閾値が別のヒステリシス</text>
+
+  <!-- START -->
+  <circle class="txt" cx="50" cy="150" r="8"/>
+  <line class="smut" x1="58" y1="150" x2="94" y2="150" stroke-width="1.4" marker-end="url(#m)"/>
+
+  <!-- NORMAL -->
+  <circle cx="150" cy="150" r="46" fill="var(--okbg)" class="sok" stroke-width="2"/>
+  <text class="ok" x="150" y="146" text-anchor="middle" font-size="12" font-weight="700">NORMAL</text>
+  <text class="ok" x="150" y="161" text-anchor="middle" font-size="8">actions = NONE</text>
+
+  <!-- NORMAL -> WARNING -->
+  <path class="smut" d="M194 137 C255 108 300 108 341 132" fill="none" stroke-width="1.4" marker-end="url(#m)"/>
+  <text class="warn" x="268" y="106" text-anchor="middle" font-size="8.5">stability &lt; 0.5</text>
+  <!-- WARNING -->
+  <circle cx="385" cy="152" r="46" fill="var(--warnbg)" class="swarn" stroke-width="2"/>
+  <text class="warn" x="385" y="142" text-anchor="middle" font-size="12" font-weight="700">WARNING</text>
+  <text class="warn" x="385" y="156" text-anchor="middle" font-size="7">INJECT_IDENTITY</text>
+  <text class="warn" x="385" y="166" text-anchor="middle" font-size="7">+REQUIRE_CONFIRM</text>
+  <!-- WARNING -> NORMAL recover -->
+  <path class="sok" d="M341 172 C300 198 255 198 194 168" fill="none" stroke-width="1.3" marker-end="url(#mok)"/>
+  <text class="ok" x="268" y="203" text-anchor="middle" font-size="8.5">stability &gt; 0.6 (exit)</text>
+
+  <!-- WARNING -> CRITICAL -->
+  <path class="smut" d="M428 140 C490 112 525 112 560 138" fill="none" stroke-width="1.4" marker-end="url(#m)"/>
+  <text class="dgr" x="500" y="110" text-anchor="middle" font-size="8.5">stability &lt; 0.3</text>
+  <!-- CRITICAL -->
+  <circle cx="592" cy="160" r="46" fill="var(--dangerbg)" class="sdgr" stroke-width="2"/>
+  <text class="dgr" x="592" y="150" text-anchor="middle" font-size="11.5" font-weight="700">CRITICAL</text>
+  <text class="dgr" x="592" y="163" text-anchor="middle" font-size="6.5">BLOCK_WRITES+IDENTITY</text>
+  <text class="dgr" x="592" y="172" text-anchor="middle" font-size="6.5">+NOTIFY (+HALT)</text>
+  <!-- CRITICAL self cooldown -->
+  <path class="sdgr" d="M577 118 C560 92 624 92 607 118" fill="none" stroke-width="1.2" marker-end="url(#m)"/>
+  <text class="dgr" x="592" y="84" text-anchor="middle" font-size="7.5">保護 ≥3 ターン</text>
+  <!-- CRITICAL -> recover -->
+  <path class="sok" d="M560 182 C520 210 470 205 428 178" fill="none" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#mok)"/>
+  <text class="ok" x="495" y="210" text-anchor="middle" font-size="8">stability &gt; 0.45 &amp; cooldown 完了</text>
+
+  <!-- COHERENCE (separate latch) -->
+  <circle cx="150" cy="310" r="44" fill="var(--infobg)" class="sinfo" stroke-width="2"/>
+  <text class="info" x="150" y="304" text-anchor="middle" font-size="11" font-weight="700">COHERENCE</text>
+  <text class="info" x="150" y="318" text-anchor="middle" font-size="7">INJECT_IDENTITY</text>
+  <text class="info" x="150" y="328" text-anchor="middle" font-size="6.5">(identity drift)</text>
+  <!-- NORMAL <-> COHERENCE -->
+  <path class="sinfo" d="M133 194 C118 230 118 250 133 268" fill="none" stroke-width="1.3" marker-end="url(#mi)"/>
+  <text class="info" x="86" y="235" text-anchor="middle" font-size="8">bc_score</text>
+  <text class="info" x="86" y="246" text-anchor="middle" font-size="8">&lt; 0.6</text>
+  <path class="sok" d="M170 268 C186 250 186 230 170 194" fill="none" stroke-width="1.2" marker-end="url(#mok)"/>
+  <text class="ok" x="216" y="235" text-anchor="middle" font-size="8">bc_score</text>
+  <text class="ok" x="216" y="246" text-anchor="middle" font-size="8">&gt; 0.7 (exit)</text>
+
+  <text class="mut" x="330" y="300" font-size="9" font-weight="700">独立ラッチ:</text>
+  <text class="mut" x="330" y="315" font-size="8.5">stability → WARNING / CRITICAL（安定性の崩壊）</text>
+  <text class="mut" x="330" y="329" font-size="8.5">bc_score → COHERENCE（振る舞いの一貫性ドリフト）</text>
+  <text class="mut" x="330" y="343" font-size="8.5">遷移/評価は on_breaker コールバックで通知</text>
+  <text class="mut" x="330" y="362" font-size="8" font-style="italic">actions は各レベルが返す BreakAction フラグ集合（別状態ではない）</text>
+</svg>

@@ -1,0 +1,74 @@
+/* YOLO button and badge (ADR 0012 §12, phase 5b). Loaded only with STIRA_YOLO_ALLOW. */
+.yolo-slot[hidden] { display: none; }
+.yolo-slot { min-width: 0; max-width: 100%; }
+.yolo-badge {
+  display: grid; gap: 2px; min-width: 0; max-width: 100%;
+  padding: 4px 6px 4px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-surface-raised); color: var(--color-text);
+  font-size: var(--font-size-sm); line-height: 1.4;
+}
+.yolo-badge[data-mode="offered"], .yolo-badge[data-mode="unavailable"] {
+  padding: 0; border: 0; background: transparent;
+}
+.yolo-badge[data-mode="window"][data-state="active"] { border-color: var(--warn-border); background: var(--warn-bg); }
+.yolo-badge[data-mode="window"][data-state="paused"] { border-color: var(--info-border); background: var(--info-bg); }
+.yolo-badge[data-mode="latched"], .yolo-badge[data-state="abnormal"] { border-color: var(--crit-border); background: var(--crit-bg); }
+.yolo-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
+.yolo-tag { font-weight: 700; color: var(--warn-fg); letter-spacing: .02em; }
+.yolo-badge[data-state="paused"] .yolo-tag { color: var(--info-fg); }
+.yolo-time, .yolo-count { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.yolo-text { min-width: 0; overflow-wrap: anywhere; }
+.yolo-muted { color: var(--color-text-muted); }
+.yolo-sub { margin: 0; font-size: var(--font-size-xs); color: var(--color-text); overflow-wrap: anywhere; }
+.yolo-soon { font-weight: 700; color: var(--warn-fg); }
+.yolo-notice { color: var(--color-text); }
+.yolo-command { font-family: var(--font-mono, ui-monospace, monospace); }
+.yolo-btn { padding: 2px 10px; min-height: 28px; font-size: var(--font-size-sm); white-space: nowrap; }
+.yolo-start { border-color: var(--warn-border); color: var(--warn-fg); }
+.yolo-stop { margin-left: auto; }
+.yolo-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+/* the tier dialog (the shared .stira-confirm look) */
+.yolo-tiers { border: 0; margin: 0 0 var(--space-4); padding: 0; display: grid; gap: var(--space-1); }
+.yolo-tiers legend { padding: 0; margin-bottom: var(--space-1); font-weight: 600; }
+.yolo-external-text { color: var(--warn-fg); }
+/* #450: the tools the chosen scope could approve; a warning when none */
+.yolo-targets { margin: 0 0 var(--space-4); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow-wrap: anywhere; }
+.yolo-targets[hidden] { display: none; }
+.yolo-targets p { margin: 0 0 var(--space-1); }
+.yolo-targets p:last-child { margin-bottom: 0; }
+.yolo-targets[data-state="none"] { border-color: var(--warn-border); background: var(--warn-bg); }
+.yolo-targets-warn { color: var(--warn-fg); font-weight: 600; }
+.yolo-targets-excluded { color: var(--color-text-muted); font-size: var(--font-size-sm); }
+.yolo-targets-link { display: inline-block; margin-top: var(--space-1); }
+/* phase 7: "Includes exec" in the badge, its text in the tier dialog (the strongest tone) */
+.yolo-exec-tag { color: var(--crit-fg); }
+.yolo-exec-text { color: var(--crit-fg); font-weight: 600; }
+/* the automatic-approval log line in the chat log */
+.conversation .yolo-line {
+  align-self: stretch; margin: 2px 0; padding: 3px 10px; border-left: 3px solid var(--warn-border);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: var(--warn-bg);
+  color: var(--color-text); font-size: var(--font-size-sm); line-height: 1.45;
+  font-family: var(--font-mono, ui-monospace, monospace); overflow-wrap: anywhere;
+}
+/* the "before this page" / "N more" line: the same look, not a tool */
+.conversation .yolo-line-summary { font-family: inherit; font-style: italic; }
+/* chat header: the badge takes its own line when the header is narrow */
+.page-header.has-yolo { flex-wrap: wrap; }
+.page-header.has-yolo .yolo-slot { flex: 0 1 auto; margin-left: auto; }
+/* Stage: at the top edge of the dialogue box, right side (the name plate is on the left).
+   In the box's flow: the box clips everything outside it (clip-path). */
+.stage-shell .textbox > .yolo-slot {
+  position: relative; align-self: flex-end; max-width: 100%; margin: calc(var(--px, 4px) * -4) 0 4px;
+  z-index: 2;
+}
+.portrait .stage-shell .textbox > .yolo-slot {
+  align-self: stretch; margin: 10px 0 6px; /* below the name plate */
+}
+.stage-shell .yolo-badge { background: var(--color-surface); }
+.stage-shell .yolo-badge[data-mode="offered"], .stage-shell .yolo-badge[data-mode="unavailable"] { background: transparent; }
+@media (max-width: 480px) {
+  .page-header.has-yolo .yolo-slot { flex-basis: 100%; margin-left: 0; }
+}
+/* ADR 0014 phase 1 (#451): the progress-report tick in the tier dialog */
+.yolo-progress { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 0 0 var(--space-4); }
+.yolo-progress-help { grid-column: 2; color: var(--color-text-muted); font-size: var(--font-size-xs); }

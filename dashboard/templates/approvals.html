@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% set nav_active = 'approvals' %}
+{% block title %}承認 — StiraCore{% endblock %}{% block title_key %}title.approvals{% endblock %}
+{% block css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/approvals.css') }}">
+{% endblock %}
+{% block head_extra %}
+  {# ADR 0012 §8b: the shared dialog of the fetch wrapper's confirmation (since phase 2c an
+     approve / edit is one press; kept so any confirmed request from this page can be shown) #}
+  <script defer src="{{ url_for('static', filename='js/confirm_dialog.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/tool_cards.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/approvals.js') }}"></script>
+  {# ADR 0025: the class words of the "allow again" buttons (no badge on this page) #}
+  <script defer src="{{ url_for('static', filename='js/allow_ui.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/approvals_page.js') }}"></script>
+{% endblock %}
+{% block content %}
+<div class="approvals-page">
+  <header class="page-header">
+    <h1><span data-i18n="approvals.title">承認</span></h1>
+    <p class="approvals-lead"><span data-i18n="approvals.lead">書き込み系の操作は、内容（対象・引数・期限）に束縛された承認がないと実行されません。応答がない・切断・期限切れはすべて拒否として扱われます。</span></p>
+    <p class="approvals-related"><a class="approval-page-link" href="/settings#sec-tools"><span data-i18n="approvals.policy_link">承認を求めるツール（常に許可・毎回確認・使わない）を変える: 設定 › 安全 › ツールの許可</span></a></p>
+  </header>
+
+  <section class="card approvals-section" aria-labelledby="pending-title">
+    <header class="panel-header">
+      <h2 id="pending-title" tabindex="-1"><span data-i18n="approvals.pending">保留中の要求</span></h2>
+      <span id="approvals-status" role="status"></span>
+    </header>
+    <p id="approvals-empty" class="empty"><span data-i18n="approvals.pending_empty">保留中の承認要求はありません</span></p>
+    <div id="approval-list" class="approval-list"></div>
+  </section>
+  <p id="approval-live" class="sr-only" role="status" aria-live="polite"></p>
+
+  <section class="card approvals-section" aria-labelledby="history-title">
+    <header class="panel-header">
+      <h2 id="history-title"><span data-i18n="approvals.history">決定履歴</span></h2>
+    </header>
+    <div class="approvals-history-wrap" tabindex="0" role="region" aria-label="決定履歴のスクロール領域" data-i18n-aria-label="approvals.history_scroll">
+      <table class="table approvals-history">
+        <caption class="sr-only"><span data-i18n="approvals.history_caption">新しい順。記録されている決定（判定・理由・由来ターン・解決者・期限）</span></caption>
+        <thead>
+          <tr>
+            <th scope="col"><span data-i18n="approvals.col_resolved">解決時刻</span></th>
+            <th scope="col"><span data-i18n="approvals.col_tool">操作</span></th>
+            <th scope="col"><span data-i18n="approvals.col_decision">判定</span></th>
+            <th scope="col"><span data-i18n="approvals.col_reason">理由</span></th>
+            <th scope="col"><span data-i18n="approvals.col_turn">由来ターン</span></th>
+            <th scope="col"><span data-i18n="approvals.col_resolver">解決者</span></th>
+            <th scope="col"><span data-i18n="approvals.col_expires">期限</span></th>
+            <th scope="col"><span data-i18n="approvals.col_hash">引数ハッシュ</span></th>
+          </tr>
+        </thead>
+        <tbody id="approval-history">
+          <tr><td colspan="8" class="empty"><span data-i18n="memory.loading">読み込み中...</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

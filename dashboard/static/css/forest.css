@@ -1,0 +1,91 @@
+/* Memory forest (stira /memory), on the shared shell (#183). Tokens only. */
+.forest-page { max-width: 1200px; margin: 0 auto; padding: var(--space-2) var(--space-6) var(--space-8); }
+.forest-page .page-header {
+  display: flex; justify-content: space-between; align-items: center; gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.forest-page h1 { font-size: var(--font-size-xl); margin: 0 0 var(--space-1); }
+.forest-page .muted, #status { color: var(--color-text-muted); }
+.forest-page .muted { margin: 0; }
+#refresh:disabled { cursor: wait; }
+.root {
+  width: fit-content; margin: var(--space-8) auto 0; padding: var(--space-3) var(--space-6);
+  border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+.trunk { height: var(--space-8); width: 2px; background: var(--color-border); margin: auto; }
+.branches {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4);
+  border-top: 2px solid var(--color-border);
+}
+.branch {
+  --layer: var(--color-accent);
+  position: relative; min-width: 0; margin-top: var(--space-6); padding: var(--space-4);
+  border: 1px solid var(--color-border); border-top: 4px solid var(--layer);
+  border-radius: var(--radius-md); background: var(--color-surface);
+}
+.branch::before {
+  content: ""; position: absolute; top: -28px; left: 50%;
+  height: var(--space-6); width: 2px; background: var(--layer);
+}
+.branch.episodic { --layer: var(--viz-teal); }
+.branch.semantic { --layer: var(--viz-blue); }
+.branch.procedural { --layer: var(--viz-violet); }
+.branch h2 { color: var(--layer); font-size: var(--font-size-lg); margin-top: 0; }
+.branch .count { color: var(--color-text-muted); font-size: var(--font-size-sm); }
+.branch ul {
+  list-style: none; margin: 0; padding-left: var(--space-3);
+  border-left: 1px solid var(--color-border-subtle);
+}
+.branch li { margin: var(--space-3) 0; }
+.memory {
+  display: block; padding: var(--space-2) var(--space-3); border-radius: 4px;
+  background: var(--color-surface-sunken); border-left: 3px solid var(--layer);
+  overflow-wrap: anywhere; white-space: pre-wrap;
+}
+.nodes .empty { color: var(--color-text-muted); margin: 0; }
+
+/* Procedural proposals (#463): the review panel under the forest. */
+.proposals {
+  margin-top: var(--space-8); padding: var(--space-4);
+  border: 1px solid var(--color-border); border-top: 4px solid var(--viz-violet);
+  border-radius: var(--radius-md); background: var(--color-surface);
+}
+.proposals h2 { color: var(--viz-violet); font-size: var(--font-size-lg); margin-top: 0; }
+.proposals .count { color: var(--color-text-muted); font-size: var(--font-size-sm); }
+.proposals .empty { color: var(--color-text-muted); }
+.proposal {
+  margin: var(--space-4) 0; padding: var(--space-4);
+  border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+.proposal-head { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.proposal-head h3 { margin: 0; font-size: var(--font-size-md, 1rem); overflow-wrap: anywhere; }
+.proposal h4 { margin: var(--space-3) 0 var(--space-1); font-size: var(--font-size-sm); color: var(--color-text-muted); }
+.proposal-meta {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3); margin: var(--space-2) 0 0; font-size: var(--font-size-sm);
+}
+.proposal-meta dt { color: var(--color-text-muted); }
+.proposal-meta dd { margin: 0; overflow-wrap: anywhere; }
+.proposal-rationale { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.proposal-body, .proposal-diff {
+  margin: 0; padding: var(--space-2) var(--space-3); max-height: 24rem; overflow: auto;
+  border-radius: 4px; background: var(--color-surface); border-left: 3px solid var(--viz-violet);
+  white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--font-size-sm);
+}
+.diff-add { color: var(--ok-fg, var(--color-text)); }
+.diff-del { color: var(--crit-fg, var(--color-text)); }
+.diff-hunk { color: var(--color-text-muted); }
+.proposal-problem,
+.proposals-breaker { color: var(--crit-fg, var(--color-text)); }
+.proposal-actions { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
+.proposal-actions textarea { width: 100%; box-sizing: border-box; }
+.proposal-buttons { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.proposals-history { padding-left: 1.2rem; font-size: var(--font-size-sm); overflow-wrap: anywhere; }
+.review-reason { color: var(--color-text-muted); }
+
+@media (max-width: 750px) {
+  .forest-page { padding: var(--space-4); }
+  .branches { grid-template-columns: 1fr; }
+}

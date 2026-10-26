@@ -1,0 +1,191 @@
+/* Design tokens (#183). The single source of every colour on the dashboard: page CSS,
+   components, JS and templates reference these variables only (tests/test_ui_theme.py).
+   Palette: deep navy night, cyan accent, lavender secondary — the Stage scene's colours
+   (dashboard/stage), so the dashboard and the Stage sit side by side. Swapping the theme =
+   editing the values below (keep the names). Contrast table: docs/ui-theme.md. */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --color-bg: #0b0d1e;
+  --color-bg-glow: #1d1f48;
+  --color-surface: #11142a;
+  --color-surface-raised: #181c38;
+  --color-surface-sunken: #0d1023;
+  --color-surface-hover: #222749;
+  /* Card/table separators (decorative). Form controls use --color-border-strong (≥3:1). */
+  --color-border: #3a4170;
+  --color-border-subtle: #252a4c;
+  --color-border-strong: #60679f;
+  --color-track: #272c50;
+
+  /* Text (on --color-surface: text ≈15:1, muted ≈8:1) */
+  --color-text: #e8e9f7;
+  --color-text-muted: #a6abd0;
+  --color-text-inverse: #0b0d1e;
+  --color-accent: #6fd8f2;
+  /* Secondary accent (brand, decorative highlights); not a status colour */
+  --color-accent-2: #b9a6ff;
+  --color-link: var(--color-accent);
+
+  /* Selection: current nav item, pressed toggle buttons, checked options (not "ok") */
+  --color-selected-bg: #15324f;
+  --color-selected-fg: #bdeeff;
+  --color-selected-border: var(--color-accent);
+  --color-bubble-user-bg: #1b2550;
+
+  /* Overlays */
+  --color-scrim: rgb(4 5 14 / .6);
+  --color-stripe: rgb(255 255 255 / .15);
+  --color-edge-shade: rgb(0 0 0 / .07);
+
+  /* Actions */
+  --color-primary: #4150b0;
+  --color-primary-hover: #4d5dc4;
+  --color-primary-border: #7d8ae6;
+  --color-on-primary: #ffffff;
+  --color-danger-solid: #7a2e3a;
+  --color-danger-solid-hover: #8f3645;
+
+  /* Status (semantic, fixed meaning) — fg for text, bg for fills, border for outlines.
+     ok stays green (= normal), info is periwinkle so it never reads as the cyan accent. */
+  --ok: #7fd69a;
+  --ok-fg: #9be3b1;
+  --ok-bg: #14301f;
+  --ok-border: #3f8055;
+  --warn: #f2c96b;
+  --warn-fg: #f6d790;
+  --warn-bg: #352b13;
+  --warn-border: #8f7330;
+  --crit: #ff8d98;
+  --crit-fg: #ffabb3;
+  --crit-bg: #3a1822;
+  --crit-border: #a04656;
+  --info: #94b2ff;
+  --info-fg: #b3c8ff;
+  --info-bg: #1d2254;
+  --info-border: #5368b8;
+  --neutral: #a6abd0;
+  --neutral-bg: #1c2042;
+
+  /* Neural State dimensions: one colour per dimension on every page (chat, observer,
+     observability chart). ≥3:1 on --color-surface; six separate hues (blue, orange,
+     yellow, pink, cyan, green) that stay apart under colour-vision deficiency simulation */
+  --dim-trust: #6f9cff;
+  --dim-curiosity: #ffa45c;
+  --dim-vigilance: #f4e06a;
+  --dim-attachment: #ff8fd2;
+  --dim-stability: #5fe2ee;
+  --dim-satisfaction: #7fd98a;
+
+  /* Data visualisation (charts/series, not status). ≥3:1 on --color-surface */
+  --viz-blue: #7aa8ff;
+  --viz-violet: #b9a0ff;
+  --viz-orange: #f0a35e;
+  --viz-teal: #4fd1c0;
+  /* Heatmap cells (text = --color-text) */
+  --heat-pos-bg: #1d3566;
+  --heat-pos-strong-bg: #2c4f94;
+  --heat-neg-bg: #4a2234;
+  --heat-neg-strong-bg: #7a3450;
+
+  /* Stage whiteboard (#350 phase 2): the projection screen, the ink on it, and code blocks
+     (also in the Stage log). WCAG contrast on the cloth: ink 13.5, muted 7.5, heading 10.1,
+     link 6.2, strong 5.2; on the code block: ink 13.3, tokens 5.7-12.1 (docs/stage-main-ui.md §9) */
+  --board-housing: #2b2c48;
+  --board-housing-edge: #4a4c72;
+  --board-housing-line: #6f7398;
+  --board-cloth: #e7e6f0;
+  --board-cloth-edge: #cfcee0;
+  --board-ink: #1c1b33;
+  --board-ink-muted: #44436a;
+  --board-heading: #1a2f6e;
+  --board-heading-rule: #2b56b3;
+  --board-link: #1d4fa8;
+  --board-strong: #b2283e;
+  /* W6c: a completion claim whose checks failed (amber; the text says it too) */
+  --board-amber-ink: #7a4a00;
+  --board-amber-bg: #f3e1b4;
+  --board-rule: #2a2946;
+  --board-rule-soft: #9c9bb8;
+  --board-th-bg: #c4c3da;
+  --board-ic-bg: #c5c4db;
+  --board-ic-ink: #2a1f5c;
+  --board-button-bg: #b3b2cc;
+  --code-bg: #15142b;
+  --code-ink: #dcdcf0;
+  --code-muted: #9d9ac8;
+  --tok-kw: #52e6ff;
+  --tok-str: #f2c46b;
+  --tok-com: #8f8cba;
+  --tok-num: #ff8ac6;
+  --tok-fn: #7fe0a0;
+  --tok-type: #c9a2ff;
+  --tok-punc: #a9a7d0;
+
+  /* Legacy aliases (chat.css compatibility) */
+  --bg: var(--color-bg);
+  --surface: var(--color-surface);
+  --surface-raised: var(--color-surface-raised);
+  --border: var(--color-border);
+  --text: var(--color-text);
+  --muted: var(--color-text-muted);
+  --accent: var(--color-accent);
+  --warning: var(--warn);
+  --danger: var(--crit);
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* Typography */
+  --font-sans: system-ui, -apple-system, "Noto Sans JP", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", monospace;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 24px;
+  --line-height: 1.6;
+
+  /* Shadow */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / .35);
+  --shadow-md: 0 6px 18px rgb(0 0 0 / .4);
+  --shadow-lg: 0 16px 40px rgb(0 0 0 / .5);
+
+  /* Focus */
+  --focus-ring: 2px solid var(--color-accent);
+  --focus-offset: 3px;
+
+  /* Layout */
+  --sidebar-width: 232px;
+  --sidebar-width-collapsed: 56px;
+
+  /* Motion */
+  --duration-fast: .15s;
+  --duration-base: .25s;
+
+  /* z-index */
+  --z-base: 0;
+  --z-sticky: 10;
+  --z-sidebar: 100;
+  --z-scrim: 190;
+  --z-drawer: 200;
+  --z-toast: 300;
+  --z-skip: 1000;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --duration-fast: 0s; --duration-base: 0s; }
+}

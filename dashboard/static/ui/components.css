@@ -1,0 +1,281 @@
+/* Shared components (#183). Low specificity via :where() so page CSS can override. */
+*, *::before, *::after { box-sizing: border-box; }
+
+:where(body.app) {
+  margin: 0;
+  background: radial-gradient(ellipse at top left, var(--color-bg-glow) 0, var(--color-bg) 65%);
+  background-attachment: fixed;
+  color: var(--color-text);
+  font: var(--font-size-md) / var(--line-height) var(--font-sans);
+}
+
+:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+:where(a) { color: var(--color-link); }
+
+.visually-hidden, .sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* Skip link */
+.skip-link {
+  position: absolute; left: var(--space-2); top: -100px; z-index: var(--z-skip);
+  padding: var(--space-2) var(--space-4); border-radius: var(--radius-md);
+  background: var(--color-accent); color: var(--color-text-inverse); font-weight: 600;
+  text-decoration: none;
+}
+.skip-link:focus { top: var(--space-2); }
+
+/* ---------- App shell ---------- */
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  min-height: 100dvh;
+  transition: grid-template-columns var(--duration-base) ease;
+}
+.app-shell[data-sidebar="collapsed"] { grid-template-columns: var(--sidebar-width-collapsed) minmax(0, 1fr); }
+.app-topbar {
+  position: fixed; top: var(--space-2); left: var(--space-2); z-index: calc(var(--z-drawer) + 1);
+  display: flex; align-items: center; gap: var(--space-2);
+}
+.app-topbar .app-brand { display: none; }
+.app-brand { color: var(--color-accent-2); font-size: var(--font-size-xs); letter-spacing: .22em; margin: 0; }
+.app-sidebar {
+  position: sticky; top: 0; height: 100dvh; z-index: var(--z-sidebar);
+  display: flex; flex-direction: column; gap: var(--space-4);
+  padding: 56px var(--space-3) var(--space-4);
+  background: var(--color-surface); border-right: 1px solid var(--color-border);
+  overflow-y: auto; overflow-x: hidden;
+}
+.app-sidebar-brand { padding: 0 var(--space-2); }
+.app-nav ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.app-nav-link {
+  display: block; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
+  color: var(--color-text); text-decoration: none; border-left: 3px solid transparent;
+  transition: background var(--duration-fast);
+}
+.app-nav-link:hover { background: var(--color-surface-hover); }
+.app-nav-link[aria-current="page"] {
+  background: var(--color-selected-bg); border-left-color: var(--color-selected-border);
+  color: var(--color-selected-fg); font-weight: 600;
+}
+.app-attention { margin-top: auto; display: grid; gap: var(--space-2); }
+.app-attention .chip { justify-content: flex-start; flex-wrap: wrap; row-gap: 0; line-height: 1.5; }
+.app-attention .chip [data-role="value"] { font-weight: 600; }
+.app-main { min-width: 0; padding-top: var(--space-6); }
+.app-main:focus { outline: none; }
+.app-scrim {
+  position: fixed; inset: 0; z-index: var(--z-scrim); background: var(--color-scrim);
+}
+.app-scrim[hidden] { display: none; }
+
+.app-shell[data-sidebar="collapsed"] .app-sidebar-brand,
+.app-shell[data-sidebar="collapsed"] .app-attention,
+.app-shell[data-sidebar="collapsed"] .app-nav-label { display: none; }
+.app-shell[data-sidebar="collapsed"] .app-nav-link { min-height: 36px; }
+.app-shell[data-sidebar="collapsed"] .app-nav-link::before {
+  content: "•"; color: var(--color-text-muted);
+}
+.app-shell[data-sidebar="collapsed"] .app-nav-link[aria-current="page"]::before { color: var(--color-accent); }
+
+@media (max-width: 768px) {
+  .app-shell, .app-shell[data-sidebar="collapsed"] { grid-template-columns: minmax(0, 1fr); }
+  .app-topbar {
+    position: sticky; top: 0; left: 0; padding: var(--space-2);
+    background: var(--color-surface); border-bottom: 1px solid var(--color-border);
+    z-index: var(--z-sticky);
+  }
+  .app-topbar .app-brand { display: inline; }
+  .app-sidebar {
+    position: fixed; inset: 0 auto 0 0; width: min(85vw, 300px); z-index: var(--z-drawer);
+    padding-top: var(--space-4); box-shadow: var(--shadow-lg);
+    transform: translateX(-100%); transition: transform var(--duration-base) ease;
+  }
+  .app-shell[data-sidebar="expanded"] .app-sidebar { transform: none; }
+  .app-shell[data-sidebar="expanded"] .app-topbar { z-index: calc(var(--z-drawer) + 1); }
+  .app-shell[data-sidebar="collapsed"] .app-sidebar-brand,
+  .app-shell[data-sidebar="collapsed"] .app-attention,
+  .app-shell[data-sidebar="collapsed"] .app-nav-label { display: revert; }
+  .app-shell[data-sidebar="collapsed"] .app-attention { display: grid; }
+  .app-shell[data-sidebar="collapsed"] .app-nav-link::before { content: none; }
+  .app-main { padding-top: 0; }
+}
+
+/* ---------- Card ---------- */
+:where(.card) {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+:where(.card.pad), :where(.card-body) { padding: var(--space-4); }
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-4); border: 1px solid transparent;
+  border-radius: var(--radius-md); font: inherit; cursor: pointer; text-decoration: none;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .6; cursor: not-allowed; }
+.btn-primary {
+  background: var(--color-primary); border-color: var(--color-primary-border);
+  color: var(--color-on-primary);
+}
+.btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); }
+.btn-secondary {
+  background: var(--color-surface-raised); border-color: var(--color-border);
+  color: var(--color-text);
+}
+.btn-secondary:hover:not(:disabled) { background: var(--color-surface-hover); }
+.btn-danger {
+  background: var(--color-danger-solid); border-color: var(--crit-border);
+  color: var(--color-on-primary);
+}
+.btn-danger:hover:not(:disabled) { background: var(--color-danger-solid-hover); }
+.btn-ghost { background: transparent; border-color: transparent; color: var(--color-text); }
+.btn-ghost:hover:not(:disabled) { background: var(--color-surface-hover); }
+.app-sidebar-toggle {
+  padding: var(--space-1) var(--space-3); background: var(--color-surface);
+  border-color: var(--color-border);
+}
+
+/* ---------- Chip / Badge ---------- */
+.chip, .badge {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  border: 1px solid var(--color-border); border-radius: var(--radius-pill);
+  background: var(--neutral-bg); color: var(--color-text-muted); text-decoration: none;
+}
+.chip { padding: var(--space-1) var(--space-3); font-size: var(--font-size-sm); }
+.badge { padding: 0 var(--space-2); font-size: var(--font-size-xs); font-weight: 600; }
+:is(.chip, .badge, .status-dot-host)[data-state="ok"] {
+  color: var(--ok-fg); background: var(--ok-bg); border-color: var(--ok-border);
+}
+:is(.chip, .badge)[data-state="warn"] {
+  color: var(--warn-fg); background: var(--warn-bg); border-color: var(--warn-border);
+}
+:is(.chip, .badge)[data-state="crit"] {
+  color: var(--crit-fg); background: var(--crit-bg); border-color: var(--crit-border);
+}
+:is(.chip, .badge)[data-state="info"] {
+  color: var(--info-fg); background: var(--info-bg); border-color: var(--info-border);
+}
+a.chip:hover { border-color: var(--color-accent); }
+
+/* ---------- Status dot ---------- */
+.status-dot {
+  display: inline-block; width: 8px; height: 8px; flex: none;
+  border-radius: 50%; background: var(--neutral);
+}
+[data-state="ok"] > .status-dot, .status-dot[data-state="ok"] { background: var(--ok); }
+[data-state="warn"] > .status-dot, .status-dot[data-state="warn"] { background: var(--warn); }
+[data-state="crit"] > .status-dot, .status-dot[data-state="crit"] { background: var(--crit); }
+[data-state="info"] > .status-dot, .status-dot[data-state="info"] { background: var(--info); }
+
+/* ---------- Toggle (checkbox role=switch) ---------- */
+.toggle {
+  appearance: none; position: relative; flex: none; width: 40px; height: 22px; margin: 0;
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-pill);
+  background: var(--color-track); cursor: pointer;
+  transition: background var(--duration-fast);
+}
+.toggle::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--color-text-muted);
+  transition: transform var(--duration-fast), background var(--duration-fast);
+}
+.toggle:checked { background: var(--color-primary); border-color: var(--color-primary-border); }
+.toggle:checked::after { transform: translateX(18px); background: var(--color-on-primary); }
+.toggle:disabled { opacity: .6; cursor: not-allowed; }
+
+/* ---------- Drawer (generic) ---------- */
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 92vw);
+  z-index: var(--z-drawer); padding: var(--space-5); overflow-y: auto;
+  background: var(--color-surface); border-left: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+}
+.drawer[hidden] { display: none; }
+
+/* ---------- Table ---------- */
+.table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.table th, .table td {
+  padding: var(--space-2) var(--space-3); text-align: left;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.table th {
+  color: var(--color-text-muted); font-size: var(--font-size-sm); font-weight: 600;
+  background: var(--color-surface-raised);
+}
+.table tbody tr:hover { background: var(--color-surface-hover); }
+
+/* ---------- Form field ---------- */
+.field { display: grid; gap: var(--space-1); margin-bottom: var(--space-3); }
+.field > label { font-size: var(--font-size-sm); }
+.field-help { color: var(--color-text-muted); font-size: var(--font-size-xs); }
+.field-error { color: var(--crit-fg); font-size: var(--font-size-xs); }
+.input, .select, .textarea {
+  width: 100%; padding: var(--space-2) var(--space-3); font: inherit;
+  background: var(--color-bg); color: var(--color-text);
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-md);
+}
+.input::placeholder, .textarea::placeholder { color: var(--color-text-muted); }
+.input[aria-invalid="true"], .select[aria-invalid="true"], .textarea[aria-invalid="true"] {
+  border-color: var(--crit-border);
+}
+
+/* ---------- Toast ---------- */
+.toast-region {
+  position: fixed; right: var(--space-4); bottom: var(--space-4); z-index: var(--z-toast);
+  display: grid; gap: var(--space-2); max-width: min(380px, calc(100vw - 32px));
+}
+.toast {
+  padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+  border: 1px solid var(--color-border); border-left-width: 4px;
+  background: var(--color-surface-raised); color: var(--color-text); box-shadow: var(--shadow-md);
+}
+.toast[data-state="ok"] { border-left-color: var(--ok); }
+.toast[data-state="warn"] { border-left-color: var(--warn); }
+.toast[data-state="crit"] { border-left-color: var(--crit); }
+.toast[data-state="info"] { border-left-color: var(--info); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- Language switcher (#184) ---------- */
+.app-lang { padding: var(--space-3) 0 0; }
+.app-lang select {
+  width: 100%; min-height: 36px; padding: var(--space-1) var(--space-2);
+  color: var(--color-text); background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+/* Shared confirmation dialog (#282, js/confirm_dialog.js): settings hub, /schedules. */
+.stira-confirm {
+  max-width: min(34rem, calc(100vw - 2rem)); color: var(--color-text); background: var(--color-surface-raised);
+  border: 1px solid var(--crit-border); border-radius: var(--radius-lg); padding: var(--space-5);
+}
+.stira-confirm[data-tone="primary"] { border-color: var(--color-border); }
+.stira-confirm::backdrop { background: var(--color-scrim); }
+.stira-confirm h2 { margin-top: 0; color: var(--crit-fg); font-size: var(--font-size-lg); }
+.stira-confirm[data-tone="primary"] h2 { color: var(--color-text); }
+.stira-confirm-items { margin: var(--space-2) 0 var(--space-3); padding-left: 1.2rem; overflow-wrap: anywhere; }
+.stira-confirm-field input {
+  box-sizing: border-box; width: 100%; margin: var(--space-2) 0 var(--space-4);
+  font: inherit; color: var(--color-text); background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); padding: 6px 10px;
+}
+/* ADR 0012 phase 2c: the confirmation's checkboxes (the whole line is the hit area). */
+.stira-confirm-checks { display: grid; gap: var(--space-2); margin: 0 0 var(--space-4); }
+.stira-confirm-check {
+  display: flex; align-items: flex-start; gap: var(--space-2); padding: 4px 0;
+  cursor: pointer; overflow-wrap: anywhere;
+}
+.stira-confirm-check input { flex: none; width: 1.15rem; height: 1.15rem; margin: 0.15em 0 0; }
+.stira-confirm [hidden] { display: none; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-2); flex-wrap: wrap; }

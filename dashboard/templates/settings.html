@@ -1,0 +1,1042 @@
+{% extends "base.html" %}
+{% set nav_active = 'settings' %}
+{% block title %}設定 — StiraCore{% endblock %}{% block title_key %}title.settings_stiracore{% endblock %}
+{% block css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/settings.css') }}">
+{% endblock %}
+{% block head_extra %}
+  <script defer src="{{ url_for('static', filename='js/settings.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/confirm_dialog.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/breaker_pairs.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/settings_surface.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/settings_hub.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/settings_diagnostics.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/settings_yolo.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/settings_page_check_ports.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/settings_containment.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/settings_taint.js') }}"></script>
+  {% if grants_ui %}<script defer src="{{ url_for('static', filename='js/settings_grants.js') }}"></script>{% endif %}
+{% endblock %}
+{% block content %}
+  <header class="page-header">
+    <div>
+      <h1><span data-i18n="base.settings">設定</span></h1>
+      <p class="hint" data-i18n="hub.page_desc">モデル・感情分類・安全・ツールの設定をこの 1 画面で変更できます。変更は下の「保存」を押すまで反映されません。</p>
+    </div>
+  </header>
+
+  <section class="hub-summary card" id="hub-summary" aria-labelledby="hub-summary-title">
+    <h2 id="hub-summary-title" class="visually-hidden" data-i18n="hub.summary_title">現在の状態</h2>
+    <dl class="summary-grid">
+      <div><dt data-i18n="hub.sum_model">モデル</dt><dd><a href="#sec-model" id="sum-model">—</a></dd></div>
+      <div><dt data-i18n="hub.sum_classifier">感情分類</dt><dd><a href="#sec-classifier" id="sum-classifier">—</a></dd></div>
+      <div><dt data-i18n="hub.sum_breaker">ブレーカー</dt><dd><a href="#sec-breaker" id="sum-breaker">—</a></dd></div>
+      <div><dt data-i18n="hub.sum_tools">使えるツール</dt><dd><a href="#sec-tools" id="sum-tools">—</a></dd></div>
+      <div><dt data-i18n="yset.sum">YOLO</dt><dd><a href="#sec-yolo" id="sum-yolo">—</a></dd></div>
+      <div><dt data-i18n="hub.sum_unsaved">未保存の変更</dt><dd><a href="#hub-footer" id="sum-unsaved">0</a></dd></div>
+    </dl>
+    <p id="load-status" class="hint" role="status"><span data-i18n="tools.loading">読み込み中</span></p>
+    <p id="danger-banner" class="notice danger-banner" role="alert" hidden></p>
+    <p id="restart-banner" class="notice warn restart-banner" role="status" hidden></p>
+  </section>
+
+  <div class="hub-layout">
+    <nav class="hub-nav" aria-labelledby="hub-nav-title">
+      <h2 id="hub-nav-title" class="visually-hidden" data-i18n="hub.nav_title">設定のセクション</h2>
+      <ul>
+        <li><a href="#sec-model" data-i18n="hub.sec_model">モデルとプロバイダ</a></li>
+        <li><a href="#sec-cost" data-i18n="cost.sec">出力上限とコスト</a></li>
+        <li><a href="#sec-classifier" data-i18n="hub.sec_classifier">感情分類</a></li>
+        <li><a href="#sec-heartbeat" data-i18n="hb.sec">ハートビート</a></li>
+        <li><a href="#sec-safety" data-i18n="hub.sec_safety">安全（ブレーカー・ツール）</a></li>
+        <li><a href="#sec-yolo" data-i18n="yset.nav">YOLO（一時的な自動承認）</a></li>
+        {% if grants_ui %}<li><a href="#sec-grants" data-i18n="grants.nav">目標グラント（ステージ C）</a></li>{% endif %}
+        <li><a href="#sec-board" data-i18n="hub.sec_board">ボード（Stage）</a></li>
+        <li><a href="#sec-delegation" data-i18n="hub.sec_delegation">サブエージェント（delegate）</a></li>
+        <li><a href="#sec-agent-jobs" data-i18n="hub.sec_agent_jobs">定期実行のエージェントジョブ</a></li>
+        <li><a href="#sec-history" data-i18n="hub.sec_history">変更履歴</a></li>
+        <li><a href="#sec-display" data-i18n="hub.sec_display">表示</a></li>
+        <li><a href="#sec-diagnostics" data-i18n="hub.sec_diagnostics">診断</a></li>
+        <li><a href="#sec-location" data-i18n="surface.sec_location">設定の場所・整合</a></li>
+        <li><a href="#sec-advanced" data-i18n="hub.sec_advanced">詳細</a></li>
+      </ul>
+    </nav>
+
+    <div class="settings-dashboard hub-content">
+    <section class="card hub-section" id="sec-model" aria-labelledby="model-title" tabindex="-1">
+      <div class="section-head">
+        <h2 id="model-title"><span data-i18n="hub.sec_model">モデルとプロバイダ</span></h2>
+        <span class="timing-badge" data-group="model"></span>
+        <span class="apply-status" data-group="model" role="status"></span>
+      </div>
+      <p class="hint" data-i18n="hub.model_desc">会話に使う AI モデルと、その提供元（プロバイダ）を選びます。</p>
+      <p class="hint" id="model-applies"><span data-i18n="settings.takes_effect_from_the_next_turn_agentcon">切替は次のターンから反映されます</span></p>
+      <dl class="facts">
+        <div><dt><span data-i18n="settings.selected_model">選択中</span></dt><dd id="model-selected">—</dd></div>
+        <div><dt><span data-i18n="settings.running_model">実行中</span></dt><dd id="model-running">—</dd></div>
+      </dl>
+      <p id="model-pinned" class="notice warn" role="note" hidden></p>
+      <div class="provider-row">
+        <label for="provider-select" data-i18n="settings.provider">プロバイダ</label>
+        <select id="provider-select"></select>
+        <span id="provider-credentials" class="badge"></span>
+      </div>
+      <p id="provider-note" class="hint"></p>
+      <fieldset class="model-fieldset">
+        <legend data-i18n="settings.model">モデル</legend>
+        <div id="model-list" class="model-grid"></div>
+        <div class="custom-model">
+          <label class="option-card custom-option">
+            <input type="radio" name="model-choice" value="__custom__" id="model-custom-radio">
+            <span data-i18n="settings.other_model_id">その他のモデル ID</span>
+          </label>
+          <input id="custom-model-id" type="text" autocomplete="off" spellcheck="false"
+                 maxlength="200" aria-label="モデル ID" data-i18n-aria-label="settings.model_id">
+        </div>
+      </fieldset>
+      <details class="endpoint-details">
+        <summary data-i18n="settings.endpoint_and_key">接続先と API キー（任意）</summary>
+        <div class="field-row">
+          <label for="custom-base-url" data-i18n="settings.base_url">接続先 URL</label>
+          <input id="custom-base-url" type="url" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:8080">
+        </div>
+        <div class="field-row">
+          <label for="custom-api-key-env" data-i18n="settings.api_key_env">API キーの環境変数名</label>
+          <input id="custom-api-key-env" type="text" autocomplete="off" spellcheck="false"
+                 maxlength="128" aria-describedby="api-key-env-hint">
+        </div>
+        <p id="api-key-env-hint" class="hint" data-i18n="settings.api_key_env_hint">キーの値ではなく、キーを入れた環境変数の名前（例: OPENAI_API_KEY）を入力します。値は保存も表示もされません。リモートの接続先 URL は gateway-config.json でのみ設定できます。</p>
+      </details>
+      <div class="save-row">
+        <button id="model-use" type="button"><span data-i18n="settings.use_this_model">このモデルを使用</span></button>
+        <button id="conn-test" type="button" class="secondary"><span data-i18n="settings.connection_test">接続テスト</span></button>
+        <span id="conn-test-result" role="status" aria-live="polite"></span>
+      </div>
+      <p class="hint" id="conn-test-note" data-i18n="settings.connection_test_note">接続テストは短いリクエストを 1 回だけ送ります（出力は数トークン、一定時間で打ち切り）。ローカルは無課金、API プロバイダではごく少額の課金が発生することがあります。</p>
+      <details class="internals">
+        <summary data-i18n="hub.details">詳細</summary>
+        <p class="hint" data-i18n="hub.model_internals">保存先: agent-config.json（provider / model_override / base_url / api_key_env）。環境変数 STIRA_PROVIDER・STIRA_MODEL などが設定されていると、そちらが優先されます。</p>
+      </details>
+    </section>
+
+    <section class="card hub-section" id="sec-cost" aria-labelledby="cost-title" tabindex="-1">
+      <div class="section-head">
+        <h2 id="cost-title"><span data-i18n="cost.sec">出力上限とコスト</span></h2>
+      </div>
+      <p class="hint" data-i18n="cost.desc">1 回の応答の長さの上限と、トークンを節約する仕組みです。フッターの「保存」でまとめて保存します（保存先: gateway-config.json）。</p>
+
+      <div class="subsection" id="sec-cost-output" tabindex="-1">
+        <div class="section-head">
+          <h3 id="cost-output-title"><span data-i18n="cost.output_title">出力の上限（1 回の応答）</span></h3>
+          <span class="timing-badge" data-group="output"></span>
+          <span class="apply-status" data-group="output" role="status"></span>
+        </div>
+        <fieldset class="choice-list" id="cost-output-mode" aria-describedby="cost-output-desc">
+          <legend class="visually-hidden" data-i18n="cost.output_title">出力の上限（1 回の応答）</legend>
+          <label class="choice" for="cost-output-auto">
+            <input id="cost-output-auto" type="radio" name="cost-output-mode" value="auto">
+            <span><strong data-i18n="cost.output_auto">自動（推奨）</strong>
+            <span class="hint" id="cost-output-auto-desc"></span></span>
+          </label>
+          <label class="choice" for="cost-output-fixed">
+            <input id="cost-output-fixed" type="radio" name="cost-output-mode" value="fixed">
+            <span><strong data-i18n="cost.output_fixed">数値で指定</strong>
+            <span class="hint" data-i18n="cost.output_fixed_desc">応答が途中で切れるときに上げます。上限は天井で、実際に出力した分だけ課金されます。</span></span>
+          </label>
+        </fieldset>
+        <div class="cost-field">
+          <label for="cost-max-output"><strong data-i18n="cost.output_tokens_label">上限（トークン）</strong></label>
+          <input id="cost-max-output" data-surface-field="gateway.max_output_tokens" type="number" inputmode="numeric" min="1" max="1000000" step="1"
+                 aria-describedby="cost-output-desc cost-max-output-warn err-output-max_output_tokens">
+          <p class="hint" id="cost-output-desc"></p>
+          <p class="notice warn cost-warn" id="cost-max-output-warn" role="status" hidden></p>
+          <p class="field-error" id="err-output-max_output_tokens" hidden></p>
+        </div>
+        <p class="field-error" id="err-output" hidden></p>
+      </div>
+
+      <div class="subsection" id="sec-cost-cache" tabindex="-1">
+        <div class="section-head">
+          <h3><span data-i18n="cost.cache_title">プロンプトキャッシュ</span></h3>
+          <span class="timing-badge" data-group="cache"></span>
+          <span class="apply-status" data-group="cache" role="status"></span>
+        </div>
+        <label class="choice switch-row" for="cost-cache-enabled">
+          <input id="cost-cache-enabled" data-surface-field="gateway.prompt_cache" class="switch" type="checkbox" role="switch"
+                 aria-describedby="cost-cache-desc cost-cache-unsupported pin-gateway-prompt_cache cost-cache-enabled-live err-cache-enabled">
+          <span><strong data-i18n="cost.cache_enabled">プロンプトキャッシュを使う</strong>
+          <span class="hint" id="cost-cache-desc" data-i18n="cost.cache_desc">毎回同じ部分（ツール定義・人格など）を再利用して、入力トークンの料金と待ち時間を減らします。Bedrock の Claude だけが対象です。既定: オフ。</span></span>
+        </label>
+        <p class="hint cost-note" id="cost-cache-unsupported" hidden></p>
+        <p class="hint pin-note" id="pin-gateway-prompt_cache" hidden></p>
+        <p class="hint cost-pin" id="cost-cache-enabled-live" hidden></p>
+        <p class="field-error" id="err-cache-enabled" hidden></p>
+        <div class="cost-field">
+          <label for="cost-cache-ttl"><strong data-i18n="cost.cache_ttl">保持時間</strong></label>
+          <select id="cost-cache-ttl" data-surface-field="gateway.prompt_cache_ttl" aria-describedby="cost-cache-ttl-desc pin-gateway-prompt_cache_ttl cost-cache-ttl-live err-cache-ttl">
+            <option value="5m" data-i18n="cost.ttl_5m">5 分（既定）</option>
+            <option value="1h" data-i18n="cost.ttl_1h">1 時間</option>
+          </select>
+          <p class="hint" id="cost-cache-ttl-desc" data-i18n="cost.cache_ttl_desc">1 時間は書き込みの料金が高く、間をあけて話すときに向きます。</p>
+          <p class="hint pin-note" id="pin-gateway-prompt_cache_ttl" hidden></p>
+          <p class="hint cost-pin" id="cost-cache-ttl-live" hidden></p>
+          <p class="field-error" id="err-cache-ttl" hidden></p>
+        </div>
+        <p class="field-error" id="err-cache" hidden></p>
+      </div>
+
+      <div class="subsection" id="sec-cost-context" tabindex="-1">
+        <div class="section-head">
+          <h3><span data-i18n="cost.context_title">コンテキスト管理</span></h3>
+          <span class="timing-badge" data-group="context"></span>
+          <span class="apply-status" data-group="context" role="status"></span>
+        </div>
+        <label class="choice switch-row" for="cost-context-enabled">
+          <input id="cost-context-enabled" data-surface-field="gateway.context_management" class="switch" type="checkbox" role="switch"
+                 aria-describedby="cost-context-desc pin-gateway-context_management cost-context-enabled-live err-context-enabled">
+          <span><strong data-i18n="cost.context_enabled">大きなツール結果を退避し、長い会話を要約する</strong>
+          <span class="hint" id="cost-context-desc" data-i18n="cost.context_desc">大きなツール結果はデータディレクトリに退避して先頭だけを会話に残し、会話が長くなったら古い部分を要約します。要約にはモデルを呼びます。会話の履歴をサーバー側で持つモデルでは使われません。既定: オフ。</span></span>
+        </label>
+        <p class="hint pin-note" id="pin-gateway-context_management" hidden></p>
+        <p class="hint cost-pin" id="cost-context-enabled-live" hidden></p>
+        <p class="field-error" id="err-context-enabled" hidden></p>
+        <details class="internals" id="cost-context-details">
+          <summary data-i18n="cost.context_details">詳細（しきい値）</summary>
+          <div class="cost-fields" id="cost-context-fields">
+            <div class="cost-field">
+              <label for="cost-ctx-offload_threshold_tokens"><strong data-i18n="cost.ctx_offload_threshold_tokens">退避するツール結果の大きさ（トークン）</strong></label>
+              <input id="cost-ctx-offload_threshold_tokens" data-option="offload_threshold_tokens" type="number" inputmode="numeric" min="1" step="1"
+                     aria-describedby="cost-ctx-offload_threshold_tokens-desc err-context-offload_threshold_tokens">
+              <p class="hint" id="cost-ctx-offload_threshold_tokens-desc" data-i18n="cost.ctx_offload_threshold_tokens_desc">これより大きいツール結果を退避します。既定: 1500。</p>
+              <p class="field-error" id="err-context-offload_threshold_tokens" hidden></p>
+            </div>
+            <div class="cost-field">
+              <label for="cost-ctx-preview_tokens"><strong data-i18n="cost.ctx_preview_tokens">会話に残す先頭（トークン）</strong></label>
+              <input id="cost-ctx-preview_tokens" data-option="preview_tokens" type="number" inputmode="numeric" min="0" step="1"
+                     aria-describedby="cost-ctx-preview_tokens-desc err-context-preview_tokens">
+              <p class="hint" id="cost-ctx-preview_tokens-desc" data-i18n="cost.ctx_preview_tokens_desc">退避したツール結果のうち会話に残す先頭の長さ。上の値より小さく。既定: 750。</p>
+              <p class="field-error" id="err-context-preview_tokens" hidden></p>
+            </div>
+            <div class="cost-field">
+              <label for="cost-ctx-compression_threshold"><strong data-i18n="cost.ctx_compression_threshold">要約を始める使用率</strong></label>
+              <input id="cost-ctx-compression_threshold" data-option="compression_threshold" type="number" inputmode="decimal" min="0.01" step="0.01"
+                     aria-describedby="cost-ctx-compression_threshold-desc err-context-compression_threshold">
+              <p class="hint" id="cost-ctx-compression_threshold-desc" data-i18n="cost.ctx_compression_threshold_desc">入力がコンテキストのこの割合に達したら要約します（0 より大きく 1 以下）。既定: 0.85。</p>
+              <p class="field-error" id="err-context-compression_threshold" hidden></p>
+            </div>
+            <div class="cost-field">
+              <label for="cost-ctx-summary_ratio"><strong data-i18n="cost.ctx_summary_ratio">一度に要約する割合</strong></label>
+              <input id="cost-ctx-summary_ratio" data-option="summary_ratio" type="number" inputmode="decimal" min="0.1" step="0.05"
+                     aria-describedby="cost-ctx-summary_ratio-desc err-context-summary_ratio">
+              <p class="hint" id="cost-ctx-summary_ratio-desc" data-i18n="cost.ctx_summary_ratio_desc">履歴のうち一度に要約する割合（0.1〜0.8）。既定: 0.8。</p>
+              <p class="field-error" id="err-context-summary_ratio" hidden></p>
+            </div>
+            <div class="cost-field">
+              <label for="cost-ctx-preserve_recent"><strong data-i18n="cost.ctx_preserve_recent">要約しない直近のメッセージ数</strong></label>
+              <input id="cost-ctx-preserve_recent" data-option="preserve_recent" type="number" inputmode="numeric" min="0" step="1"
+                     aria-describedby="cost-ctx-preserve_recent-desc err-context-preserve_recent">
+              <p class="hint" id="cost-ctx-preserve_recent-desc" data-i18n="cost.ctx_preserve_recent_desc">既定: 4。</p>
+              <p class="field-error" id="err-context-preserve_recent" hidden></p>
+            </div>
+            <div class="cost-field">
+              <label for="cost-ctx-retention_hours"><strong data-i18n="cost.ctx_retention_hours">退避した結果の保存期間（時間）</strong></label>
+              <input id="cost-ctx-retention_hours" data-option="retention_hours" type="number" inputmode="decimal" min="0.5" step="0.5"
+                     aria-describedby="cost-ctx-retention_hours-desc err-context-retention_hours">
+              <p class="hint" id="cost-ctx-retention_hours-desc" data-i18n="cost.ctx_retention_hours_desc">これより古い退避分は削除します（0 より大きく 8760 以下）。既定: 24。</p>
+              <p class="field-error" id="err-context-retention_hours" hidden></p>
+            </div>
+            <div class="cost-field">
+              <label for="cost-ctx-context_window_tokens"><strong data-i18n="cost.ctx_context_window_tokens">コンテキストの大きさ（トークン）</strong></label>
+              <input id="cost-ctx-context_window_tokens" data-option="context_window_tokens" type="number" inputmode="numeric" min="1" step="1" placeholder="自動" data-i18n-placeholder="cost.ctx_auto_placeholder"
+                     aria-describedby="cost-ctx-context_window_tokens-desc err-context-context_window_tokens">
+              <p class="hint" id="cost-ctx-context_window_tokens-desc" data-i18n="cost.ctx_context_window_tokens_desc">空欄 = 自動（モデルの設定・能力表、なければ 200000）。チャットのコンテキスト計にも使います。</p>
+              <p class="field-error" id="err-context-context_window_tokens" hidden></p>
+            </div>
+            <div class="cost-field">
+              <label for="cost-ctx-retrieval_max_tokens"><strong data-i18n="cost.ctx_retrieval_max_tokens">読み戻しの上限（トークン）</strong></label>
+              <input id="cost-ctx-retrieval_max_tokens" data-option="retrieval_max_tokens" type="number" inputmode="numeric" min="1" step="1"
+                     aria-describedby="cost-ctx-retrieval_max_tokens-desc err-context-retrieval_max_tokens">
+              <p class="hint" id="cost-ctx-retrieval_max_tokens-desc" data-i18n="cost.ctx_retrieval_max_tokens_desc">退避分を読み戻すときに一度に返す最大の長さ。既定: 10000。</p>
+              <p class="field-error" id="err-context-retrieval_max_tokens" hidden></p>
+            </div>
+          </div>
+        </details>
+        <p class="field-error" id="err-context" hidden></p>
+      </div>
+
+      <div class="subsection" id="sec-cost-profile" tabindex="-1">
+        <div class="section-head">
+          <h3><span data-i18n="cost.profile_title">小さいモデル向けのプロファイル</span></h3>
+        </div>
+        <p id="cost-profile-current" role="status"></p>
+        <p class="hint" id="cost-profile-desc" data-i18n="cost.profile_desc">小さいコンテキストのモデル向けに、記憶の量と送るツール定義を絞ります。この画面では変更できません: gateway-config.json の context_profile（default / small / tiny）か環境変数 STIRA_CONTEXT_PROFILE を使い、再起動で反映します。既定: default（変更なし）。</p>
+        <p class="hint" id="cost-profile-next" hidden></p>
+      </div>
+
+      <div class="subsection" id="sec-cost-task-models" tabindex="-1">
+        <div class="section-head">
+          <h3><span data-i18n="cost.task_models_title">処理ごとのモデル</span></h3>
+        </div>
+        <ul id="cost-task-models-list"></ul>
+        <p class="hint" id="cost-task-models-desc" data-i18n="cost.task_models_desc">要約などの補助の処理が使うモデルです。既定はすべて会話と同じモデル（inherit）。この画面では変更できません: gateway-config.json の task_models か環境変数 STIRA_TASK_MODEL_&lt;処理名&gt; を使い、再起動で反映します。指定したモデルが使えないときは別のモデルに切り替えず、その処理を失敗にします。</p>
+        <p class="hint" id="cost-task-models-next" hidden></p>
+      </div>
+    </section>
+
+    <section class="card hub-section" id="sec-classifier" aria-labelledby="classifier-title" tabindex="-1">
+      <div class="section-head">
+        <h2 id="classifier-title"><span data-i18n="hub.sec_classifier">感情分類</span></h2>
+        <span class="timing-badge" data-group="classifier"></span>
+        <span class="apply-status" data-group="classifier" role="status"></span>
+      </div>
+      <p class="hint" data-i18n="hub.classifier_desc">あなたの発言がエージェントの感情（信頼・警戒など）をどう動かすかを判定する仕組みを選びます。</p>
+      <fieldset class="choice-list" id="classifier-choices" aria-describedby="classifier-effective">
+        <legend class="visually-hidden" data-i18n="hub.classifier_legend">分類の方式</legend>
+      </fieldset>
+      <p id="classifier-effective" class="hint"></p>
+      <p class="field-error" id="err-classifier-choice" hidden></p>
+      <p class="field-error" id="err-classifier" hidden></p>
+      <details class="internals">
+        <summary data-i18n="hub.details">詳細</summary>
+        <p class="hint" data-i18n="hub.classifier_internals">保存先: gateway-config.json（jev_enabled / jev_classifier）。「自動」は jev_enabled=false に対応し、Sokudan がインストールされていれば SokudanClassifier、なければ RuleBasedClassifier を使います。</p>
+      </details>
+    </section>
+
+    <section class="card hub-section" id="sec-heartbeat" aria-labelledby="heartbeat-title" tabindex="-1">
+      <div class="section-head">
+        <h2 id="heartbeat-title"><span data-i18n="hb.sec">ハートビート</span></h2>
+        <span class="timing-badge" data-group="heartbeat"></span>
+        <span class="apply-status" data-group="heartbeat" role="status"></span>
+      </div>
+      <p class="hint" id="hb-desc" data-i18n="hb.desc">会話していない間も、感情の減衰・状態の記録・ブレーカーの確認を一定の間隔で続けます。モデルは呼ばないので、トークンの料金はかかりません。</p>
+      <label class="choice switch-row" for="hb-enabled">
+        <input id="hb-enabled" data-surface-field="gateway.hb_enabled" class="switch" type="checkbox" role="switch"
+               aria-describedby="hb-enabled-desc pin-gateway-hb_enabled hb-enabled-live err-heartbeat-enabled">
+        <span><strong data-i18n="hb.enabled">ハートビートを使う</strong>
+        <span class="hint" id="hb-enabled-desc" data-i18n="hb.enabled_desc">オフでも減衰は次の会話でまとめて計算されます。オンにすると、会話の合間の状態もグラフに残ります。既定: オフ。</span></span>
+      </label>
+      <p class="hint pin-note" id="pin-gateway-hb_enabled" hidden></p>
+      <p class="hint cost-pin" id="hb-enabled-live" hidden></p>
+      <p class="field-error" id="err-heartbeat-enabled" hidden></p>
+      <div class="hb-fields">
+        <div class="cost-field">
+          <label for="hb-floor"><strong data-i18n="hb.floor">最短の間隔（分）</strong></label>
+          <input id="hb-floor" data-surface-field="gateway.hb_interval_floor_sec" type="number" inputmode="numeric" min="1" max="1440" step="1"
+                 aria-describedby="hb-floor-desc hb-interval-note err-heartbeat-interval_floor_sec">
+          <p class="hint" id="hb-floor-desc" data-i18n="hb.floor_desc">状態が不安定なときの間隔。既定: 5 分。</p>
+          <p class="field-error" id="err-heartbeat-interval_floor_sec" hidden></p>
+        </div>
+        <div class="cost-field">
+          <label for="hb-ceil"><strong data-i18n="hb.ceil">最長の間隔（分）</strong></label>
+          <input id="hb-ceil" data-surface-field="gateway.hb_interval_ceil_sec" type="number" inputmode="numeric" min="1" max="1440" step="1"
+                 aria-describedby="hb-ceil-desc hb-interval-note err-heartbeat-interval_ceil_sec">
+          <p class="hint" id="hb-ceil-desc" data-i18n="hb.ceil_desc">落ち着いているときの間隔。既定: 180 分（3 時間）。</p>
+          <p class="field-error" id="err-heartbeat-interval_ceil_sec" hidden></p>
+        </div>
+      </div>
+      <p class="hint" id="hb-interval-hint" data-i18n="hb.interval_hint">安定しているほど最長に近く、不安定なほど最短に近い間隔になります。1 分〜24 時間（1440 分）。</p>
+      <p class="hint hb-note" id="hb-interval-note" role="status" aria-live="polite"></p>
+      <p class="field-error" id="err-heartbeat" hidden></p>
+      <div class="hb-live">
+        <h3 id="hb-live-title" data-i18n="hb.live_title">いまの状態</h3>
+        <p class="hint" id="hb-live-summary" data-state="info"></p>
+        <dl class="facts" id="hb-live-facts"></dl>
+      </div>
+      <details class="internals">
+        <summary data-i18n="hub.details">詳細</summary>
+        <p class="hint" data-i18n="hb.internals">保存先: gateway-config.json の hb_enabled / hb_interval_floor_sec / hb_interval_ceil_sec（秒）。チャットサーバーの起動時に読むので、保存した変更は再起動後に反映されます。環境変数 STIRA_HEARTBEAT（1 / 0）があるとスイッチはそちらが優先されます。この画面にあるのは設定と状態の表示だけで、見回りを今すぐ動かす・止める操作はありません。</p>
+      </details>
+    </section>
+
+    <section class="card hub-section" id="sec-safety" aria-labelledby="safety-title" tabindex="-1">
+      <h2 id="safety-title"><span data-i18n="hub.sec_safety">安全（ブレーカー・ツール）</span></h2>
+      <p class="hint" data-i18n="hub.safety_desc">エージェントが不安定になったときに書き込み・実行系を制限する仕組み（ブレーカー）と、使ってよいツールを決めます。応答はブレーカーでは止まりません。</p>
+
+      <div class="subsection" id="sec-presets" tabindex="-1">
+        <div class="section-head">
+          <h3 id="presets-title"><span data-i18n="hub.presets_title">安全プリセット</span></h3>
+          <span id="preset-current" class="badge" data-state="info"></span>
+        </div>
+        <p class="hint" data-i18n="hub.presets_desc">ツールの許可とブレーカーをまとめて切り替えます。選ぶと変更点が表示され、「下書きに反映」→「保存」で確定します。実行系ツールはどのプリセットでも無効のままです。</p>
+        <div class="preset-grid" id="preset-list" role="group" aria-labelledby="presets-title"></div>
+        <div class="preset-preview" id="preset-preview" hidden tabindex="-1" aria-labelledby="preset-preview-title">
+          <h4 id="preset-preview-title"></h4>
+          <ul id="preset-preview-list"></ul>
+          <div class="save-row">
+            <button id="preset-apply" type="button" class="btn btn-primary"><span data-i18n="hub.preset_apply">下書きに反映</span></button>
+            <button id="preset-cancel" type="button" class="btn btn-secondary"><span data-i18n="hub.cancel">キャンセル</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="subsection" id="sec-breaker" tabindex="-1">
+        <div class="section-head">
+          <h3><span data-i18n="hub.breaker_title">ブレーカー（自動で制限をかける基準）</span></h3>
+          <span class="timing-badge" data-group="breaker"></span>
+          <span class="apply-status" data-group="breaker" role="status"></span>
+        </div>
+        <p class="hint" data-i18n="hub.breaker_desc">安定度は 0〜1 で、低いほど不安定です。値を上げるほど早めに制限がかかり、安全側になります。</p>
+        <p class="breaker-reset-note" id="breaker-reset-note" role="status" hidden></p>
+        <fieldset class="threshold-pair" id="pair-stability-warning">
+          <legend><strong data-i18n="hub.warn_label">警告ライン</strong></legend>
+          <div class="threshold-row hyst-row" aria-hidden="true"><span></span><div class="hyst"><span class="hyst-band" id="stability-warning-band"></span><span class="hyst-mark hyst-enter" id="stability-warning-mark"></span><span class="hyst-mark hyst-exit" id="stability-warning-exit-mark"></span></div><span></span></div>
+          <div class="threshold-row">
+            <label for="stability-warning"><span data-i18n="hub.pair_enter">入る（下回ったら）</span></label>
+            <input id="stability-warning" name="stability_warning" data-surface-field="stira.stability_warning" type="range" min="0" max="1" step="0.01"
+                   aria-describedby="pair-sum-stability-warning err-breaker-stability_warning">
+            <output id="stability-warning-value" for="stability-warning">—</output>
+          </div>
+          <div class="threshold-row">
+            <label for="stability-warning-exit"><span data-i18n="hub.pair_exit">解除（上回ったら）</span></label>
+            <input id="stability-warning-exit" name="stability_warning_exit" data-surface-field="stira.stability_warning_exit" type="range" min="0" max="1" step="0.01"
+                   aria-describedby="pair-sum-stability-warning err-breaker-stability_warning_exit">
+            <output id="stability-warning-exit-value" for="stability-warning-exit">—</output>
+          </div>
+          <p class="hint pair-summary" id="pair-sum-stability-warning"></p>
+          <p class="hint field-desc" id="desc-stability-warning" data-i18n="hub.warn_desc">安定度がこれを下回ると「警告」になり、書き込み・実行系のツールを止めます（読み取りは続きます）。</p>
+          <p class="field-note" id="note-stability-warning" role="status" hidden></p>
+          <p class="field-error" id="err-breaker-stability_warning" hidden></p>
+          <p class="field-error" id="err-breaker-stability_warning_exit" hidden></p>
+        </fieldset>
+        <fieldset class="threshold-pair" id="pair-stability-critical">
+          <legend><strong data-i18n="hub.crit_label">危険ライン</strong></legend>
+          <div class="threshold-row hyst-row" aria-hidden="true"><span></span><div class="hyst"><span class="hyst-band" id="stability-critical-band"></span><span class="hyst-mark hyst-enter" id="stability-critical-mark"></span><span class="hyst-mark hyst-exit" id="stability-critical-exit-mark"></span></div><span></span></div>
+          <div class="threshold-row">
+            <label for="stability-critical"><span data-i18n="hub.pair_enter">入る（下回ったら）</span></label>
+            <input id="stability-critical" name="stability_critical" data-surface-field="stira.stability_critical" type="range" min="0" max="1" step="0.01"
+                   aria-describedby="pair-sum-stability-critical err-breaker-stability_critical">
+            <output id="stability-critical-value" for="stability-critical">—</output>
+          </div>
+          <div class="threshold-row">
+            <label for="stability-critical-exit"><span data-i18n="hub.pair_exit">解除（上回ったら）</span></label>
+            <input id="stability-critical-exit" name="stability_critical_exit" data-surface-field="stira.stability_critical_exit" type="range" min="0" max="1" step="0.01"
+                   aria-describedby="pair-sum-stability-critical err-breaker-stability_critical_exit">
+            <output id="stability-critical-exit-value" for="stability-critical-exit">—</output>
+          </div>
+          <p class="hint pair-summary" id="pair-sum-stability-critical"></p>
+          <p class="hint field-desc" id="desc-stability-critical" data-i18n="hub.crit_desc">これを下回ると「危険」になります。応答と読み取りは続き、書き込み・実行系は止まる（読み取り専用）か、1 回ごとに人の承認が必要になります（どちらかは「ツールの許可」の「実効」に出ます）。警告ラインより低くしてください。</p>
+          <p class="field-note" id="note-stability-critical" role="status" hidden></p>
+          <p class="field-error" id="err-breaker-stability_critical" hidden></p>
+          <p class="field-error" id="err-breaker-stability_critical_exit" hidden></p>
+        </fieldset>
+        <fieldset class="threshold-pair" id="pair-bc-threshold">
+          <legend><strong data-i18n="hub.bc_label">ぶれ検知ライン</strong></legend>
+          <div class="threshold-row hyst-row" aria-hidden="true"><span></span><div class="hyst"><span class="hyst-band" id="bc-threshold-band"></span><span class="hyst-mark hyst-enter" id="bc-threshold-mark"></span><span class="hyst-mark hyst-exit" id="bc-threshold-exit-mark"></span></div><span></span></div>
+          <div class="threshold-row">
+            <label for="bc-threshold"><span data-i18n="hub.pair_enter">入る（下回ったら）</span></label>
+            <input id="bc-threshold" name="bc_threshold" data-surface-field="stira.bc_threshold" type="range" min="0" max="1" step="0.01"
+                   aria-describedby="pair-sum-bc-threshold err-breaker-bc_threshold">
+            <output id="bc-threshold-value" for="bc-threshold">—</output>
+          </div>
+          <div class="threshold-row">
+            <label for="bc-threshold-exit"><span data-i18n="hub.pair_exit">解除（上回ったら）</span></label>
+            <input id="bc-threshold-exit" name="bc_exit_threshold" data-surface-field="stira.bc_exit_threshold" type="range" min="0" max="1" step="0.01"
+                   aria-describedby="pair-sum-bc-threshold err-breaker-bc_exit_threshold">
+            <output id="bc-threshold-exit-value" for="bc-threshold-exit">—</output>
+          </div>
+          <p class="hint pair-summary" id="pair-sum-bc-threshold"></p>
+          <p class="hint field-desc" id="desc-bc-threshold" data-i18n="hub.bc_desc">最近の安定度のぶれが大きく、一貫性スコアがこれを下回ると「一貫性低下」にします。</p>
+          <p class="field-note" id="note-bc-threshold" role="status" hidden></p>
+          <p class="field-error" id="err-breaker-bc_threshold" hidden></p>
+          <p class="field-error" id="err-breaker-bc_exit_threshold" hidden></p>
+        </fieldset>
+        <p class="field-error" id="err-breaker" hidden></p>
+        <details class="internals breaker-details" id="breaker-details">
+          <summary><span data-i18n="hub.details_title">詳細設定（再起動後に反映）</span></summary>
+          <div class="section-head">
+            <span class="timing-badge" data-group="breaker_details"></span>
+            <span class="apply-status" data-group="breaker_details" role="status"></span>
+          </div>
+          <ul class="clamp-notes" id="breaker-clamp-notes" hidden></ul>
+          <div class="detail-row">
+            <label for="bc-window-size"><strong data-i18n="hub.det_bc_window">一貫性を測る直近の回数</strong></label>
+            <input id="bc-window-size" name="bc_window_size" data-surface-field="stira.bc_window_size" type="number" inputmode="decimal" step="1"
+                   aria-describedby="desc-bc-window-size note-bc-window-size err-breaker_details-bc_window_size">
+            <p class="hint field-desc" id="desc-bc-window-size" data-i18n="hub.det_bc_window_desc">一貫性スコアを計算する直近の安定度の数。5〜200（5 未満ではスコアが出ません。大きいほど揺れに気づくのが遅れます）。</p>
+            <p class="field-note" id="note-bc-window-size" role="status" hidden></p>
+            <p class="field-error" id="err-breaker_details-bc_window_size" hidden></p>
+          </div>
+          <div class="detail-row">
+            <label for="critical-cooldown-turns"><strong data-i18n="hub.det_cooldown">危険から戻るまでの最小ターン</strong></label>
+            <input id="critical-cooldown-turns" name="critical_cooldown_turns" data-surface-field="stira.critical_cooldown_turns" type="number" inputmode="decimal" step="1"
+                   aria-describedby="desc-critical-cooldown-turns note-critical-cooldown-turns err-breaker_details-critical_cooldown_turns">
+            <p class="hint field-desc" id="desc-critical-cooldown-turns" data-i18n="hub.det_cooldown_desc">「危険」に入ってから解除できるまでの最小ターン数。3〜50。</p>
+            <p class="field-note" id="note-critical-cooldown-turns" role="status" hidden></p>
+            <p class="field-error" id="err-breaker_details-critical_cooldown_turns" hidden></p>
+          </div>
+          <div class="detail-row">
+            <label for="decay-min-interval-sec"><strong data-i18n="hub.det_decay">感情の減衰の最小間隔（秒）</strong></label>
+            <input id="decay-min-interval-sec" name="decay_min_interval_sec" data-surface-field="stira.decay_min_interval_sec" type="number" inputmode="decimal" step="any"
+                   aria-describedby="desc-decay-min-interval-sec note-decay-min-interval-sec err-breaker_details-decay_min_interval_sec">
+            <p class="hint field-desc" id="desc-decay-min-interval-sec" data-i18n="hub.det_decay_desc">感情を基準値へ戻す計算の最小間隔。0 以上。</p>
+            <p class="field-note" id="note-decay-min-interval-sec" role="status" hidden></p>
+            <p class="field-error" id="err-breaker_details-decay_min_interval_sec" hidden></p>
+          </div>
+          <div class="detail-row">
+            <label for="sycophancy-threshold"><strong data-i18n="hub.det_syc">迎合の検知ライン</strong></label>
+            <input id="sycophancy-threshold" name="sycophancy_threshold" data-surface-field="stira.sycophancy_threshold" type="number" inputmode="decimal" step="0.01"
+                   aria-describedby="desc-sycophancy-threshold note-sycophancy-threshold err-breaker_details-sycophancy_threshold">
+            <p class="hint field-desc" id="desc-sycophancy-threshold" data-i18n="hub.det_syc_desc">直近の同意の割合がこれを超えると迎合の警告を出します。0〜1。</p>
+            <p class="field-note" id="note-sycophancy-threshold" role="status" hidden></p>
+            <p class="field-error" id="err-breaker_details-sycophancy_threshold" hidden></p>
+          </div>
+          <div class="detail-row">
+            <label for="sycophancy-window-size"><strong data-i18n="hub.det_syc_window">迎合を測る直近の回数</strong></label>
+            <input id="sycophancy-window-size" name="sycophancy_window_size" data-surface-field="stira.sycophancy_window_size" type="number" inputmode="decimal" step="1"
+                   aria-describedby="desc-sycophancy-window-size note-sycophancy-window-size err-breaker_details-sycophancy_window_size">
+            <p class="hint field-desc" id="desc-sycophancy-window-size" data-i18n="hub.det_syc_window_desc">同意の割合を数える直近の応答数。1〜200。</p>
+            <p class="field-note" id="note-sycophancy-window-size" role="status" hidden></p>
+            <p class="field-error" id="err-breaker_details-sycophancy_window_size" hidden></p>
+          </div>
+          <div class="detail-row">
+            <label for="hitl-timeout-sec"><strong data-i18n="hub.det_hitl_timeout">承認の待ち時間（秒）</strong></label>
+            <input id="hitl-timeout-sec" name="hitl_timeout_sec" data-surface-field="stira.hitl_timeout_sec" type="number" inputmode="decimal" step="1"
+                   aria-describedby="desc-hitl-timeout-sec note-hitl-timeout-sec err-breaker_details-hitl_timeout_sec">
+            <p class="hint field-desc" id="desc-hitl-timeout-sec" data-i18n="hub.det_hitl_timeout_desc">人の承認を待つ時間。1 秒〜24 時間（86400 秒）。時間切れは「拒否」として扱います（安全側）。</p>
+            <p class="field-note" id="note-hitl-timeout-sec" role="status" hidden></p>
+            <p class="field-error" id="err-breaker_details-hitl_timeout_sec" hidden></p>
+          </div>
+          <div class="detail-row">
+            <label for="hitl-max-edit-rounds"><strong data-i18n="hub.det_hitl_rounds">承認での修正のやり取りの上限</strong></label>
+            <input id="hitl-max-edit-rounds" name="hitl_max_edit_rounds" data-surface-field="stira.hitl_max_edit_rounds" type="number" inputmode="decimal" step="1"
+                   aria-describedby="desc-hitl-max-edit-rounds note-hitl-max-edit-rounds err-breaker_details-hitl_max_edit_rounds">
+            <p class="hint field-desc" id="desc-hitl-max-edit-rounds" data-i18n="hub.det_hitl_rounds_desc">承認時に内容を直して出し直せる回数。0〜10。</p>
+            <p class="field-note" id="note-hitl-max-edit-rounds" role="status" hidden></p>
+            <p class="field-error" id="err-breaker_details-hitl_max_edit_rounds" hidden></p>
+          </div>
+          <p class="field-error" id="err-breaker_details" hidden></p>
+          <h4 data-i18n="hub.fixed_title">変更できない値（表示のみ）</h4>
+          <dl class="facts" id="breaker-fixed"></dl>
+          <p class="hint" data-i18n="hub.breaker_internals">保存先: agent-config.json の stira_config_overrides。入るラインは解除ラインより低くしてください（入るラインを解除ライン以上に上げると、解除ラインも一緒に上がります）。</p>
+        </details>
+      </div>
+
+      <div class="subsection" id="sec-tools" tabindex="-1">
+        <div class="section-head">
+          <h3><span data-i18n="hub.tools_title">ツールの許可</span></h3>
+          <span class="timing-badge" data-group="tools"></span>
+          <span class="apply-status" data-group="tools" role="status"></span>
+        </div>
+        <p class="hint" data-i18n="hub.tools_desc">エージェントが使ってよいツールを選びます。ブレーカーが「警告」以上のときは、ここで許可していても書き込み・実行系は止まるか、1 回ごとに人の承認が必要になります。</p>
+        <p class="hint" id="policy-legend-help" data-i18n="policy.help">ツールごとに「常に許可」「毎回確認」「使わない」を選びます。実効の判定は、ここでの選択・ブレーカー・保護（床）のうち最も厳しいものです。緩める変更は確認が必要で、ブレーカー作動中はできません。</p>
+        {% if shell_status is defined and shell_status.approvals_url and shell_status.approvals_page == '/approvals' %}
+        <p class="hint"><a class="hub-related-link" href="/approvals"><span data-i18n="policy.approvals_link">「毎回確認」のツールの承認要求は、チャットと「承認」ページに届きます</span></a></p>
+        {% endif %}
+        <p class="hint" id="policy-grant-common" data-i18n="policy.grant_common">「常に許可」にしたツールの永続許可（全ツール共通）— 範囲: そのツールの全引数 / 期限: 取り消すまで（自動失効なし） / 取消先: この一覧でそのツールを「毎回確認」か「使わない」に変えて保存。ブレーカーと床は引き続き適用されます。</p>
+        <p class="hint" data-i18n="policy.isolation_help">「隔離」はツールが OS の隔離環境で動くかどうかで、承認とは別です。承認してもツールは隔離されません。</p>
+        <p class="hint" id="policy-yolo-help" data-i18n="policy.yolo_help">YOLO は「毎回確認」のツールだけを自動で承認します。「常に許可」は元から確認が出ず、「使わない」は YOLO の間も実行されません。</p>
+        <div class="tool-profiles" id="tool-profiles">
+          <h4 id="tool-profiles-title" data-i18n="profile.title">目的別のプロファイル</h4>
+          <p class="hint" data-i18n="profile.desc">よく使う組み合わせをまとめて選べます。選ぶと、各ツールが「常に許可」「毎回確認」「使わない」のどれになるかが出ます。「下書きに反映」→「保存」で確定します（緩める変更は保存時に確認します）。今の設定が勝手に書き換わることはありません。</p>
+          <div class="preset-grid" id="profile-list" role="group" aria-labelledby="tool-profiles-title"></div>
+          <div class="preset-preview profile-preview" id="profile-preview" hidden tabindex="-1" aria-labelledby="profile-preview-title">
+            <h5 id="profile-preview-title"></h5>
+            <p id="profile-preview-summary" class="hint"></p>
+            <p id="profile-preview-yolo" class="notice profile-yolo-line"></p>
+            <div id="profile-preview-groups" class="profile-groups"></div>
+            <p class="hint" data-i18n="profile.outside_table">表にないツール（MCP など）は今の設定のままです。シェルの許可リストも変わりません。</p>
+            <div class="save-row">
+              <button id="profile-apply" type="button" class="btn btn-primary"><span data-i18n="hub.preset_apply">下書きに反映</span></button>
+              <button id="profile-cancel" type="button" class="btn btn-secondary"><span data-i18n="hub.cancel">キャンセル</span></button>
+            </div>
+          </div>
+        </div>
+        <fieldset class="choice-list" id="tool-mode" aria-describedby="err-tools-mode">
+          <legend><span data-i18n="hub.mode_legend">許可の方式</span></legend>
+          <label class="choice"><input type="radio" name="tool-mode" value="custom">
+            <span><strong data-i18n="hub.mode_custom">選んだツールだけ許可（おすすめ）</strong>
+            <span class="hint" data-i18n="hub.mode_custom_desc">下で「常に許可」か「毎回確認」にしたツールだけを使います。</span></span></label>
+          <label class="choice"><input type="radio" name="tool-mode" value="trust_all">
+            <span><strong data-i18n="hub.mode_trust_all">すべて許可（注意が必要）</strong>
+            <span class="hint" data-i18n="hub.mode_trust_all_desc">下の「使わない」を無視して全ツールを使い（「毎回確認」と実行系は確認を続けます）、シェルの許可リストも使いません。保存時に確認が必要です。</span></span></label>
+        </fieldset>
+        <p class="field-error" id="err-tools-mode" hidden></p>
+        <div class="tool-filter-row">
+          <label for="tool-filter" data-i18n="hub.tool_filter">ツールを検索</label>
+          <input id="tool-filter" type="search" autocomplete="off" spellcheck="false">
+          <span id="tool-filter-count" class="hint" role="status" aria-live="polite"></span>
+        </div>
+        <p class="field-error" id="err-tools-enabled_tools" hidden></p>
+        <p class="field-error" id="err-tools" hidden></p>
+        <p id="tools-locked" class="notice danger-banner" role="alert" hidden></p>
+        <h4 id="read-tools-title" data-i18n="hub.group_read">読み取り（情報を見るだけ）</h4>
+        <ul id="read-tools" class="tool-list" aria-labelledby="read-tools-title"></ul>
+        <h4 id="write-tools-title" data-i18n="hub.group_write">書き込み・外部アクセス</h4>
+        <ul id="write-tools" class="tool-list" aria-labelledby="write-tools-title"></ul>
+        <h4 id="exec-tools-title"><span data-i18n="tools.exec_title">実行系（既定で無効）</span></h4>
+        <p id="exec-tools-notice" class="hint"></p>
+        <ul id="exec-tools" class="tool-list" aria-labelledby="exec-tools-title"></ul>
+        <section class="floor-panel" aria-labelledby="floor-title">
+          <h4 id="floor-title" data-i18n="policy.floor_title">保護（床）— 設定や承認では解除できません</h4>
+          <p class="hint" data-i18n="policy.floor_desc">次の保護は読み取り専用で表示しています。ここに操作はありません。</p>
+          <ul id="floor-list" class="floor-list"></ul>
+        </section>
+        <div id="allowlist-secrets" class="notice danger-banner" role="status" hidden>
+          <p id="allowlist-secrets-text"></p>
+          <button id="allowlist-secrets-remove" type="button" class="btn btn-secondary"><span data-i18n="policy.secret_saved_remove">秘密らしいコマンドを削除</span></button>
+        </div>
+        <fieldset id="shell-editor" class="shell-editor" aria-describedby="allowlist-help">
+          <legend><span data-i18n="hub.allowlist_legend">シェルで実行してよいコマンド</span></legend>
+          <p id="allowlist-help" class="hint">
+            <span data-i18n="tools.allowlist_exact_match">コマンド全体の完全一致です。引数付きコマンドは個別に追加してください。</span>
+            <span data-i18n="tools.allowlist_no_pipes">パイプ・リダイレクト・コマンド置換は使用できません。</span>
+          </p>
+          <label for="new-command"><span data-i18n="tools.command_to_add">追加するコマンド</span></label>
+          <div class="command-entry">
+            <input id="new-command" type="text" placeholder="ls -la" autocomplete="off" spellcheck="false"
+                   aria-describedby="allowlist-help err-tools-shell_allowlist">
+            <button id="add-command" type="button" class="btn btn-secondary"><span data-i18n="tools.add">追加</span></button>
+          </div>
+          <p class="field-error" id="err-tools-shell_allowlist" hidden></p>
+          <ul id="allowlist" aria-label="許可コマンド一覧" data-i18n-aria-label="tools.command_allowlist"></ul>
+        </fieldset>
+        <fieldset id="pcports" class="shell-editor" aria-describedby="pcports-help">
+          <legend><span data-i18n="pcports.legend">page_check が開いてよい localhost のポート</span></legend>
+          <p id="pcports-help" class="hint">
+            <span data-i18n="pcports.help">エージェントの検証用ブラウザ（page_check）は、ここに追加したポートの localhost:&lt;ポート&gt; のページだけを開けます（既定は空＝ワークスペースのファイルだけ）。そのポートへの通信だけが 127.0.0.1 に転送され、他のホスト・ポート・そこから外れるリダイレクトはすべて拒否されます。</span>
+            <span data-i18n="pcports.server">実行系ツールが無効なら、サーバーはあなたが起動してください（127.0.0.1 で待ち受けるように）。</span>
+            <span data-i18n="pcports.rules">1024 未満とこのダッシュボード自身のポートは追加できません。追加には確認が必要です。ここ以外（エージェントのツールや API）からは追加できません。</span>
+          </p>
+          <p id="pcports-locked" class="notice danger-banner" role="alert" hidden></p>
+          <label for="pcports-new"><span data-i18n="pcports.port_to_add">追加するポート</span></label>
+          <div class="command-entry">
+            <input id="pcports-new" type="number" inputmode="numeric" min="1024" max="65535" step="1" placeholder="8080" autocomplete="off"
+                   aria-describedby="pcports-help err-pcports">
+            <button id="pcports-add" type="button" class="btn btn-secondary"><span data-i18n="tools.add">追加</span></button>
+          </div>
+          <p class="field-error" id="err-pcports" role="alert" hidden></p>
+          <p id="pcports-status" class="hint" role="status" aria-live="polite"></p>
+          <ul id="pcports-list" aria-label="許可したポートの一覧" data-i18n-aria-label="pcports.list"></ul>
+        </fieldset>
+        <details class="internals">
+          <summary data-i18n="hub.details">詳細</summary>
+          <p class="hint" data-i18n="hub.tools_internals">保存先: tool-config.json（mode = custom / trust_all、enabled_tools、shell_allowlist）。実行系（shell・batch・cron・use_agent・swarm・graph・think）は環境変数 STIRA_ENABLE_EXEC_TOOLS が無い限り公開されません。</p>
+          <p class="hint" data-i18n="policy.internals">「毎回確認」のツールは tool-config.json の ask_tools に入ります。enabled_tools に無いツールは「使わない」です。実行系と page_check（フェーズ 1）は「常に許可」にできません。</p>
+        </details>
+      </div>
+
+      <div class="subsection" id="sec-write" tabindex="-1">
+        <div class="section-head">
+          <h3><span data-i18n="hub.write_title">書き込みできる場所</span></h3>
+          <span class="timing-badge" data-group="write"></span>
+          <span class="apply-status" data-group="write" role="status"></span>
+        </div>
+        <p class="hint" data-i18n="hub.write_desc">ファイル書き込みツール（file_write / editor）が書き込める場所です。ここに含まれない場所への書き込みは拒否されます。SOUL や手続き記憶などの保護対象は、どの設定でも書き込めません。</p>
+        <fieldset class="choice-list" id="write-scope" aria-describedby="err-write-roots">
+          <legend><span data-i18n="hub.write_legend">範囲</span></legend>
+          <label class="choice"><input type="radio" name="write-scope" value="workspace">
+            <span><strong data-i18n="hub.write_workspace">ワークスペースのみ（おすすめ）</strong>
+            <span class="hint" data-i18n="hub.write_workspace_desc">エージェントの作業ディレクトリ（既定: .local/stira/）の中だけに書き込めます。</span></span></label>
+          <label class="choice"><input type="radio" name="write-scope" value="workspace_tmp">
+            <span><strong data-i18n="hub.write_workspace_tmp">ワークスペース＋/tmp</strong>
+            <span class="hint" data-i18n="hub.write_workspace_tmp_desc">一時ファイル用に /tmp も許可します。</span></span></label>
+          <label class="choice"><input type="radio" name="write-scope" value="custom">
+            <span><strong data-i18n="hub.write_custom">カスタム</strong>
+            <span class="hint" data-i18n="hub.write_custom_desc">下の欄に 1 行に 1 つずつ絶対パスを書きます。@workspace はワークスペースを表します。</span></span></label>
+        </fieldset>
+        <label for="write-roots"><span data-i18n="hub.write_roots_label">許可する場所（1 行に 1 つ）</span></label>
+        <textarea id="write-roots" rows="3" spellcheck="false" autocomplete="off" aria-describedby="write-workspace-path err-write-roots"></textarea>
+        <p class="hint" id="write-workspace-path"></p>
+        <p class="field-error" id="err-write-roots" hidden></p>
+        <p class="field-error" id="err-write" hidden></p>
+        <details class="internals">
+          <summary data-i18n="hub.details">詳細</summary>
+          <p class="hint" data-i18n="hub.write_internals">保存先: agent-config.json の write_roots（既定 ["@workspace"]）。@workspace は workspace_dir、未設定ならチャットサーバーのデータディレクトリです。範囲外への書き込みは拒否されます（write_outside_action = deny）。チャットサーバーの再起動で反映されます。</p>
+        </details>
+      </div>
+
+      <div class="subsection" id="sec-read" tabindex="-1">
+        <div class="section-head">
+          <h3><span data-i18n="hub.read_title">読み取りできる場所</span></h3>
+          <span class="timing-badge" data-group="read"></span>
+          <span class="apply-status" data-group="read" role="status"></span>
+        </div>
+        <p class="hint" data-i18n="hub.read_desc">ファイルを読むツール（file_read / view_image / image_reader / editor の view / lsp_*）が読める場所です。ここに含まれない場所は読めません（E_READ_OUTSIDE_ROOTS）。鍵・認証情報・キーチェーン・ブラウザのプロファイル（~/.ssh、~/.aws、.env、*.pem など）は、どの設定でも読めません（E_READ_SECRET_PATH）。</p>
+        <fieldset class="choice-list" id="read-scope" aria-describedby="err-read-roots">
+          <legend><span data-i18n="hub.read_legend">範囲</span></legend>
+          <label class="choice"><input type="radio" name="read-scope" value="workspace">
+            <span><strong data-i18n="hub.read_workspace">ワークスペースのみ（おすすめ）</strong>
+            <span class="hint" data-i18n="hub.read_workspace_desc">エージェントの作業ディレクトリの中だけを読めます。</span></span></label>
+          <label class="choice"><input type="radio" name="read-scope" value="workspace_home">
+            <span><strong data-i18n="hub.read_workspace_home">ワークスペース＋ホーム</strong>
+            <span class="hint" data-i18n="hub.read_workspace_home_desc">ホームディレクトリの下も読めます（秘密パスは除く）。</span></span></label>
+          <label class="choice"><input type="radio" name="read-scope" value="everywhere">
+            <span><strong data-i18n="hub.read_everywhere">どこでも（調査用）</strong>
+            <span class="hint" data-i18n="hub.read_everywhere_desc">このマシンのファイルをどこでも読めます（秘密パスは除く）。必要な間だけにしてください。</span></span></label>
+          <label class="choice"><input type="radio" name="read-scope" value="custom">
+            <span><strong data-i18n="hub.read_custom">カスタム</strong>
+            <span class="hint" data-i18n="hub.read_custom_desc">下の欄に 1 行に 1 つずつ絶対パスを書きます（読ませたいリポジトリなど）。@workspace はワークスペースを表します。</span></span></label>
+        </fieldset>
+        <label for="read-roots"><span data-i18n="hub.read_roots_label">読める場所（1 行に 1 つ）</span></label>
+        <textarea id="read-roots" rows="3" spellcheck="false" autocomplete="off" aria-describedby="err-read-roots"></textarea>
+        <p class="field-error" id="err-read-roots" hidden></p>
+        <p class="field-error" id="err-read" hidden></p>
+        <details class="internals">
+          <summary data-i18n="hub.details">詳細</summary>
+          <p class="hint" data-i18n="hub.read_internals">保存先: agent-config.json の read_roots（既定 ["@workspace"]）。場所を足す保存は確認が出て、設定履歴に残ります。秘密パスの床には agent-config.json の read_secret_paths で追加できます（外すことはできません）。チャットサーバーの再起動で反映されます。</p>
+        </details>
+      </div>
+
+      <div class="subsection" id="sec-containment" tabindex="-1">
+        <div class="section-head">
+          <h3><span data-i18n="contain.title">隔離の段階（観測のみ）</span></h3>
+        </div>
+        <p class="hint" data-i18n="contain.desc">ゲートがすでに出している拒否と保留（秘密パスの読み取り、床への書込み、自分のダッシュボードへの呼び出し、外部送信の保留、連続実行）を数え、仮に段階が上がるとしたらどこかを記録します。フェーズ 0 では何も止めません。</p>
+        <div id="containment-view" role="status" aria-live="polite"></div>
+        <details class="internals">
+          <summary data-i18n="hub.details">詳細</summary>
+          <p class="hint" data-i18n="contain.internals">設定: agent-config.json の containment（{"phase": 0} で ON、無しで OFF）。環境変数 STIRA_CONTAINMENT_OBSERVE=0 で強制 OFF。チャットサーバーの再起動で反映されます。週次の集計は containment_cli の summary で出せます。</p>
+        </details>
+      </div>
+
+      <div class="subsection" id="sec-taint" tabindex="-1">
+        <div class="section-head">
+          <h3><span data-i18n="taint.title">信頼ラベル（観測のみ）</span></h3>
+        </div>
+        <p class="hint" data-i18n="taint.desc">ターンごとに文脈の信頼（trusted / untrusted）と機微（sensitive）を記録し、外部送信の呼び出しのうち、仮に送信の層があったら人に確認していたものを数えます。フェーズ 0 では何も止めず、プロンプトもツール結果も変えません。</p>
+        <div id="taint-view" role="status" aria-live="polite"></div>
+        <details class="internals">
+          <summary data-i18n="hub.details">詳細</summary>
+          <p class="hint" data-i18n="taint.internals">設定: agent-config.json の taint（{"phase": 0} で ON、無しで OFF）。環境変数 STIRA_TAINT_OBSERVE=0 で強制 OFF。チャットサーバーの再起動で反映されます。週次の集計は taint_cli の summary で出せます。</p>
+        </details>
+      </div>
+    </section>
+
+    <section class="card hub-section" id="sec-yolo" aria-labelledby="yset-title" tabindex="-1">
+      <div class="section-head">
+        <h2 id="yset-title"><span data-i18n="yset.nav">YOLO（一時的な自動承認）</span></h2>
+        <span id="yset-state" class="badge" data-state="info" hidden></span>
+      </div>
+      <p class="hint" data-i18n="yset.desc">チャットの YOLO ボタンを押して確認すると、最大 6 時間、「毎回確認」のツールを自動で承認できるようになります。ここでは「どこまで許すか」と上限を決めます。ここで許可しても自動承認は始まりません。「使わない」・保護（床）・ブレーカーはどの設定でも変わりません。</p>
+      <p id="yset-load" class="hint" role="status"><span data-i18n="tools.loading">読み込み中</span></p>
+      <p id="yset-restart" class="notice warn" role="status" hidden></p>
+      <p id="yset-busy" class="notice warn" hidden><span data-i18n="yset.busy">YOLO の窓（または確認待ち・ロック）があるあいだは変更できません。チャットの「停止」で終えてから保存してください。</span></p>
+      <p id="yset-warnings" class="notice warn" hidden></p>
+      <div class="yset-fields" id="yset-fields" hidden>
+        <div class="yset-field" data-field="allow">
+          <div class="yset-head">
+            <label for="yset-allow"><strong data-i18n="yset.allow_label">許可する範囲</strong></label>
+            <span class="badge yset-timing" data-state="info" data-i18n="hub.timing_restart">再起動後</span>
+            <span class="badge yset-source" data-field="allow" hidden></span>
+          </div>
+          <select id="yset-allow" aria-describedby="yset-allow-desc yset-allow-pin err-yset-allow">
+            <option value="off" data-i18n="yset.allow_off">オフ（YOLO ボタンを出さない）</option>
+            <option value="internal" data-i18n="yset.allow_internal">内部ツールまで（ファイル操作など）</option>
+            <option value="external" data-i18n="yset.allow_external">外部送信まで（Web・HTTP など）</option>
+          </select>
+          <p class="hint" id="yset-allow-desc" data-i18n="yset.allow_desc">ボタンで選べる最も広い範囲です。外部送信は、宛先がマスクされた記録と別の上限付きで自動承認します。既定: 外部送信まで（ボタンと両方の範囲を見せるだけで、押して確認するまで何も承認しません。「オフ」でボタンを消せます）。</p>
+          <p class="hint yset-pin" id="yset-allow-pin" hidden></p>
+          <p class="field-error" id="err-yset-allow" hidden></p>
+        </div>
+        <div class="yset-field" data-field="offer_exec">
+          <div class="yset-head">
+            <span class="yset-label" id="yset-offer-exec-label"><strong data-i18n="yset.offer_exec_label">実行系を選択肢に出す</strong></span>
+            <span class="badge yset-timing" data-state="info" data-i18n="hub.timing_restart">再起動後</span>
+            <span class="badge yset-source" data-field="offer_exec" hidden></span>
+          </div>
+          <label class="choice switch-row" for="yset-offer-exec">
+            <input id="yset-offer-exec" class="switch" type="checkbox" role="switch"
+                   aria-describedby="yset-offer-exec-desc yset-exec-tools err-yset-offer_exec">
+            <span><strong data-i18n="yset.offer_exec_switch">「実行系も含める」を確認ダイアログに出す</strong>
+            <span class="hint" id="yset-offer-exec-desc" data-i18n="yset.offer_exec_desc">許可が「外部送信まで」で、実行系ツールが公開されているときだけ出ます。含めた窓では shell・batch も自動承認されます（コマンドは Stira の保護を回避できます）。既定: オン。</span></span>
+          </label>
+          <p class="hint" id="yset-exec-tools"></p>
+          <p class="field-error" id="err-yset-offer_exec" hidden></p>
+        </div>
+        <div class="yset-field" data-field="max_auto_approvals">
+          <div class="yset-head">
+            <label for="yset-cap"><strong data-i18n="yset.cap_label">1 つの窓で自動承認する上限</strong></label>
+            <span class="badge yset-timing" data-state="ok" data-i18n="yset.timing_next_window">次の窓から</span>
+            <span class="badge yset-source" data-field="max_auto_approvals" hidden></span>
+          </div>
+          <input id="yset-cap" type="number" inputmode="numeric" min="1" max="10000" step="1"
+                 aria-describedby="yset-cap-desc yset-cap-pin err-yset-max_auto_approvals">
+          <p class="hint" id="yset-cap-desc" data-i18n="yset.cap_desc">この回数に達すると窓は終わります。1〜10000、既定: 2000。</p>
+          <p class="hint yset-pin" id="yset-cap-pin" hidden></p>
+          <p class="field-error" id="err-yset-max_auto_approvals" hidden></p>
+        </div>
+        <div class="yset-field" data-field="max_external">
+          <div class="yset-head">
+            <label for="yset-external"><strong data-i18n="yset.external_label">うち外部送信の上限</strong></label>
+            <span class="badge yset-timing" data-state="ok" data-i18n="yset.timing_next_window">次の窓から</span>
+            <span class="badge yset-source" data-field="max_external" hidden></span>
+          </div>
+          <input id="yset-external" type="number" inputmode="numeric" min="0" max="10000" step="1"
+                 aria-describedby="yset-external-desc yset-external-pin err-yset-max_external">
+          <p class="hint" id="yset-external-desc" data-i18n="yset.external_desc">達したあとは外部送信だけ毎回確認に戻ります（窓は続きます）。0〜上限、既定: 200。</p>
+          <p class="hint yset-pin" id="yset-external-pin" hidden></p>
+          <p class="field-error" id="err-yset-max_external" hidden></p>
+        </div>
+        <div class="yset-field" data-field="max_exec">
+          <div class="yset-head">
+            <label for="yset-exec"><strong data-i18n="yset.exec_label">うち実行系の上限</strong></label>
+            <span class="badge yset-timing" data-state="ok" data-i18n="yset.timing_next_window">次の窓から</span>
+            <span class="badge yset-source" data-field="max_exec" hidden></span>
+          </div>
+          <input id="yset-exec" type="number" inputmode="numeric" min="0" max="10000" step="1"
+                 aria-describedby="yset-exec-desc yset-exec-pin err-yset-max_exec">
+          <p class="hint" id="yset-exec-desc" data-i18n="yset.exec_desc">「実行系も含める」窓での shell・batch の回数。達したあとは毎回確認に戻ります。0〜上限、既定: 200。</p>
+          <p class="hint yset-pin" id="yset-exec-pin" hidden></p>
+          <p class="field-error" id="err-yset-max_exec" hidden></p>
+        </div>
+        <div class="yset-field" data-field="host_confirm">
+          <div class="yset-head">
+            <label for="yset-confirm"><strong data-i18n="yset.confirm_label">確認の方法</strong></label>
+            <span class="badge yset-timing" data-state="info" data-i18n="hub.timing_restart">再起動後</span>
+            <span class="badge yset-source" data-field="host_confirm" hidden></span>
+          </div>
+          <select id="yset-confirm" aria-describedby="yset-confirm-desc yset-confirm-pin err-yset-host_confirm">
+            <option value="browser" data-i18n="yset.confirm_browser">この画面でチェック（既定）</option>
+            <option value="auto" data-i18n="yset.confirm_auto">ホストで確認（使えればダイアログ）</option>
+            <option value="command" data-i18n="yset.confirm_command">ホストのコマンドで確認</option>
+            <option value="dialog" data-i18n="yset.confirm_dialog">ホストのダイアログ（OS 認証）で確認</option>
+          </select>
+          <p class="hint" id="yset-confirm-desc" data-i18n="yset.confirm_desc">YOLO の開始や、設定を緩める保存をどこで確認するかです。ホストを選ぶと画面のチェックでは確認できなくなります（厳しい側）。既定: この画面でチェック。</p>
+          <p class="hint yset-pin" id="yset-confirm-pin" hidden></p>
+          <p class="field-error" id="err-yset-host_confirm" hidden></p>
+        </div>
+      </div>
+      <div class="save-row">
+        <button id="yset-save" type="button" class="btn btn-primary" disabled><span data-i18n="yset.save">YOLO 設定を保存</span></button>
+        <button id="yset-discard" type="button" class="btn btn-secondary" disabled><span data-i18n="hub.discard">破棄</span></button>
+        <span id="yset-status" role="status" aria-live="polite"></span>
+      </div>
+      <p class="hint" data-i18n="yset.save_note">この欄は「YOLO 設定を保存」で保存します（画面下の「保存」とは別です）。緩める変更は確認してから保存されます。</p>
+      <details class="internals">
+        <summary data-i18n="hub.details">詳細</summary>
+        <p class="hint" data-i18n="yset.internals">保存先: gateway-config.json の "yolo"（allow / offer_exec / max_auto_approvals / max_external / max_exec / host_confirm）。環境変数（STIRA_YOLO_ALLOW など）が設定されている値はそちらが優先され、ここでは変更できません。許可・実行系の選択肢・確認の方法はサーバーの再起動後に、上限は次の YOLO の窓から有効です。開いている窓は変わりません。実行系ツールそのものの公開（STIRA_ENABLE_EXEC_TOOLS）はここでは変えられません。</p>
+      </details>
+    </section>
+
+    {% if grants_ui %}
+    <section class="card hub-section" id="sec-grants" aria-labelledby="grants-title" tabindex="-1">
+      <div class="section-head">
+        <h2 id="grants-title"><span data-i18n="grants.nav">目標グラント（ステージ C）</span></h2>
+      </div>
+      <p class="hint" data-i18n="grants.desc">時間・予算・範囲を決めた「目標グラント」を発行・停止・確認します（アルファ版: 変わることがあります）。発行しただけでは何も動きません: 反復が動くのは、実行部のスイッチ（autonomy.stage_c_exec）が有効で、人が「1 反復だけ実行」を押したとき — または、ハートビート開始（既定オフ）付きで発行したグラントで、スケジューラーの確認が始めたときだけです。目標の文はここには表示されません（発行した本人だけが確認画面で見られます）。</p>
+      {% if grants_exec_ui %}<p class="hint" data-i18n="grants.exec_desc">実行部が有効なとき、「1 反復だけ実行」を押すと、専用セッションでゴールの反復を 1 回だけ実行します（自動の次の反復はありません）。「ハートビートで反復を始めてよい」付きで発行したグラント（既定オフ。サーバーが許すときだけ選べます）は、スケジューラーの定期的な確認からも、1 回の確認につき最大 1 反復が始まります。モデル呼び出しとツール呼び出しの度にグラントを確認し、呼び出し前に予算を予約します。「毎回確認」のツールはあなたの承認カードを待ちます（ハートビートで始めた反復は待たずに止まります）。完了の主張はあなたの確認を待ち、確定できるのはあなただけです。アルファ版です。</p>{% endif %}
+      <p id="grants-status" class="hint" role="status" aria-live="polite"><span data-i18n="tools.loading">読み込み中</span></p>
+      <div id="grants-list"></div>
+      <p><button id="grants-kill" type="button" class="btn btn-secondary"><span data-i18n="grants.kill">キルスイッチ（すべて停止）</span></button></p>
+      <p id="grants-error" class="field-error" role="alert" hidden></p>
+      <details class="internals" id="grants-issue-box">
+        <summary data-i18n="grants.issue_title">新しいグラントを発行</summary>
+        <form id="grants-issue-form" novalidate>
+          <p><label for="grants-goal"><strong data-i18n="grants.goal_label">目標</strong></label><br>
+            <textarea id="grants-goal" rows="3" maxlength="2000" spellcheck="false" autocomplete="off" aria-describedby="grants-goal-hint"></textarea></p>
+          <p class="hint" id="grants-goal-hint" data-i18n="grants.goal_hint">秘密情報（鍵・トークン）を書かないでください。マスク処理で変わる目標は保存されません。</p>
+          <fieldset>
+            <legend data-i18n="grants.tools_label">使ってよいツール</legend>
+            <div id="grants-tools"></div>
+          </fieldset>
+          <p><label for="grants-subtree"><strong data-i18n="grants.subtree_label">作業ディレクトリ（書込みルートの中、絶対パス）</strong></label><br>
+            <input id="grants-subtree" type="text" spellcheck="false" autocomplete="off"></p>
+          <p><label for="grants-total"><strong data-i18n="grants.total_label">総トークン予算</strong></label>
+            <input id="grants-total" type="number" inputmode="numeric" min="1" max="5000000" step="1" value="2000000"></p>
+          <p><label for="grants-tick"><strong data-i18n="grants.tick_label">1 tick あたりの上限</strong></label>
+            <input id="grants-tick" type="number" inputmode="numeric" min="1" max="5000000" step="1" value="200000"></p>
+          <p><label for="grants-ttl"><strong data-i18n="grants.ttl_label">有効時間（分、最大 360）</strong></label>
+            <input id="grants-ttl" type="number" inputmode="numeric" min="1" max="360" step="1" value="120"></p>
+          <p><label for="grants-iterations"><strong data-i18n="grants.iterations_label">最大反復（最大 20）</strong></label>
+            <input id="grants-iterations" type="number" inputmode="numeric" min="1" max="20" step="1" value="10"></p>
+          {% if grants_tick_ui %}<label class="choice switch-row" for="grants-heartbeat-start">
+            <input id="grants-heartbeat-start" class="switch" type="checkbox" role="switch" aria-describedby="grants-heartbeat-start-desc">
+            <span><strong data-i18n="grants.heartbeat_start_label">ハートビートで反復を始めてよい</strong>
+            <span class="hint" id="grants-heartbeat-start-desc" data-i18n="grants.heartbeat_start_desc">オンにすると、人が押さなくても、スケジューラーの定期的な確認（モデルを使わない）が 1 回の確認につき最大 1 反復を始めます。前の反復の終わりから最低間隔をあけ、あなたの会話中・確認待ち・停止中は始めません。承認が必要な操作は待たずに止まります。発行後は変えられません（取り消して新しく発行してください）。</span></span>
+          </label>{% endif %}
+          <p class="hint" data-i18n="grants.verifier_hint">完了の確認者はあなたです（v1）。完了の主張があると「確認待ち」になり、ここで確定か差し戻しを選びます。</p>
+          <p><label for="grants-confirm"><strong data-i18n="grants.confirm_label">確認のため ISSUE と入力</strong></label>
+            <input id="grants-confirm" type="text" spellcheck="false" autocomplete="off"></p>
+          <p><button id="grants-issue" type="submit" class="btn btn-primary"><span data-i18n="grants.issue">発行</span></button></p>
+        </form>
+      </details>
+    </section>
+    {% endif %}
+
+    <section class="card hub-section" id="sec-board" aria-labelledby="board-title" tabindex="-1">
+      <div class="section-head">
+        <h2 id="board-title"><span data-i18n="hub.sec_board">ボード（Stage）</span></h2>
+        <span class="timing-badge" data-group="board"></span>
+        <span class="apply-status" data-group="board" role="status"></span>
+      </div>
+      <label class="choice switch-row" for="board-svg">
+        <input id="board-svg" class="switch" type="checkbox" role="switch" aria-describedby="board-svg-desc board-svg-stage err-board-svg">
+        <span><strong data-i18n="hub.board_svg">ボードで静的 SVG を表示する</strong>
+        <span class="hint" id="board-svg-desc" data-i18n="hub.board_svg_desc">返答の ```svg ブロックを、許可した図形・色・文字だけで組み立て直した画像として表示します。スクリプト・リンク・外部の画像やフォント・アニメーションは使えず、読み込みもしません。使えない部分は除いて表示し、読めないものや大きすぎるものはコードのまま表示します。既定: オン。</span></span>
+      </label>
+      <p class="hint" id="board-svg-stage" hidden></p>
+      <p class="field-error" id="err-board-svg" hidden></p>
+      <details class="internals">
+        <summary data-i18n="hub.details">詳細</summary>
+        <p class="hint" data-i18n="hub.board_internals">保存先: gateway-config.json の ui.board_svg（オフのときだけ書かれます）。Stage のページを開き直すと反映されます。チャット画面と Stage のログはこれまでどおりコードで表示します。上限: 1 つの SVG は 32KB・要素 500・入れ子 8 段まで、1 つの返答で 4 個まで。</p>
+      </details>
+    </section>
+
+    <section class="card hub-section" id="sec-delegation" aria-labelledby="delegation-title" tabindex="-1">
+      <div class="section-head">
+        <h2 id="delegation-title"><span data-i18n="hub.sec_delegation">サブエージェント（delegate）</span></h2>
+        <span class="timing-badge" data-group="delegation"></span>
+        <span class="apply-status" data-group="delegation" role="status"></span>
+      </div>
+      <label class="choice switch-row" for="delegation-enabled">
+        <input id="delegation-enabled" class="switch" type="checkbox" role="switch" aria-describedby="delegation-enabled-desc err-delegation-enabled">
+        <span><strong data-i18n="hub.delegation_enabled">サブエージェントに任せる（delegate）を使う</strong>
+        <span class="hint" id="delegation-enabled-desc" data-i18n="hub.delegation_enabled_desc">エージェントが、読み込みの多い調査・独立した作業・確認を子エージェントに任せ、要約（最大 2,000 字）だけを受け取ります。子が使えるのは、エージェントが確認なしで使えるツールだけです。任せるたびに承認カードが出ます（YOLO の窓でも自動承認しません）。停止ボタンで子も止まります。既定: オン。</span></span>
+      </label>
+      <p class="field-error" id="err-delegation-enabled" hidden></p>
+      <div class="delegation-fields">
+        <div class="delegation-field">
+          <label for="delegation-max-tool-calls"><strong data-i18n="hub.delegation_max_tool_calls">子 1 つのツール呼び出しの上限</strong></label>
+          <input id="delegation-max-tool-calls" type="number" inputmode="numeric" min="1" max="100" step="1"
+                 aria-describedby="delegation-limits-desc err-delegation-max_tool_calls">
+          <p class="field-error" id="err-delegation-max_tool_calls" hidden></p>
+        </div>
+        <div class="delegation-field">
+          <label for="delegation-max-seconds"><strong data-i18n="hub.delegation_max_seconds">子 1 つの時間の上限（秒）</strong></label>
+          <input id="delegation-max-seconds" type="number" inputmode="numeric" min="10" max="1800" step="1"
+                 aria-describedby="delegation-limits-desc err-delegation-max_seconds">
+          <p class="field-error" id="err-delegation-max_seconds" hidden></p>
+        </div>
+        <div class="delegation-field">
+          <label for="delegation-max-children"><strong data-i18n="hub.delegation_max_children">1 ターンで任せられる数</strong></label>
+          <input id="delegation-max-children" type="number" inputmode="numeric" min="1" max="50" step="1"
+                 aria-describedby="delegation-limits-desc err-delegation-max_children_per_turn">
+          <p class="field-error" id="err-delegation-max_children_per_turn" hidden></p>
+        </div>
+      </div>
+      <p class="hint" id="delegation-limits-desc" data-i18n="hub.delegation_limits_desc">上限に達した子はそこで止まり、それまでの要約と理由を返します。既定: 40 回・600 秒・1 ターン 20 個。</p>
+      <details class="internals">
+        <summary data-i18n="hub.details">詳細</summary>
+        <p class="hint" data-i18n="hub.delegation_internals">保存先: gateway-config.json の delegation（既定と違う値だけが書かれます）。次のターンから反映されます。子は 1 つずつ動き、子が子を作ることはできません。子のツール呼び出しはチャットに名前だけが表示されます（引数・結果は表示しません）。子のトークンはそのターンの使用量に含まれます。</p>
+      </details>
+    </section>
+
+    <section class="card hub-section" id="sec-agent-jobs" aria-labelledby="agent-jobs-title" tabindex="-1">
+      <div class="section-head">
+        <h2 id="agent-jobs-title"><span data-i18n="hub.sec_agent_jobs">定期実行のエージェントジョブ</span></h2>
+        <span class="timing-badge" data-group="agent_jobs"></span>
+        <span class="apply-status" data-group="agent_jobs" role="status"></span>
+      </div>
+      <label class="choice switch-row" for="agent-jobs-enabled">
+        <input id="agent-jobs-enabled" class="switch" type="checkbox" role="switch" aria-describedby="agent-jobs-enabled-desc err-agent_jobs-enabled">
+        <span><strong data-i18n="hub.agent_jobs_enabled">人が定義したエージェントジョブを動かす</strong>
+        <span class="hint" id="agent-jobs-enabled-desc" data-i18n="hub.agent_jobs_enabled_desc">スケジューラーが、人が登録して確認したプロンプトを、人のいない時間にモデルで実行します。使えるのは読み取り専用のツールだけで、書き込み・外部送信・承認が要る呼び出しに来たらそこで止まります。ハートビートが正常なときだけ動き、再起動のあとは一時停止で始まります（人が再開します）。既定: オフ。</span></span>
+      </label>
+      <p class="field-error" id="err-agent_jobs-enabled" hidden></p>
+      <div class="delegation-fields">
+        <div class="delegation-field">
+          <label for="agent-jobs-budget"><strong data-i18n="hub.agent_jobs_budget">1 日のトークン上限（全エージェントジョブ合計）</strong></label>
+          <input id="agent-jobs-budget" type="number" inputmode="numeric" min="1" max="10000000" step="1"
+                 aria-describedby="agent-jobs-budget-desc err-agent_jobs-agent_daily_token_budget">
+          <p class="field-error" id="err-agent_jobs-agent_daily_token_budget" hidden></p>
+        </div>
+      </div>
+      <p class="hint" id="agent-jobs-budget-desc" data-i18n="hub.agent_jobs_budget_desc">UTC の 1 日ごとに数えます。上限に届くジョブは走らず一時停止します。無制限にはできません。既定: 50,000。</p>
+      <details class="internals">
+        <summary data-i18n="hub.details">詳細</summary>
+        <p class="hint" data-i18n="hub.agent_jobs_internals">保存先: gateway-config.json の agent_jobs（既定と違う値だけが書かれます）。チャットサーバーの次の起動から反映されます。STIRA_SCHEDULER=0 のときはスケジューラー全体が止まります。ジョブの結果は信頼しないデータとして枠に入れて記録します。中断した実行は再起動後に続きから再開しません。</p>
+      </details>
+    </section>
+
+    <section class="card hub-section" id="sec-history" aria-labelledby="history-title" tabindex="-1">
+      <h2 id="history-title"><span data-i18n="hub.sec_history">変更履歴</span></h2>
+      <p class="hint" data-i18n="hub.history_desc">この画面とモデル欄で保存した変更の記録です（新しい順）。「この変更を取り消す」で、その変更の前の値に戻す変更を作って保存します。秘密の値は記録しません。</p>
+      <p id="history-empty" class="hint" data-i18n="hub.history_empty">まだ変更履歴はありません。</p>
+      <p id="history-status" class="hint" role="status" aria-live="polite"></p>
+      <ol id="history-list" class="history-list"></ol>
+    </section>
+
+    <section class="card hub-section" id="sec-display" aria-labelledby="display-title" tabindex="-1">
+      <div class="section-head">
+        <h2 id="display-title"><span data-i18n="hub.sec_display">表示</span></h2>
+        <span class="badge timing-now" data-state="ok" data-i18n="hub.timing_now">すぐ</span>
+      </div>
+      <p class="hint" data-i18n="hub.display_desc">この画面の見え方の設定です。このブラウザにだけ保存され、すぐに反映されます。</p>
+      <div class="field-row">
+        <label for="hub-lang" data-i18n="hub.language">表示言語</label>
+        <select id="hub-lang">
+          <option value="ja">日本語</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+      <label class="choice switch-row" for="show-internal">
+        <input id="show-internal" class="switch" type="checkbox" role="switch">
+        <span><strong data-i18n="hub.show_internal">内部名を表示</strong>
+        <span class="hint" data-i18n="hub.show_internal_desc">ツール名などの内部的な名前を説明の横に表示します（開発者向け）。</span></span>
+      </label>
+    </section>
+
+    <section class="card hub-section" id="sec-diagnostics" aria-labelledby="diagnostics-title" tabindex="-1">
+      <div class="section-head">
+        <h2 id="diagnostics-title"><span data-i18n="hub.sec_diagnostics">診断</span></h2>
+        <span class="badge" data-i18n="diagnostics.tab_read_only">読み取り専用</span>
+      </div>
+      <p class="hint" data-i18n="diagnostics.tab_desc">書込み先の事前診断（stira doctor と同じ検査）の結果です。この欄は読み取り専用で、設定は変更しません。直すのは人間の仕事です。</p>
+      <p id="diag-status" class="diag-status" role="status" aria-live="polite" data-level="info"><span data-i18n="diagnostics.tab_loading">読み込み中</span></p>
+      <dl id="diag-facts" class="facts"></dl>
+      <div id="diag-checks-box" hidden>
+        <h3 id="diag-checks-title"><span data-i18n="diagnostics.tab_checks">全般の検査</span></h3>
+        <ul id="diag-checks" class="diag-list" aria-labelledby="diag-checks-title"></ul>
+      </div>
+      <div id="diag-roots-box" hidden>
+        <h3 id="diag-roots-title"><span data-i18n="diagnostics.tab_roots">書込み先</span></h3>
+        <ul id="diag-roots" class="diag-list" aria-labelledby="diag-roots-title"></ul>
+      </div>
+      <div id="diag-notes-box" hidden>
+        <h3 id="diag-notes-title"><span data-i18n="diagnostics.tab_notes">メモ</span></h3>
+        <ul id="diag-notes" class="diag-list" aria-labelledby="diag-notes-title"></ul>
+      </div>
+      <button id="diag-rerun" type="button" class="btn btn-secondary"><span data-i18n="diagnostics.rerun">再診断</span></button>
+      <p class="hint" data-i18n="diagnostics.doctor_note">読み取りと一時ファイルのみ。設定は変更しません。</p>
+    </section>
+
+    <section class="card hub-section" id="sec-location" aria-labelledby="location-title" tabindex="-1">
+      <div class="section-head">
+        <h2 id="location-title"><span data-i18n="surface.sec_location">設定の場所・整合</span></h2>
+      </div>
+      <p class="hint" data-i18n="surface.location_desc">設定ファイルの置き場所と、環境変数で固定されている設定です（読み取り専用）。環境変数は名前だけを表示し、値は表示しません。</p>
+      <dl class="location-grid" id="location-facts"></dl>
+      <h3 id="pinned-title"><span data-i18n="surface.pinned_title">環境変数で固定されている設定</span></h3>
+      <p class="hint" data-i18n="surface.pinned_desc">固定中の項目は画面から変更できません。変えるには、その環境変数を外してサーバーを再起動してください。</p>
+      <p class="hint" id="pinned-empty" data-i18n="surface.pinned_none">なし（すべて設定ファイルの値か既定値です）</p>
+      <ul class="pinned-list" id="pinned-list" aria-labelledby="pinned-title" hidden></ul>
+      <p class="hint" id="restart-unknown" data-i18n="surface.restart_unknown" hidden>起動時の設定を読めなかったため、再起動待ちの変更は表示できません。</p>
+    </section>
+
+    <section class="card hub-section" id="sec-advanced" aria-labelledby="advanced-title" tabindex="-1">
+      <h2 id="advanced-title"><span data-i18n="hub.sec_advanced">詳細</span></h2>
+      <p class="hint" data-i18n="hub.advanced_desc">普段は変更しない情報です。</p>
+      <h3 id="soul-title"><span data-i18n="settings.soul_info">SOUL 情報</span></h3>
+      <dl class="facts">
+        <div><dt><span data-i18n="settings.path">パス</span></dt><dd id="soul-path">—</dd></div>
+        <div><dt><span data-i18n="settings.status">状態</span></dt><dd id="soul-exists">—</dd></div>
+      </dl>
+      <label for="soul-preview"><span data-i18n="settings.content_preview_read_only">内容プレビュー（読み取り専用）</span></label>
+      <textarea id="soul-preview" readonly></textarea>
+    </section>
+    </div>
+  </div>
+
+  <div class="hub-footer" id="hub-footer" role="region" aria-labelledby="hub-footer-title" tabindex="-1">
+    <h2 id="hub-footer-title" class="visually-hidden" data-i18n="hub.footer_title">変更の保存</h2>
+    <div class="footer-state">
+      <strong id="hub-dirty-count" aria-live="polite">—</strong>
+      <details id="hub-diff" class="hub-diff" hidden>
+        <summary data-i18n="hub.show_changes">変更内容</summary>
+        <ul id="hub-diff-list" tabindex="0" aria-label="変更内容" data-i18n-aria-label="hub.show_changes"></ul>
+      </details>
+      <span id="hub-save-status" role="status" aria-live="polite"></span>
+      <a id="hub-yolo-unsaved" class="hint" href="#sec-yolo" hidden data-i18n="yset.footer_unsaved">YOLO 欄に未保存の変更があります。この「保存」には含まれません。YOLO 欄の「YOLO 設定を保存」で保存してください。</a>
+    </div>
+    <div class="footer-actions">
+      <button id="hub-defaults" type="button" class="btn btn-ghost"><span data-i18n="hub.reset_defaults">既定に戻す</span></button>
+      <button id="hub-discard" type="button" class="btn btn-secondary"><span data-i18n="hub.discard">破棄</span></button>
+      <button id="hub-save" type="button" class="btn btn-primary"><span data-i18n="tools.save">保存</span></button>
+    </div>
+  </div>
+
+  {# #282: the confirmation dialog is built by the shared js/confirm_dialog.js #}
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <noscript>このページには JavaScript が必要です。/ JavaScript is required.</noscript>
+{% endblock %}

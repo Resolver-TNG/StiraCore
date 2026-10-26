@@ -1,0 +1,13 @@
+# Daily trigger for stira-distill.service (see that file). Not enabled by default.
+# OnCalendar uses the HOST's time zone (an EC2 instance is UTC unless you change it).
+[Unit]
+Description=Daily StiraCore memory maintenance
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=15min
+# Catch up once after the machine was off at 04:30.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

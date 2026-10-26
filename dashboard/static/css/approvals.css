@@ -1,0 +1,58 @@
+/* Approval cards, queue and history (#189). Shared by /chat and /approvals. */
+.approval-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.approval-card { border: 1px solid var(--warn-border); border-radius: 8px; background: var(--surface); }
+.approval-card[data-expired="true"] { border-color: var(--border); opacity: .85; }
+.approval-card > .stira-card-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 8px 12px; cursor: pointer; font-size: 13px; }
+.approval-card .stira-card-title { font: 600 13px var(--font-mono); color: var(--text); }
+.approval-card .stira-card-brief { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font: 12px var(--font-mono); }
+.approval-card .stira-card-meta { color: var(--warn-fg); font-size: 12px; font-variant-numeric: tabular-nums; }
+.approval-card > .stira-card-body { padding: 4px 12px 12px; border-top: 1px solid var(--color-border-subtle); font-size: 13px; }
+.approval-heading { margin: 8px 0 4px; font-size: 13px; color: var(--text); }
+.approval-subheading { margin: 10px 0 4px; font-size: 12px; color: var(--muted); }
+.approval-facts { margin: 0; }
+.approval-facts > div { display: grid; grid-template-columns: minmax(7em, 12em) minmax(0, 1fr); gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--color-border-subtle); }
+.approval-facts > div:last-child { border-bottom: 0; }
+.approval-facts dt { color: var(--muted); }
+.approval-facts dd { margin: 0; overflow-wrap: anywhere; text-align: left; font-style: normal; }
+.approval-turn { color: var(--color-accent); font-family: var(--font-mono); }
+.approval-facts dd[data-trend="missing"] { color: var(--muted); }
+.approval-args { margin: 0; max-height: 260px; overflow: auto; padding: 8px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--color-surface-sunken); border: 1px solid var(--border); border-radius: 6px; font: 12px/1.5 var(--font-mono); color: var(--text); }
+.approval-field { margin-top: 8px; }
+.approval-field label { display: block; margin-bottom: 4px; font-size: 12px; color: var(--muted); }
+.approval-field textarea { width: 100%; font-family: var(--font-mono); }
+.approval-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.approval-more { margin-top: 10px; }
+.approval-more > summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.approval-more .btn { margin-top: 6px; }
+/* .btn sets display; a hidden action (masked edit, restored respond) must stay hidden. */
+.approval-card [hidden] { display: none; }
+.approval-more .tool-payload-note { margin: 4px 0; color: var(--muted); font-size: 12px; }
+.approval-error { margin: 8px 0 0; color: var(--crit-fg); font-size: 12px; }
+.approval-error:empty { display: none; }
+.approval-page-link { color: var(--color-accent); font-size: 12px; }
+.approval-note { color: var(--muted); font-size: 11px; }
+
+/* Chat: the queue sits above the conversation. */
+.hitl-panel.approval-queue { background: var(--warn-bg); border-color: var(--warn-border); }
+
+/* /approvals page */
+/* minmax(0, 1fr): a wide table scrolls inside its wrapper instead of widening the page. */
+.approvals-page { max-width: 1200px; margin: auto; padding: 20px 24px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.approvals-page .page-header h1 { margin: 0; }
+.approvals-lead { margin: 6px 0 0; color: var(--muted); max-width: 70ch; }
+.approvals-section { padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+.approvals-section .panel-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.approvals-section h2 { margin: 0; font-size: 16px; }
+.approvals-section .empty { color: var(--muted); margin: 12px 0; }
+.approvals-section .empty[hidden] { display: none; }
+.approvals-history-wrap { overflow-x: auto; }
+.approvals-related { margin: 6px 0 0; }
+.approvals-history { font-size: 12px; }
+.approvals-history td[data-trend="missing"] { color: var(--muted); }
+.approvals-history code { font-family: var(--font-mono); }
+
+/* Permission cards for failed writes (#244): same frame, critical accent. */
+.hitl-panel.permission-queue { background: var(--surface); border-color: var(--crit-border); }
+.permission-card { border-color: var(--crit-border); }
+.permission-link { color: var(--color-accent); }
+.permission-status:empty { display: none; }

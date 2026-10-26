@@ -1,0 +1,546 @@
+{
+ "view": "back",
+ "size": [
+  278,
+  278
+ ],
+ "atlas": [
+  256,
+  146
+ ],
+ "parts": [
+  {
+   "id": "locks_side",
+   "z": "front",
+   "slot": "over:body",
+   "chains": [
+    "locks_l",
+    "locks_r"
+   ],
+   "tint": "#e0a030"
+  },
+  {
+   "id": "locks",
+   "z": "front",
+   "slot": "over:body",
+   "chains": [
+    "locks_cl",
+    "locks_c",
+    "locks_cr"
+   ],
+   "tint": "#9a5cf0"
+  }
+ ],
+ "layerOrder": [
+  "char:body",
+  "hair:locks_side",
+  "hair:locks",
+  "char:arms"
+ ],
+ "segments": [
+  {
+   "id": "locks_cr.3",
+   "part": "locks",
+   "chain": "locks_cr",
+   "parent": "locks_cr.2",
+   "depth": 3,
+   "z": "front",
+   "side": 1,
+   "box": [
+    145,
+    236,
+    29,
+    27
+   ],
+   "at": [
+    152,
+    53
+   ],
+   "pivot": [
+    165.5,
+    238.5
+   ],
+   "pixels": 179,
+   "breath": 0.0
+  },
+  {
+   "id": "locks_cr.2",
+   "part": "locks",
+   "chain": "locks_cr",
+   "parent": "locks_cr.1",
+   "depth": 2,
+   "z": "front",
+   "side": 1,
+   "box": [
+    146,
+    198,
+    33,
+    40
+   ],
+   "at": [
+    118,
+    53
+   ],
+   "pivot": [
+    167.5,
+    200.5
+   ],
+   "pixels": 691,
+   "breath": 0.0
+  },
+  {
+   "id": "locks_cr.1",
+   "part": "locks",
+   "chain": "locks_cr",
+   "parent": "locks_cr.0",
+   "depth": 1,
+   "z": "front",
+   "side": 1,
+   "box": [
+    157,
+    148,
+    22,
+    52
+   ],
+   "at": [
+    95,
+    53
+   ],
+   "pivot": [
+    167.7,
+    150.5
+   ],
+   "pixels": 1072,
+   "breath": 1.0
+  },
+  {
+   "id": "locks_cr.0",
+   "part": "locks",
+   "chain": "locks_cr",
+   "parent": "head",
+   "depth": 0,
+   "z": "front",
+   "side": 1,
+   "box": [
+    156,
+    108,
+    24,
+    42
+   ],
+   "at": [
+    70,
+    53
+   ],
+   "pivot": [
+    167.5,
+    110.5
+   ],
+   "pixels": 877,
+   "breath": 1.0
+  },
+  {
+   "id": "locks_c.3",
+   "part": "locks",
+   "chain": "locks_c",
+   "parent": "locks_c.2",
+   "depth": 3,
+   "z": "front",
+   "side": 0,
+   "box": [
+    123,
+    236,
+    32,
+    36
+   ],
+   "at": [
+    37,
+    53
+   ],
+   "pivot": [
+    139.2,
+    238.5
+   ],
+   "pixels": 486,
+   "breath": 0.0
+  },
+  {
+   "id": "locks_c.2",
+   "part": "locks",
+   "chain": "locks_c",
+   "parent": "locks_c.1",
+   "depth": 2,
+   "z": "front",
+   "side": 0,
+   "box": [
+    122,
+    198,
+    36,
+    40
+   ],
+   "at": [
+    0,
+    53
+   ],
+   "pivot": [
+    140.0,
+    200.5
+   ],
+   "pixels": 1311,
+   "breath": 0.0
+  },
+  {
+   "id": "locks_c.1",
+   "part": "locks",
+   "chain": "locks_c",
+   "parent": "locks_c.0",
+   "depth": 1,
+   "z": "front",
+   "side": 0,
+   "box": [
+    123,
+    148,
+    35,
+    52
+   ],
+   "at": [
+    215,
+    0
+   ],
+   "pivot": [
+    139.8,
+    150.5
+   ],
+   "pixels": 1712,
+   "breath": 1.0
+  },
+  {
+   "id": "locks_c.0",
+   "part": "locks",
+   "chain": "locks_c",
+   "parent": "head",
+   "depth": 0,
+   "z": "front",
+   "side": 0,
+   "box": [
+    122,
+    108,
+    36,
+    42
+   ],
+   "at": [
+    178,
+    0
+   ],
+   "pivot": [
+    139.5,
+    110.5
+   ],
+   "pixels": 1345,
+   "breath": 1.0
+  },
+  {
+   "id": "locks_cl.3",
+   "part": "locks",
+   "chain": "locks_cl",
+   "parent": "locks_cl.2",
+   "depth": 3,
+   "z": "front",
+   "side": -1,
+   "box": [
+    107,
+    236,
+    17,
+    29
+   ],
+   "at": [
+    160,
+    0
+   ],
+   "pivot": [
+    114.5,
+    238.5
+   ],
+   "pixels": 251,
+   "breath": 0.0
+  },
+  {
+   "id": "locks_cl.2",
+   "part": "locks",
+   "chain": "locks_cl",
+   "parent": "locks_cl.1",
+   "depth": 2,
+   "z": "front",
+   "side": -1,
+   "box": [
+    102,
+    198,
+    21,
+    40
+   ],
+   "at": [
+    138,
+    0
+   ],
+   "pivot": [
+    112.0,
+    200.5
+   ],
+   "pixels": 707,
+   "breath": 0.0
+  },
+  {
+   "id": "locks_cl.1",
+   "part": "locks",
+   "chain": "locks_cl",
+   "parent": "locks_cl.0",
+   "depth": 1,
+   "z": "front",
+   "side": -1,
+   "box": [
+    100,
+    148,
+    24,
+    52
+   ],
+   "at": [
+    113,
+    0
+   ],
+   "pivot": [
+    111.0,
+    150.5
+   ],
+   "pixels": 1134,
+   "breath": 1.0
+  },
+  {
+   "id": "locks_cl.0",
+   "part": "locks",
+   "chain": "locks_cl",
+   "parent": "head",
+   "depth": 0,
+   "z": "front",
+   "side": -1,
+   "box": [
+    100,
+    108,
+    24,
+    42
+   ],
+   "at": [
+    88,
+    0
+   ],
+   "pivot": [
+    112.2,
+    110.5
+   ],
+   "pixels": 906,
+   "breath": 1.0
+  },
+  {
+   "id": "locks_r.3",
+   "part": "locks_side",
+   "chain": "locks_r",
+   "parent": "locks_r.2",
+   "depth": 3,
+   "z": "front",
+   "side": 1,
+   "box": [
+    174,
+    236,
+    6,
+    9
+   ],
+   "at": [
+    26,
+    106
+   ],
+   "pivot": [
+    176.2,
+    238.4
+   ],
+   "pixels": 21,
+   "breath": 0.0
+  },
+  {
+   "id": "locks_r.2",
+   "part": "locks_side",
+   "chain": "locks_r",
+   "parent": "locks_r.1",
+   "depth": 2,
+   "z": "front",
+   "side": 1,
+   "box": [
+    174,
+    198,
+    25,
+    40
+   ],
+   "at": [
+    0,
+    106
+   ],
+   "pivot": [
+    188.0,
+    200.5
+   ],
+   "pixels": 571,
+   "breath": 0.0
+  },
+  {
+   "id": "locks_r.1",
+   "part": "locks_side",
+   "chain": "locks_r",
+   "parent": "locks_r.0",
+   "depth": 1,
+   "z": "front",
+   "side": 1,
+   "box": [
+    179,
+    148,
+    26,
+    52
+   ],
+   "at": [
+    213,
+    53
+   ],
+   "pivot": [
+    191.5,
+    150.5
+   ],
+   "pixels": 1189,
+   "breath": 1.0
+  },
+  {
+   "id": "locks_r.0",
+   "part": "locks_side",
+   "chain": "locks_r",
+   "parent": "head",
+   "depth": 0,
+   "z": "front",
+   "side": 1,
+   "box": [
+    178,
+    108,
+    30,
+    43
+   ],
+   "at": [
+    182,
+    53
+   ],
+   "pivot": [
+    190.5,
+    110.5
+   ],
+   "pixels": 1012,
+   "breath": 1.0
+  },
+  {
+   "id": "locks_l.3",
+   "part": "locks_side",
+   "chain": "locks_l",
+   "parent": "locks_l.2",
+   "depth": 3,
+   "z": "front",
+   "side": -1,
+   "box": [
+    112,
+    243,
+    2,
+    6
+   ],
+   "at": [
+    85,
+    0
+   ],
+   "pivot": [
+    113.0,
+    243.5
+   ],
+   "pixels": 8,
+   "breath": 0.0
+  },
+  {
+   "id": "locks_l.2",
+   "part": "locks_side",
+   "chain": "locks_l",
+   "parent": "locks_l.1",
+   "depth": 2,
+   "z": "front",
+   "side": -1,
+   "box": [
+    78,
+    198,
+    24,
+    39
+   ],
+   "at": [
+    60,
+    0
+   ],
+   "pivot": [
+    90.0,
+    200.5
+   ],
+   "pixels": 494,
+   "breath": 0.0
+  },
+  {
+   "id": "locks_l.1",
+   "part": "locks_side",
+   "chain": "locks_l",
+   "parent": "locks_l.0",
+   "depth": 1,
+   "z": "front",
+   "side": -1,
+   "box": [
+    75,
+    148,
+    27,
+    52
+   ],
+   "at": [
+    32,
+    0
+   ],
+   "pivot": [
+    87.0,
+    150.5
+   ],
+   "pixels": 1251,
+   "breath": 1.0
+  },
+  {
+   "id": "locks_l.0",
+   "part": "locks_side",
+   "chain": "locks_l",
+   "parent": "head",
+   "depth": 0,
+   "z": "front",
+   "side": -1,
+   "box": [
+    73,
+    108,
+    31,
+    43
+   ],
+   "at": [
+    0,
+    0
+   ],
+   "pivot": [
+    89.3,
+    110.5
+   ],
+   "pixels": 996,
+   "breath": 1.0
+  }
+ ],
+ "hairPixels": 16213,
+ "crownPixels": 6233,
+ "restHash": "809ddff8ebf096a3413ac57a40dbdb6da7c1f0a44a38f0b232687717de653bd6",
+ "restRgbHash": "36ffd6bf0a91ea0c69f569efefb9bff08a1988a3cd8432e180ad7c39b42aa9b4"
+}

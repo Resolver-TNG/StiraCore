@@ -1,0 +1,11 @@
+{
+  "labeler": "astra",
+  "model_id": "global.openai.gpt-6-astra",
+  "region": "ap-northeast-1",
+  "max_tokens": 4000,
+  "additional_fields": null,
+  "order_seed": 101,
+  "batch_size": 20,
+  "calls": 7,
+  "unlabeled": []
+}

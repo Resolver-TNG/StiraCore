@@ -1,0 +1,7 @@
+# Daily model-free memory maintenance for StiraCore (docs/memory-maintenance.md, pattern B).
+# Add with `crontab -e`; replace /home/YOU/StiraCore (both places; keep the double quotes,
+# they make a path with spaces work; a literal % must be written \% in crontab). cron mails
+# what the command prints when MAILTO is set and mail works; the wrapper prints only on
+# failure and always appends one JSON line to <data directory>/distill-runs.jsonl.
+# MAILTO=you@example.com
+30 4 * * * umask 077; STIRA_ROOT="/home/YOU/StiraCore" /bin/bash "/home/YOU/StiraCore/examples/memory-maintenance/stira-distill.sh"

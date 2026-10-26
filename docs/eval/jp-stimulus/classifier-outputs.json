@@ -1,0 +1,1137 @@
+{
+ "classifiers": {
+  "rule": {
+   "name": "rule"
+  },
+  "sokudan": {
+   "confidence_threshold": 0.5,
+   "name": "sokudan"
+  }
+ },
+ "predictions": {
+  "rule": {
+   "u001": {
+    "category": "none",
+    "confidence": null
+   },
+   "u002": {
+    "category": "none",
+    "confidence": null
+   },
+   "u003": {
+    "category": "none",
+    "confidence": null
+   },
+   "u004": {
+    "category": "none",
+    "confidence": null
+   },
+   "u005": {
+    "category": "none",
+    "confidence": null
+   },
+   "u006": {
+    "category": "none",
+    "confidence": null
+   },
+   "u007": {
+    "category": "none",
+    "confidence": null
+   },
+   "u008": {
+    "category": "none",
+    "confidence": null
+   },
+   "u009": {
+    "category": "none",
+    "confidence": null
+   },
+   "u010": {
+    "category": "none",
+    "confidence": null
+   },
+   "u011": {
+    "category": "none",
+    "confidence": null
+   },
+   "u012": {
+    "category": "none",
+    "confidence": null
+   },
+   "u013": {
+    "category": "none",
+    "confidence": null
+   },
+   "u014": {
+    "category": "none",
+    "confidence": null
+   },
+   "u015": {
+    "category": "none",
+    "confidence": null
+   },
+   "u016": {
+    "category": "none",
+    "confidence": null
+   },
+   "u017": {
+    "category": "none",
+    "confidence": null
+   },
+   "u018": {
+    "category": "none",
+    "confidence": null
+   },
+   "u019": {
+    "category": "none",
+    "confidence": null
+   },
+   "u020": {
+    "category": "none",
+    "confidence": null
+   },
+   "u021": {
+    "category": "none",
+    "confidence": null
+   },
+   "u022": {
+    "category": "none",
+    "confidence": null
+   },
+   "u023": {
+    "category": "none",
+    "confidence": null
+   },
+   "u024": {
+    "category": "none",
+    "confidence": null
+   },
+   "u025": {
+    "category": "none",
+    "confidence": null
+   },
+   "u026": {
+    "category": "none",
+    "confidence": null
+   },
+   "u027": {
+    "category": "none",
+    "confidence": null
+   },
+   "u028": {
+    "category": "none",
+    "confidence": null
+   },
+   "u029": {
+    "category": "none",
+    "confidence": null
+   },
+   "u030": {
+    "category": "none",
+    "confidence": null
+   },
+   "u031": {
+    "category": "none",
+    "confidence": null
+   },
+   "u032": {
+    "category": "none",
+    "confidence": null
+   },
+   "u033": {
+    "category": "none",
+    "confidence": null
+   },
+   "u034": {
+    "category": "none",
+    "confidence": null
+   },
+   "u035": {
+    "category": "none",
+    "confidence": null
+   },
+   "u036": {
+    "category": "none",
+    "confidence": null
+   },
+   "u037": {
+    "category": "none",
+    "confidence": null
+   },
+   "u038": {
+    "category": "none",
+    "confidence": null
+   },
+   "u039": {
+    "category": "none",
+    "confidence": null
+   },
+   "u040": {
+    "category": "none",
+    "confidence": null
+   },
+   "u041": {
+    "category": "none",
+    "confidence": null
+   },
+   "u042": {
+    "category": "none",
+    "confidence": null
+   },
+   "u043": {
+    "category": "none",
+    "confidence": null
+   },
+   "u044": {
+    "category": "none",
+    "confidence": null
+   },
+   "u045": {
+    "category": "none",
+    "confidence": null
+   },
+   "u046": {
+    "category": "none",
+    "confidence": null
+   },
+   "u047": {
+    "category": "none",
+    "confidence": null
+   },
+   "u048": {
+    "category": "none",
+    "confidence": null
+   },
+   "u049": {
+    "category": "none",
+    "confidence": null
+   },
+   "u050": {
+    "category": "none",
+    "confidence": null
+   },
+   "u051": {
+    "category": "none",
+    "confidence": null
+   },
+   "u052": {
+    "category": "none",
+    "confidence": null
+   },
+   "u053": {
+    "category": "none",
+    "confidence": null
+   },
+   "u054": {
+    "category": "none",
+    "confidence": null
+   },
+   "u055": {
+    "category": "none",
+    "confidence": null
+   },
+   "u056": {
+    "category": "none",
+    "confidence": null
+   },
+   "u057": {
+    "category": "none",
+    "confidence": null
+   },
+   "u058": {
+    "category": "none",
+    "confidence": null
+   },
+   "u059": {
+    "category": "none",
+    "confidence": null
+   },
+   "u060": {
+    "category": "none",
+    "confidence": null
+   },
+   "u061": {
+    "category": "none",
+    "confidence": null
+   },
+   "u062": {
+    "category": "none",
+    "confidence": null
+   },
+   "u063": {
+    "category": "none",
+    "confidence": null
+   },
+   "u064": {
+    "category": "none",
+    "confidence": null
+   },
+   "u065": {
+    "category": "none",
+    "confidence": null
+   },
+   "u066": {
+    "category": "none",
+    "confidence": null
+   },
+   "u067": {
+    "category": "none",
+    "confidence": null
+   },
+   "u068": {
+    "category": "none",
+    "confidence": null
+   },
+   "u069": {
+    "category": "none",
+    "confidence": null
+   },
+   "u070": {
+    "category": "none",
+    "confidence": null
+   },
+   "u071": {
+    "category": "none",
+    "confidence": null
+   },
+   "u072": {
+    "category": "none",
+    "confidence": null
+   },
+   "u073": {
+    "category": "none",
+    "confidence": null
+   },
+   "u074": {
+    "category": "none",
+    "confidence": null
+   },
+   "u075": {
+    "category": "none",
+    "confidence": null
+   },
+   "u076": {
+    "category": "none",
+    "confidence": null
+   },
+   "u077": {
+    "category": "none",
+    "confidence": null
+   },
+   "u078": {
+    "category": "none",
+    "confidence": null
+   },
+   "u079": {
+    "category": "none",
+    "confidence": null
+   },
+   "u080": {
+    "category": "none",
+    "confidence": null
+   },
+   "u081": {
+    "category": "none",
+    "confidence": null
+   },
+   "u082": {
+    "category": "none",
+    "confidence": null
+   },
+   "u083": {
+    "category": "none",
+    "confidence": null
+   },
+   "u084": {
+    "category": "none",
+    "confidence": null
+   },
+   "u085": {
+    "category": "none",
+    "confidence": null
+   },
+   "u086": {
+    "category": "none",
+    "confidence": null
+   },
+   "u087": {
+    "category": "none",
+    "confidence": null
+   },
+   "u088": {
+    "category": "none",
+    "confidence": null
+   },
+   "u089": {
+    "category": "none",
+    "confidence": null
+   },
+   "u090": {
+    "category": "none",
+    "confidence": null
+   },
+   "u091": {
+    "category": "none",
+    "confidence": null
+   },
+   "u092": {
+    "category": "none",
+    "confidence": null
+   },
+   "u093": {
+    "category": "none",
+    "confidence": null
+   },
+   "u094": {
+    "category": "none",
+    "confidence": null
+   },
+   "u095": {
+    "category": "none",
+    "confidence": null
+   },
+   "u096": {
+    "category": "none",
+    "confidence": null
+   },
+   "u097": {
+    "category": "none",
+    "confidence": null
+   },
+   "u098": {
+    "category": "none",
+    "confidence": null
+   },
+   "u099": {
+    "category": "none",
+    "confidence": null
+   },
+   "u100": {
+    "category": "none",
+    "confidence": null
+   },
+   "u101": {
+    "category": "none",
+    "confidence": null
+   },
+   "u102": {
+    "category": "none",
+    "confidence": null
+   },
+   "u103": {
+    "category": "none",
+    "confidence": null
+   },
+   "u104": {
+    "category": "none",
+    "confidence": null
+   },
+   "u105": {
+    "category": "none",
+    "confidence": null
+   },
+   "u106": {
+    "category": "none",
+    "confidence": null
+   },
+   "u107": {
+    "category": "none",
+    "confidence": null
+   },
+   "u108": {
+    "category": "none",
+    "confidence": null
+   },
+   "u109": {
+    "category": "uncertainty",
+    "confidence": null
+   },
+   "u110": {
+    "category": "none",
+    "confidence": null
+   },
+   "u111": {
+    "category": "none",
+    "confidence": null
+   },
+   "u112": {
+    "category": "none",
+    "confidence": null
+   },
+   "u113": {
+    "category": "none",
+    "confidence": null
+   },
+   "u114": {
+    "category": "none",
+    "confidence": null
+   },
+   "u115": {
+    "category": "none",
+    "confidence": null
+   },
+   "u116": {
+    "category": "none",
+    "confidence": null
+   },
+   "u117": {
+    "category": "none",
+    "confidence": null
+   },
+   "u118": {
+    "category": "none",
+    "confidence": null
+   },
+   "u119": {
+    "category": "none",
+    "confidence": null
+   },
+   "u120": {
+    "category": "none",
+    "confidence": null
+   },
+   "u121": {
+    "category": "none",
+    "confidence": null
+   },
+   "u122": {
+    "category": "none",
+    "confidence": null
+   },
+   "u123": {
+    "category": "none",
+    "confidence": null
+   },
+   "u124": {
+    "category": "none",
+    "confidence": null
+   },
+   "u125": {
+    "category": "none",
+    "confidence": null
+   },
+   "u126": {
+    "category": "none",
+    "confidence": null
+   },
+   "u127": {
+    "category": "none",
+    "confidence": null
+   },
+   "u128": {
+    "category": "none",
+    "confidence": null
+   },
+   "u129": {
+    "category": "none",
+    "confidence": null
+   },
+   "u130": {
+    "category": "connection",
+    "confidence": null
+   },
+   "u131": {
+    "category": "none",
+    "confidence": null
+   },
+   "u132": {
+    "category": "none",
+    "confidence": null
+   },
+   "u133": {
+    "category": "none",
+    "confidence": null
+   },
+   "u134": {
+    "category": "none",
+    "confidence": null
+   },
+   "u135": {
+    "category": "none",
+    "confidence": null
+   },
+   "u136": {
+    "category": "none",
+    "confidence": null
+   },
+   "u137": {
+    "category": "none",
+    "confidence": null
+   },
+   "u138": {
+    "category": "none",
+    "confidence": null
+   },
+   "u139": {
+    "category": "none",
+    "confidence": null
+   },
+   "u140": {
+    "category": "none",
+    "confidence": null
+   }
+  },
+  "sokudan": {
+   "u001": {
+    "category": "achievement",
+    "confidence": 0.8587
+   },
+   "u002": {
+    "category": "achievement",
+    "confidence": 0.5788
+   },
+   "u003": {
+    "category": "loss",
+    "confidence": 0.9947
+   },
+   "u004": {
+    "category": "joy",
+    "confidence": 0.9957
+   },
+   "u005": {
+    "category": "achievement",
+    "confidence": 0.9905
+   },
+   "u006": {
+    "category": "loss",
+    "confidence": 0.5577
+   },
+   "u007": {
+    "category": "threat",
+    "confidence": 0.5522
+   },
+   "u008": {
+    "category": "uncertainty",
+    "confidence": 0.9892
+   },
+   "u009": {
+    "category": "loss",
+    "confidence": 0.9756
+   },
+   "u010": {
+    "category": "threat",
+    "confidence": 0.9967
+   },
+   "u011": {
+    "category": "loss",
+    "confidence": 0.6394
+   },
+   "u012": {
+    "category": "achievement",
+    "confidence": 0.9629
+   },
+   "u013": {
+    "category": "connection",
+    "confidence": 0.9889
+   },
+   "u014": {
+    "category": "loss",
+    "confidence": 0.9941
+   },
+   "u015": {
+    "category": "achievement",
+    "confidence": 0.8637
+   },
+   "u016": {
+    "category": "none",
+    "confidence": null
+   },
+   "u017": {
+    "category": "none",
+    "confidence": null
+   },
+   "u018": {
+    "category": "joy",
+    "confidence": 0.5905
+   },
+   "u019": {
+    "category": "none",
+    "confidence": null
+   },
+   "u020": {
+    "category": "uncertainty",
+    "confidence": 0.9957
+   },
+   "u021": {
+    "category": "threat",
+    "confidence": 0.9948
+   },
+   "u022": {
+    "category": "connection",
+    "confidence": 0.9204
+   },
+   "u023": {
+    "category": "loss",
+    "confidence": 0.997
+   },
+   "u024": {
+    "category": "achievement",
+    "confidence": 0.9404
+   },
+   "u025": {
+    "category": "threat",
+    "confidence": 0.9831
+   },
+   "u026": {
+    "category": "uncertainty",
+    "confidence": 0.5776
+   },
+   "u027": {
+    "category": "uncertainty",
+    "confidence": 0.8961
+   },
+   "u028": {
+    "category": "none",
+    "confidence": null
+   },
+   "u029": {
+    "category": "achievement",
+    "confidence": 0.8727
+   },
+   "u030": {
+    "category": "joy",
+    "confidence": 0.8155
+   },
+   "u031": {
+    "category": "achievement",
+    "confidence": 0.9816
+   },
+   "u032": {
+    "category": "loss",
+    "confidence": 0.9924
+   },
+   "u033": {
+    "category": "threat",
+    "confidence": 0.994
+   },
+   "u034": {
+    "category": "threat",
+    "confidence": 0.9963
+   },
+   "u035": {
+    "category": "joy",
+    "confidence": 0.9947
+   },
+   "u036": {
+    "category": "threat",
+    "confidence": 0.9949
+   },
+   "u037": {
+    "category": "joy",
+    "confidence": 0.9931
+   },
+   "u038": {
+    "category": "loss",
+    "confidence": 0.6214
+   },
+   "u039": {
+    "category": "uncertainty",
+    "confidence": 0.9688
+   },
+   "u040": {
+    "category": "loss",
+    "confidence": 0.9945
+   },
+   "u041": {
+    "category": "uncertainty",
+    "confidence": 0.5095
+   },
+   "u042": {
+    "category": "joy",
+    "confidence": 0.703
+   },
+   "u043": {
+    "category": "threat",
+    "confidence": 0.8521
+   },
+   "u044": {
+    "category": "threat",
+    "confidence": 0.6756
+   },
+   "u045": {
+    "category": "threat",
+    "confidence": 0.8667
+   },
+   "u046": {
+    "category": "achievement",
+    "confidence": 0.9906
+   },
+   "u047": {
+    "category": "achievement",
+    "confidence": 0.9344
+   },
+   "u048": {
+    "category": "uncertainty",
+    "confidence": 0.7564
+   },
+   "u049": {
+    "category": "uncertainty",
+    "confidence": 0.968
+   },
+   "u050": {
+    "category": "uncertainty",
+    "confidence": 0.8023
+   },
+   "u051": {
+    "category": "threat",
+    "confidence": 0.9239
+   },
+   "u052": {
+    "category": "threat",
+    "confidence": 0.5039
+   },
+   "u053": {
+    "category": "uncertainty",
+    "confidence": 0.9907
+   },
+   "u054": {
+    "category": "threat",
+    "confidence": 0.9963
+   },
+   "u055": {
+    "category": "threat",
+    "confidence": 0.9969
+   },
+   "u056": {
+    "category": "uncertainty",
+    "confidence": 0.7662
+   },
+   "u057": {
+    "category": "joy",
+    "confidence": 0.9751
+   },
+   "u058": {
+    "category": "joy",
+    "confidence": 0.9957
+   },
+   "u059": {
+    "category": "connection",
+    "confidence": 0.9895
+   },
+   "u060": {
+    "category": "uncertainty",
+    "confidence": 0.9662
+   },
+   "u061": {
+    "category": "achievement",
+    "confidence": 0.716
+   },
+   "u062": {
+    "category": "threat",
+    "confidence": 0.9358
+   },
+   "u063": {
+    "category": "achievement",
+    "confidence": 0.5013
+   },
+   "u064": {
+    "category": "none",
+    "confidence": null
+   },
+   "u065": {
+    "category": "none",
+    "confidence": null
+   },
+   "u066": {
+    "category": "threat",
+    "confidence": 0.9969
+   },
+   "u067": {
+    "category": "loss",
+    "confidence": 0.9639
+   },
+   "u068": {
+    "category": "loss",
+    "confidence": 0.978
+   },
+   "u069": {
+    "category": "joy",
+    "confidence": 0.9843
+   },
+   "u070": {
+    "category": "threat",
+    "confidence": 0.6482
+   },
+   "u071": {
+    "category": "achievement",
+    "confidence": 0.8989
+   },
+   "u072": {
+    "category": "achievement",
+    "confidence": 0.9909
+   },
+   "u073": {
+    "category": "achievement",
+    "confidence": 0.9936
+   },
+   "u074": {
+    "category": "loss",
+    "confidence": 0.7937
+   },
+   "u075": {
+    "category": "joy",
+    "confidence": 0.996
+   },
+   "u076": {
+    "category": "loss",
+    "confidence": 0.8777
+   },
+   "u077": {
+    "category": "threat",
+    "confidence": 0.9718
+   },
+   "u078": {
+    "category": "none",
+    "confidence": null
+   },
+   "u079": {
+    "category": "threat",
+    "confidence": 0.9951
+   },
+   "u080": {
+    "category": "uncertainty",
+    "confidence": 0.8603
+   },
+   "u081": {
+    "category": "threat",
+    "confidence": 0.9969
+   },
+   "u082": {
+    "category": "loss",
+    "confidence": 0.6665
+   },
+   "u083": {
+    "category": "uncertainty",
+    "confidence": 0.5039
+   },
+   "u084": {
+    "category": "threat",
+    "confidence": 0.9877
+   },
+   "u085": {
+    "category": "threat",
+    "confidence": 0.5485
+   },
+   "u086": {
+    "category": "none",
+    "confidence": null
+   },
+   "u087": {
+    "category": "achievement",
+    "confidence": 0.9957
+   },
+   "u088": {
+    "category": "none",
+    "confidence": null
+   },
+   "u089": {
+    "category": "connection",
+    "confidence": 0.5313
+   },
+   "u090": {
+    "category": "loss",
+    "confidence": 0.9967
+   },
+   "u091": {
+    "category": "uncertainty",
+    "confidence": 0.8213
+   },
+   "u092": {
+    "category": "loss",
+    "confidence": 0.9904
+   },
+   "u093": {
+    "category": "none",
+    "confidence": null
+   },
+   "u094": {
+    "category": "uncertainty",
+    "confidence": 0.8414
+   },
+   "u095": {
+    "category": "achievement",
+    "confidence": 0.7496
+   },
+   "u096": {
+    "category": "threat",
+    "confidence": 0.984
+   },
+   "u097": {
+    "category": "joy",
+    "confidence": 0.7144
+   },
+   "u098": {
+    "category": "none",
+    "confidence": null
+   },
+   "u099": {
+    "category": "loss",
+    "confidence": 0.6798
+   },
+   "u100": {
+    "category": "uncertainty",
+    "confidence": 0.9934
+   },
+   "u101": {
+    "category": "joy",
+    "confidence": 0.9958
+   },
+   "u102": {
+    "category": "none",
+    "confidence": null
+   },
+   "u103": {
+    "category": "loss",
+    "confidence": 0.9528
+   },
+   "u104": {
+    "category": "achievement",
+    "confidence": 0.9569
+   },
+   "u105": {
+    "category": "none",
+    "confidence": null
+   },
+   "u106": {
+    "category": "connection",
+    "confidence": 0.9959
+   },
+   "u107": {
+    "category": "loss",
+    "confidence": 0.9922
+   },
+   "u108": {
+    "category": "uncertainty",
+    "confidence": 0.9971
+   },
+   "u109": {
+    "category": "joy",
+    "confidence": 0.8022
+   },
+   "u110": {
+    "category": "uncertainty",
+    "confidence": 0.519
+   },
+   "u111": {
+    "category": "threat",
+    "confidence": 0.9975
+   },
+   "u112": {
+    "category": "achievement",
+    "confidence": 0.5202
+   },
+   "u113": {
+    "category": "loss",
+    "confidence": 0.9516
+   },
+   "u114": {
+    "category": "achievement",
+    "confidence": 0.9652
+   },
+   "u115": {
+    "category": "none",
+    "confidence": null
+   },
+   "u116": {
+    "category": "uncertainty",
+    "confidence": 0.9946
+   },
+   "u117": {
+    "category": "none",
+    "confidence": null
+   },
+   "u118": {
+    "category": "connection",
+    "confidence": 0.9643
+   },
+   "u119": {
+    "category": "connection",
+    "confidence": 0.8128
+   },
+   "u120": {
+    "category": "uncertainty",
+    "confidence": 0.61
+   },
+   "u121": {
+    "category": "threat",
+    "confidence": 0.9396
+   },
+   "u122": {
+    "category": "uncertainty",
+    "confidence": 0.5568
+   },
+   "u123": {
+    "category": "uncertainty",
+    "confidence": 0.7365
+   },
+   "u124": {
+    "category": "threat",
+    "confidence": 0.9568
+   },
+   "u125": {
+    "category": "threat",
+    "confidence": 0.9715
+   },
+   "u126": {
+    "category": "uncertainty",
+    "confidence": 0.9804
+   },
+   "u127": {
+    "category": "none",
+    "confidence": null
+   },
+   "u128": {
+    "category": "none",
+    "confidence": null
+   },
+   "u129": {
+    "category": "loss",
+    "confidence": 0.9854
+   },
+   "u130": {
+    "category": "connection",
+    "confidence": 0.9325
+   },
+   "u131": {
+    "category": "none",
+    "confidence": null
+   },
+   "u132": {
+    "category": "achievement",
+    "confidence": 0.7851
+   },
+   "u133": {
+    "category": "none",
+    "confidence": null
+   },
+   "u134": {
+    "category": "achievement",
+    "confidence": 0.9964
+   },
+   "u135": {
+    "category": "joy",
+    "confidence": 0.9875
+   },
+   "u136": {
+    "category": "threat",
+    "confidence": 0.6204
+   },
+   "u137": {
+    "category": "joy",
+    "confidence": 0.9831
+   },
+   "u138": {
+    "category": "joy",
+    "confidence": 0.9959
+   },
+   "u139": {
+    "category": "connection",
+    "confidence": 0.9636
+   },
+   "u140": {
+    "category": "threat",
+    "confidence": 0.9601
+   }
+  }
+ }
+}

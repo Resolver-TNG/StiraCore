@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% set nav_active = 'chat' %}
+{% block title %}チャット — StiraCore{% endblock %}{% block title_key %}title.chat_stiracore{% endblock %}
+{% block css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/approvals.css') }}">
+  {% if yolo_ui %}<link rel="stylesheet" href="{{ url_for('static', filename='ui/yolo.css') }}">{% endif %}
+  {% if yolo_ui %}<link rel="stylesheet" href="{{ url_for('static', filename='ui/progress.css') }}">{% endif %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='ui/allow.css') }}">
+{% endblock %}
+{% block head_extra %}
+  <script defer src="{{ url_for('static', filename='js/sparkline.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/tool_cards.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/approvals.js') }}"></script>
+  {# ADR 0025: the session allowances' badge, list and log lines (empty until PR 3) #}
+  <script defer src="{{ url_for('static', filename='js/allow_ui.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/permission_cards.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/breaker_reasons.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/turn_ribbon.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/neural_trend.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/chat_core.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/confirm_dialog.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/chat.js') }}"></script>
+  {# ADR 0012 phase 5b: only with STIRA_YOLO_ALLOW (yolo.routes installs the flag) #}
+  {% if yolo_ui %}<script defer src="{{ url_for('static', filename='js/yolo_ui.js') }}"></script>{% endif %}
+  {# ADR 0014 phase 1 (#451): the progress report panel, also only with STIRA_YOLO_ALLOW #}
+  {% if yolo_ui %}<script defer src="{{ url_for('static', filename='js/progress_ui.js') }}"></script>{% endif %}
+{% endblock %}
+{% block content %}
+  <header class="page-header{% if yolo_ui %} has-yolo{% endif %}">
+    <div>
+      <h1><span data-i18n="base.chat">チャット</span></h1>
+    </div>
+    {% if yolo_ui %}<div id="yolo-slot-chat" class="yolo-slot" role="group" aria-label="YOLO" data-i18n-aria-label="yolo.region" hidden></div>{% endif %}
+    <div id="allow-slot-chat" class="allow-slot" role="group" aria-label="継続許可" data-i18n-aria-label="allow.region" hidden></div>
+    <span id="breaker-indicator" class="breaker" data-level="unknown">
+      <span data-i18n="chat.unknown">⚪ 不明</span>
+    </span>
+  </header>
+
+  <div class="dashboard">
+    <section class="chat-panel card" aria-labelledby="chat-title">
+      <header class="panel-header">
+        <h2 id="chat-title"><span data-i18n="chat.conversation">会話</span></h2>
+        <span id="connection-status" role="status"><span data-i18n="chat.loading">読み込み中</span></span>
+      </header>
+
+      <section class="turn-state" id="neural-trend" data-expanded="false" aria-labelledby="neural-title">
+        <div class="turn-state-head">
+          <h3 id="neural-title" class="turn-state-title"><button type="button" id="neural-toggle" class="turn-state-toggle" aria-expanded="false" aria-controls="neural-body" aria-describedby="neural-summary"><span class="turn-state-chevron" aria-hidden="true"></span><span data-i18n="chat.neural_state_trend">神経状態トレンド</span></button></h3>
+          <p class="turn-state-summary" id="neural-summary"><span data-i18n="chat.stability">安定</span> <span class="turn-state-value" id="neural-summary-stability">—</span> <span class="turn-state-badge" id="neural-summary-badge" data-level="" hidden></span></p>
+        </div>
+        <div id="neural-body" class="turn-state-body" hidden>
+        <p class="neural-disclaimer" id="neural-disclaimer"><span data-i18n="turns.disclaimer">神経状態は内部指標です。人間の感情や因果関係を証明するものではありません。</span></p>
+        <div id="turn-neural" class="sparkline-grid">
+          <div class="spark-cell"><div class="spark-label"><span data-i18n="chat.trust">信頼</span><span class="spark-val" id="sv-trust">—</span></div><div id="spark-trust"></div></div>
+          <div class="spark-cell"><div class="spark-label"><span data-i18n="chat.curiosity">好奇心</span><span class="spark-val" id="sv-curiosity">—</span></div><div id="spark-curiosity"></div></div>
+          <div class="spark-cell"><div class="spark-label"><span data-i18n="chat.vigilance">警戒</span><span class="spark-val" id="sv-vigilance">—</span></div><div id="spark-vigilance"></div></div>
+          <div class="spark-cell"><div class="spark-label"><span data-i18n="chat.attachment">愛着</span><span class="spark-val" id="sv-attachment">—</span></div><div id="spark-attachment"></div></div>
+          <div class="spark-cell"><div class="spark-label"><span data-i18n="chat.stability">安定</span><span class="spark-val" id="sv-stability">—</span></div><div id="spark-stability"></div></div>
+          <div class="spark-cell"><div class="spark-label"><span data-i18n="chat.satisfaction">満足</span><span class="spark-val" id="sv-satisfaction">—</span></div><div id="spark-satisfaction"></div></div>
+        </div>
+        </div>
+      </section>
+
+      <section id="hitl-panel" class="hitl-panel approval-queue" aria-labelledby="hitl-title" hidden>
+        <header class="panel-header">
+          <h3 id="hitl-title"><span data-i18n="chat.approval_required">承認要求</span></h3>
+          <a class="approval-page-link" href="/approvals"><span data-i18n="approvals.open_page">承認ページと履歴</span></a>
+        </header>
+        <div id="approval-list" class="approval-list"></div>
+      </section>
+      <p id="approval-live" class="sr-only" role="status" aria-live="polite"></p>
+
+      <section id="permission-panel" class="hitl-panel permission-queue" aria-labelledby="permission-title" hidden>
+        <header class="panel-header">
+          <h3 id="permission-title"><span data-i18n="diagnostics.panel_title">書込みに権限が必要です</span></h3>
+        </header>
+        <div id="permission-list" class="approval-list"></div>
+      </section>
+      <p id="permission-live" class="sr-only" role="status" aria-live="polite"></p>
+
+      <p id="turn-summary-description" class="sr-only" data-i18n="chat.turn_summary_description">刺激を検知したエージェント応答には神経状態の変化量とブレーカーのレベルが表示されます。</p>
+      <div id="conversation" class="conversation" role="log"
+           aria-label="会話履歴" data-i18n-aria-label="chat.conversation_history" aria-live="polite"
+           aria-relevant="additions text" aria-describedby="turn-summary-description" tabindex="0">
+        <p id="empty-history" class="empty"><span data-i18n="chat.send_a_message_to_begin">メッセージを送信してください</span></p>
+      </div>
+
+      {% if yolo_ui %}<section id="progress-slot" class="progress-panel" aria-labelledby="progress-title" hidden></section>{% endif %}
+      <div class="turn-tokens-row">
+        <div id="turn-tokens" class="turn-tokens" role="status">
+          <span data-i18n="chat.turn_tokens">今回のトークン</span>
+        </div>
+        <span id="ctx-gauge" class="ctx-gauge" data-level="ok" hidden></span>
+        {# #350 phase 3: a new conversation (POST /api/chat/session/new, after confirmation) #}
+        <button id="new-session" type="button" class="new-session" disabled aria-describedby="new-session-reason"><span data-i18n="chat.new_button">新しい会話</span></button>
+        <span id="new-session-reason" class="sr-only"></span>
+      </div>
+      <div id="unsettled-send" class="unsettled-send" role="alert" hidden>
+        <p><span data-i18n="chat.unsettled_notice">前の送信の結果が不明です。同じ内容を再送するか、破棄してください。</span></p>
+        <p id="unsettled-preview" class="unsettled-preview"></p>
+        <div class="unsettled-actions">
+          <button id="unsettled-resend" type="button" class="btn btn-primary"><span data-i18n="chat.unsettled_resend">同じ内容を再送</span></button>
+          <button id="unsettled-discard" type="button" class="btn btn-secondary"><span data-i18n="chat.unsettled_discard">破棄</span></button>
+        </div>
+      </div>
+      {# #350: the conversation was reset but its new history could not be read yet #}
+      <div id="history-stale" class="unsettled-send" role="alert" hidden>
+        <p><span data-i18n="chat.new_history_failed">新しい履歴を読み込めませんでした。再読み込みしてください。</span></p>
+        <div class="unsettled-actions">
+          <button id="history-reload" type="button" class="btn btn-primary"><span data-i18n="chat.new_history_reload">再読み込み</span></button>
+        </div>
+      </div>
+      <form id="chat-form" class="composer">
+        <label for="message"><span data-i18n="chat.message">メッセージ</span></label>
+        <div class="composer-row">
+          <textarea id="message" name="message" rows="2" maxlength="16000"
+                    placeholder="メッセージを入力" data-i18n-placeholder="chat.type_a_message"
+                    aria-describedby="input-help" disabled></textarea>
+          <button id="send-button" type="submit" disabled><span data-i18n="chat.send">送信</span></button>
+          <button id="stop-turn-button" type="button" class="stop-turn" hidden aria-describedby="stop-turn-help"><span data-i18n="chat.stop_turn">■ 止める</span></button>
+        </div>
+        <div class="attachment-controls">
+          <button id="attach-button" type="button" disabled><span data-i18n="chat.image">画像</span></button>
+          <input id="image-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp,.jpg,.jpeg" multiple hidden>
+          <small id="input-help"><span data-i18n="chat.paste_image_png_jpeg_gif_webp_10_mib_5">Enter: 送信 · Shift+Enter: 改行 · 画像貼付</span></small>
+          <small id="stop-turn-help" hidden><span data-i18n="chat.stop_turn_help">ページを閉じてもターンは続きます。止めるのは「■ 止める」だけです</span></small>
+        </div>
+        <div id="image-preview" class="image-preview" aria-label="添付画像" data-i18n-aria-label="chat.attachments" hidden></div>
+        <small id="image-error" class="error" role="alert"></small>
+      </form>
+    </section>
+
+    <aside class="sidebar" aria-labelledby="gateway-title">
+      <section class="card gateway-card">
+        <header class="panel-header">
+          <h2 id="gateway-title"><span data-i18n="chat.gateway">ゲートウェイ</span></h2>
+        </header>
+        <p id="gateway-health" class="health" role="status"><span data-i18n="chat.waiting_for_update">更新待ち</span></p>
+        <dl class="facts">
+          <div><dt><span data-i18n="chat.agent_id">エージェントID</span></dt><dd id="agent-id">—</dd></div>
+          <div><dt><span data-i18n="chat.model">モデル</span></dt><dd id="model">—</dd></div>
+          <div><dt><span data-i18n="chat.stimulus_classifier">刺激分類器</span></dt><dd id="classifier">—</dd></div>
+          {# #367: turns since start-up that moved Neural State; the last one's reason if not #}
+          <div><dt><span data-i18n="chat.emotion_updates">感情の更新</span></dt><dd id="emotion-updates">—</dd></div>
+          <div><dt><span data-i18n="chat.uptime">稼働時間</span></dt><dd id="uptime">—</dd></div>
+        </dl>
+      </section>
+
+      <section class="card gateway-card">
+        <h3><span data-i18n="chat.neural_state">神経状態</span></h3>
+        <div id="gateway-neural" class="neural-grid"></div>
+      </section>
+
+      <section class="card gateway-card">
+        <h3><span data-i18n="chat.circuit_breaker">ブレーカー</span></h3>
+        <p id="breaker-level" class="breaker" data-level="unknown"><span data-i18n="chat.unknown">⚪ 不明</span></p>
+        <dl class="facts">
+          <div><dt><span data-i18n="chat.last_change">最終変更</span></dt><dd id="breaker-changed">—</dd></div>
+          <div><dt><span data-i18n="breaker_reason.label">理由</span></dt><dd id="breaker-reason">—</dd></div>
+        </dl>
+      </section>
+
+      <section class="card gateway-card" aria-labelledby="diagnostics-title">
+        <h3 id="diagnostics-title"><span data-i18n="diagnostics.sidebar_title">書込み診断</span></h3>
+        <dl class="facts">
+          <div><dt><span data-i18n="diagnostics.doctor">事前診断</span></dt><dd id="doctor-status">—</dd></div>
+          <div><dt><span data-i18n="diagnostics.open_cards">権限カード</span></dt><dd id="write-failure-count">—</dd></div>
+        </dl>
+        <button id="doctor-rerun" type="button" class="btn btn-secondary"><span data-i18n="diagnostics.rerun">再診断</span></button>
+        <small id="doctor-note"><span data-i18n="diagnostics.doctor_note">読み取りと一時ファイルのみ。設定は変更しません。</span></small>
+      </section>
+
+      <section class="card gateway-card">
+        <h3><span data-i18n="chat.memory_stores">記憶ストア</span></h3>
+        <dl class="facts">
+          <div><dt><span data-i18n="chat.episodic">エピソード</span></dt><dd id="episodic-count">—</dd></div>
+          <div><dt><span data-i18n="chat.semantic">意味</span></dt><dd id="semantic-count">—</dd></div>
+          <div><dt><span data-i18n="chat.procedural">手続き</span></dt><dd id="procedural-count">—</dd></div>
+        </dl>
+      </section>
+
+      <section class="card gateway-card">
+        <h3><span data-i18n="chat.soul_amp_coherence">魂・整合性</span></h3>
+        <dl class="facts">
+          <div><dt><span data-i18n="chat.soul_status">魂の状態</span></dt><dd id="soul-status">—</dd></div>
+          <div><dt><span data-i18n="chat.soul_path">魂の指定元</span></dt><dd id="soul-path">—</dd></div>
+          <div><dt><span data-i18n="chat.bcscore">整合性スコア</span></dt><dd id="bc-score">—</dd></div>
+        </dl>
+      </section>
+
+      <section class="card gateway-card">
+        <h3><span data-i18n="chat.session">セッション</span></h3>
+        <dl class="facts">
+          <div><dt><span data-i18n="chat.input_tokens">入力トークン</span></dt><dd id="input-tokens">—</dd></div>
+          <div><dt><span data-i18n="chat.output_tokens">出力トークン</span></dt><dd id="output-tokens">—</dd></div>
+          <div><dt><span data-i18n="chat.estimated_cost_usd">推定費用（USD）</span></dt><dd id="estimated-cost">—</dd></div>
+        </dl>
+        <small><span data-i18n="chat.reported_usage_only_updated_every_5s">報告済み使用量のみ・5秒毎更新</span></small>
+      </section>
+    </aside>
+  </div>
+  <aside id="turn-inspector" class="drawer turn-inspector" role="dialog" aria-modal="false"
+         aria-labelledby="inspector-title" aria-describedby="inspector-note" hidden>
+    <header class="panel-header">
+      <h2 id="inspector-title"><span data-i18n="turns.inspector_title">ターン詳細</span></h2>
+      <button type="button" class="btn btn-secondary" id="inspector-close"><span data-i18n="turns.close">閉じる</span></button>
+    </header>
+    <p id="inspector-meta" class="inspector-meta"></p>
+    <p id="inspector-note" class="inspector-note"><span data-i18n="turns.disclaimer">神経状態は内部指標です。人間の感情や因果関係を証明するものではありません。</span></p>
+    <div class="inspector-views" role="group" aria-label="表示形式" data-i18n-aria-label="turns.view_mode">
+      <button type="button" class="btn btn-secondary" id="inspector-view-pretty" aria-pressed="true"><span data-i18n="turns.pretty">整形</span></button>
+      <button type="button" class="btn btn-secondary" id="inspector-view-json" aria-pressed="false"><span data-i18n="turns.json">JSON</span></button>
+    </div>
+    <div id="inspector-pretty" class="inspector-pretty"></div>
+    <pre id="inspector-json" class="inspector-json" tabindex="0" aria-label="生 JSON" data-i18n-aria-label="turns.raw_json" hidden></pre>
+  </aside>
+  <noscript><span data-i18n="chat.please_enable_javascript">JavaScriptを有効にしてください</span></noscript>
+{% endblock %}

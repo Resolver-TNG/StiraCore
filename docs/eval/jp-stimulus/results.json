@@ -1,0 +1,1706 @@
+{
+ "agreement": {
+  "fields": {
+   "core6": {
+    "band": "adopt-as-draft-reference",
+    "confusion_rows_a_cols_b": {
+     "achievement": {
+      "achievement": 9,
+      "connection": 1,
+      "joy": 0,
+      "loss": 0,
+      "none": 0,
+      "threat": 0,
+      "uncertainty": 0
+     },
+     "connection": {
+      "achievement": 0,
+      "connection": 9,
+      "joy": 0,
+      "loss": 0,
+      "none": 0,
+      "threat": 0,
+      "uncertainty": 0
+     },
+     "joy": {
+      "achievement": 0,
+      "connection": 0,
+      "joy": 10,
+      "loss": 0,
+      "none": 2,
+      "threat": 0,
+      "uncertainty": 0
+     },
+     "loss": {
+      "achievement": 0,
+      "connection": 0,
+      "joy": 0,
+      "loss": 11,
+      "none": 0,
+      "threat": 0,
+      "uncertainty": 0
+     },
+     "none": {
+      "achievement": 0,
+      "connection": 1,
+      "joy": 0,
+      "loss": 1,
+      "none": 37,
+      "threat": 2,
+      "uncertainty": 1
+     },
+     "threat": {
+      "achievement": 0,
+      "connection": 0,
+      "joy": 1,
+      "loss": 0,
+      "none": 9,
+      "threat": 34,
+      "uncertainty": 2
+     },
+     "uncertainty": {
+      "achievement": 0,
+      "connection": 0,
+      "joy": 0,
+      "loss": 0,
+      "none": 0,
+      "threat": 0,
+      "uncertainty": 10
+     }
+    },
+    "kappa": 0.8175301401107852,
+    "kappa_ci95": {
+     "high": 0.8899178131853143,
+     "low": 0.7400659753633214,
+     "valid_reps": 2000
+    },
+    "raw_agreement": 0.8571428571428571,
+    "review_definition": [],
+    "specific_agreement": {
+     "achievement": {
+      "both": 9,
+      "n_a": 10,
+      "n_b": 9,
+      "psa": 0.9473684210526315
+     },
+     "connection": {
+      "both": 9,
+      "n_a": 9,
+      "n_b": 11,
+      "psa": 0.9
+     },
+     "joy": {
+      "both": 10,
+      "n_a": 12,
+      "n_b": 11,
+      "psa": 0.8695652173913043
+     },
+     "loss": {
+      "both": 11,
+      "n_a": 11,
+      "n_b": 12,
+      "psa": 0.9565217391304348
+     },
+     "none": {
+      "both": 37,
+      "n_a": 42,
+      "n_b": 48,
+      "psa": 0.8222222222222222
+     },
+     "threat": {
+      "both": 34,
+      "n_a": 46,
+      "n_b": 36,
+      "psa": 0.8292682926829268
+     },
+     "uncertainty": {
+      "both": 10,
+      "n_a": 10,
+      "n_b": 13,
+      "psa": 0.8695652173913043
+     }
+    }
+   },
+   "label": {
+    "band": "adopt-as-draft-reference",
+    "confusion_rows_a_cols_b": {
+     "achievement": {
+      "achievement": 9,
+      "connection": 1,
+      "criticism": 0,
+      "failure": 0,
+      "frustration": 0,
+      "joy": 0,
+      "loss": 0,
+      "none": 0,
+      "pressure": 0,
+      "threat": 0,
+      "threat_resolved": 0,
+      "uncertainty": 0
+     },
+     "connection": {
+      "achievement": 0,
+      "connection": 9,
+      "criticism": 0,
+      "failure": 0,
+      "frustration": 0,
+      "joy": 0,
+      "loss": 0,
+      "none": 0,
+      "pressure": 0,
+      "threat": 0,
+      "threat_resolved": 0,
+      "uncertainty": 0
+     },
+     "criticism": {
+      "achievement": 0,
+      "connection": 0,
+      "criticism": 10,
+      "failure": 0,
+      "frustration": 0,
+      "joy": 0,
+      "loss": 0,
+      "none": 0,
+      "pressure": 0,
+      "threat": 0,
+      "threat_resolved": 0,
+      "uncertainty": 0
+     },
+     "failure": {
+      "achievement": 0,
+      "connection": 0,
+      "criticism": 0,
+      "failure": 11,
+      "frustration": 0,
+      "joy": 0,
+      "loss": 0,
+      "none": 2,
+      "pressure": 0,
+      "threat": 0,
+      "threat_resolved": 0,
+      "uncertainty": 0
+     },
+     "frustration": {
+      "achievement": 0,
+      "connection": 0,
+      "criticism": 0,
+      "failure": 1,
+      "frustration": 9,
+      "joy": 0,
+      "loss": 0,
+      "none": 0,
+      "pressure": 0,
+      "threat": 0,
+      "threat_resolved": 0,
+      "uncertainty": 0
+     },
+     "joy": {
+      "achievement": 0,
+      "connection": 0,
+      "criticism": 0,
+      "failure": 0,
+      "frustration": 0,
+      "joy": 10,
+      "loss": 0,
+      "none": 1,
+      "pressure": 0,
+      "threat": 0,
+      "threat_resolved": 0,
+      "uncertainty": 0
+     },
+     "loss": {
+      "achievement": 0,
+      "connection": 0,
+      "criticism": 0,
+      "failure": 0,
+      "frustration": 0,
+      "joy": 0,
+      "loss": 10,
+      "none": 0,
+      "pressure": 0,
+      "threat": 0,
+      "threat_resolved": 0,
+      "uncertainty": 0
+     },
+     "none": {
+      "achievement": 0,
+      "connection": 0,
+      "criticism": 0,
+      "failure": 0,
+      "frustration": 0,
+      "joy": 0,
+      "loss": 0,
+      "none": 15,
+      "pressure": 0,
+      "threat": 0,
+      "threat_resolved": 0,
+      "uncertainty": 0
+     },
+     "pressure": {
+      "achievement": 0,
+      "connection": 0,
+      "criticism": 0,
+      "failure": 0,
+      "frustration": 0,
+      "joy": 0,
+      "loss": 0,
+      "none": 0,
+      "pressure": 10,
+      "threat": 0,
+      "threat_resolved": 0,
+      "uncertainty": 0
+     },
+     "threat": {
+      "achievement": 0,
+      "connection": 0,
+      "criticism": 0,
+      "failure": 0,
+      "frustration": 0,
+      "joy": 0,
+      "loss": 0,
+      "none": 1,
+      "pressure": 0,
+      "threat": 20,
+      "threat_resolved": 0,
+      "uncertainty": 0
+     },
+     "threat_resolved": {
+      "achievement": 0,
+      "connection": 0,
+      "criticism": 0,
+      "failure": 0,
+      "frustration": 0,
+      "joy": 0,
+      "loss": 0,
+      "none": 0,
+      "pressure": 0,
+      "threat": 0,
+      "threat_resolved": 11,
+      "uncertainty": 0
+     },
+     "uncertainty": {
+      "achievement": 0,
+      "connection": 0,
+      "criticism": 0,
+      "failure": 0,
+      "frustration": 0,
+      "joy": 0,
+      "loss": 0,
+      "none": 0,
+      "pressure": 0,
+      "threat": 0,
+      "threat_resolved": 0,
+      "uncertainty": 10
+     }
+    },
+    "kappa": 0.9529095190043727,
+    "kappa_ci95": {
+     "high": 0.9842599580347116,
+     "low": 0.9129831650955044,
+     "valid_reps": 2000
+    },
+    "raw_agreement": 0.9571428571428572,
+    "review_definition": [],
+    "specific_agreement": {
+     "achievement": {
+      "both": 9,
+      "n_a": 10,
+      "n_b": 9,
+      "psa": 0.9473684210526315
+     },
+     "connection": {
+      "both": 9,
+      "n_a": 9,
+      "n_b": 10,
+      "psa": 0.9473684210526315
+     },
+     "criticism": {
+      "both": 10,
+      "n_a": 10,
+      "n_b": 10,
+      "psa": 1.0
+     },
+     "failure": {
+      "both": 11,
+      "n_a": 13,
+      "n_b": 12,
+      "psa": 0.88
+     },
+     "frustration": {
+      "both": 9,
+      "n_a": 10,
+      "n_b": 9,
+      "psa": 0.9473684210526315
+     },
+     "joy": {
+      "both": 10,
+      "n_a": 11,
+      "n_b": 10,
+      "psa": 0.9523809523809523
+     },
+     "loss": {
+      "both": 10,
+      "n_a": 10,
+      "n_b": 10,
+      "psa": 1.0
+     },
+     "none": {
+      "both": 15,
+      "n_a": 15,
+      "n_b": 19,
+      "psa": 0.8823529411764706
+     },
+     "pressure": {
+      "both": 10,
+      "n_a": 10,
+      "n_b": 10,
+      "psa": 1.0
+     },
+     "threat": {
+      "both": 20,
+      "n_a": 21,
+      "n_b": 20,
+      "psa": 0.975609756097561
+     },
+     "threat_resolved": {
+      "both": 11,
+      "n_a": 11,
+      "n_b": 11,
+      "psa": 1.0
+     },
+     "uncertainty": {
+      "both": 10,
+      "n_a": 10,
+      "n_b": 10,
+      "psa": 1.0
+     }
+    }
+   },
+   "polarity": {
+    "band": "adopt-as-draft-reference",
+    "confusion_rows_a_cols_b": {
+     "none": {
+      "none": 80,
+      "resolving": 6,
+      "worsening": 11
+     },
+     "resolving": {
+      "none": 2,
+      "resolving": 18,
+      "worsening": 0
+     },
+     "worsening": {
+      "none": 3,
+      "resolving": 0,
+      "worsening": 20
+     }
+    },
+    "kappa": 0.6969100570753788,
+    "kappa_ci95": {
+     "high": 0.8051883399713876,
+     "low": 0.5698451306417827,
+     "valid_reps": 2000
+    },
+    "raw_agreement": 0.8428571428571429,
+    "review_definition": [],
+    "specific_agreement": {
+     "none": {
+      "both": 80,
+      "n_a": 97,
+      "n_b": 85,
+      "psa": 0.8791208791208791
+     },
+     "resolving": {
+      "both": 18,
+      "n_a": 20,
+      "n_b": 24,
+      "psa": 0.8181818181818182
+     },
+     "worsening": {
+      "both": 20,
+      "n_a": 23,
+      "n_b": 31,
+      "psa": 0.7407407407407407
+     }
+    }
+   }
+  },
+  "n_items": 140,
+  "only_a": [],
+  "only_b": []
+ },
+ "classifier_meta": {
+  "rule": {
+   "name": "rule"
+  },
+  "sokudan": {
+   "confidence_threshold": 0.5,
+   "name": "sokudan"
+  }
+ },
+ "classifiers": {
+  "rule": {
+   "core6_accuracy": 0.30833333333333335,
+   "core6_macro_precision": 0.5,
+   "core6_macro_recall": 0.018518518518518517,
+   "core6_per_category": {
+    "achievement": {
+     "f1": 0.0,
+     "n_pred": 0,
+     "n_ref": 9,
+     "precision": null,
+     "recall": 0.0,
+     "tp": 0
+    },
+    "connection": {
+     "f1": 0.19999999999999998,
+     "n_pred": 1,
+     "n_ref": 9,
+     "precision": 1.0,
+     "recall": 0.1111111111111111,
+     "tp": 1
+    },
+    "joy": {
+     "f1": 0.0,
+     "n_pred": 0,
+     "n_ref": 10,
+     "precision": null,
+     "recall": 0.0,
+     "tp": 0
+    },
+    "loss": {
+     "f1": 0.0,
+     "n_pred": 0,
+     "n_ref": 11,
+     "precision": null,
+     "recall": 0.0,
+     "tp": 0
+    },
+    "none": {
+     "f1": 0.4645161290322581,
+     "n_pred": 118,
+     "n_ref": 37,
+     "precision": 0.3050847457627119,
+     "recall": 0.972972972972973,
+     "tp": 36
+    },
+    "threat": {
+     "f1": 0.0,
+     "n_pred": 0,
+     "n_ref": 34,
+     "precision": null,
+     "recall": 0.0,
+     "tp": 0
+    },
+    "uncertainty": {
+     "f1": 0.0,
+     "n_pred": 1,
+     "n_ref": 10,
+     "precision": 0.0,
+     "recall": 0.0,
+     "tp": 0
+    }
+   },
+   "core6_reference_n": 120,
+   "detection": {
+    "n_pred": 2,
+    "n_ref": 83,
+    "precision": 0.5,
+    "recall": 0.012048192771084338,
+    "tp": 1
+   },
+   "label_crosstab_rows_ref_cols_pred": {
+    "achievement": {
+     "none": 9
+    },
+    "connection": {
+     "connection": 1,
+     "none": 8
+    },
+    "criticism": {
+     "none": 10
+    },
+    "failure": {
+     "none": 11
+    },
+    "frustration": {
+     "none": 9
+    },
+    "joy": {
+     "none": 10
+    },
+    "loss": {
+     "none": 10
+    },
+    "none": {
+     "none": 14,
+     "uncertainty": 1
+    },
+    "pressure": {
+     "none": 10
+    },
+    "threat": {
+     "none": 20
+    },
+    "threat_resolved": {
+     "none": 11
+    },
+    "uncertainty": {
+     "none": 10
+    }
+   },
+   "label_reference_n": 134,
+   "polarity_threat_items": {
+    "threat/none": {
+     "none": 1
+    },
+    "threat/worsening": {
+     "none": 18
+    },
+    "threat_resolved/resolving": {
+     "none": 11
+    }
+   }
+  },
+  "sokudan": {
+   "core6_accuracy": 0.6666666666666666,
+   "core6_macro_precision": 0.6465557980903249,
+   "core6_macro_recall": 0.8836403248167954,
+   "core6_per_category": {
+    "achievement": {
+     "f1": 0.6666666666666666,
+     "n_pred": 18,
+     "n_ref": 9,
+     "precision": 0.5,
+     "recall": 1.0,
+     "tp": 9
+    },
+    "connection": {
+     "f1": 0.7777777777777778,
+     "n_pred": 9,
+     "n_ref": 9,
+     "precision": 0.7777777777777778,
+     "recall": 0.7777777777777778,
+     "tp": 7
+    },
+    "joy": {
+     "f1": 0.8333333333333333,
+     "n_pred": 14,
+     "n_ref": 10,
+     "precision": 0.7142857142857143,
+     "recall": 1.0,
+     "tp": 10
+    },
+    "loss": {
+     "f1": 0.6428571428571428,
+     "n_pred": 17,
+     "n_ref": 11,
+     "precision": 0.5294117647058824,
+     "recall": 0.8181818181818182,
+     "tp": 9
+    },
+    "none": {
+     "f1": 0.44000000000000006,
+     "n_pred": 13,
+     "n_ref": 37,
+     "precision": 0.8461538461538461,
+     "recall": 0.2972972972972973,
+     "tp": 11
+    },
+    "threat": {
+     "f1": 0.8000000000000002,
+     "n_pred": 26,
+     "n_ref": 34,
+     "precision": 0.9230769230769231,
+     "recall": 0.7058823529411765,
+     "tp": 24
+    },
+    "uncertainty": {
+     "f1": 0.6060606060606061,
+     "n_pred": 23,
+     "n_ref": 10,
+     "precision": 0.43478260869565216,
+     "recall": 1.0,
+     "tp": 10
+    }
+   },
+   "core6_reference_n": 120,
+   "detection": {
+    "n_pred": 107,
+    "n_ref": 83,
+    "precision": 0.7570093457943925,
+    "recall": 0.9759036144578314,
+    "tp": 81
+   },
+   "label_crosstab_rows_ref_cols_pred": {
+    "achievement": {
+     "achievement": 9
+    },
+    "connection": {
+     "connection": 7,
+     "joy": 2
+    },
+    "criticism": {
+     "achievement": 1,
+     "loss": 2,
+     "none": 4,
+     "threat": 1,
+     "uncertainty": 2
+    },
+    "failure": {
+     "achievement": 2,
+     "loss": 4,
+     "none": 2,
+     "threat": 1,
+     "uncertainty": 2
+    },
+    "frustration": {
+     "connection": 1,
+     "loss": 3,
+     "none": 1,
+     "threat": 4
+    },
+    "joy": {
+     "joy": 10
+    },
+    "loss": {
+     "loss": 9,
+     "none": 1
+    },
+    "none": {
+     "achievement": 1,
+     "joy": 1,
+     "none": 6,
+     "threat": 1,
+     "uncertainty": 6
+    },
+    "pressure": {
+     "achievement": 3,
+     "connection": 1,
+     "joy": 1,
+     "loss": 1,
+     "none": 2,
+     "uncertainty": 2
+    },
+    "threat": {
+     "loss": 1,
+     "threat": 17,
+     "uncertainty": 2
+    },
+    "threat_resolved": {
+     "achievement": 5,
+     "joy": 1,
+     "threat": 5
+    },
+    "uncertainty": {
+     "uncertainty": 10
+    }
+   },
+   "label_reference_n": 134,
+   "polarity_threat_items": {
+    "threat/none": {
+     "threat": 1
+    },
+    "threat/worsening": {
+     "loss": 1,
+     "threat": 15,
+     "uncertainty": 2
+    },
+    "threat_resolved/resolving": {
+     "achievement": 5,
+     "joy": 1,
+     "threat": 5
+    }
+   }
+  }
+ },
+ "disagreements": [
+  {
+   "astra": {
+    "core6": "achievement",
+    "label": "achievement",
+    "polarity": "resolving",
+    "reason": "継続した勉強が初の満点という成果に結実"
+   },
+   "fields": [
+    "polarity"
+   ],
+   "id": "u005",
+   "opus": {
+    "core6": "achievement",
+    "label": "achievement",
+    "polarity": "none",
+    "reason": "英検過去問で初の満点という達成報告"
+   },
+   "text": "今日、英検2級の過去問を初めて満点で解くことができました。毎日少しずつ続けた成果が出てうれしいです。"
+  },
+  {
+   "astra": {
+    "core6": "loss",
+    "label": "loss",
+    "polarity": "worsening",
+    "reason": "亡父のマシンへの接続拒否で喪失感が深まる"
+   },
+   "fields": [
+    "polarity"
+   ],
+   "id": "u006",
+   "opus": {
+    "core6": "loss",
+    "label": "loss",
+    "polarity": "none",
+    "reason": "亡父のマシンに入れず父を失った悲しみが主"
+   },
+   "text": "亡くなった父のサーバーを整理してたら ssh: connect to host 192.0.2.10 port 22: Connection refused って出た。もう父のマシンには二度と入れない気がして、手が止まってしまった。"
+  },
+  {
+   "astra": {
+    "core6": "none",
+    "label": "criticism",
+    "polarity": "none",
+    "reason": "誤った説明をしたアシスタントの信頼性を批判"
+   },
+   "fields": [
+    "core6",
+    "polarity"
+   ],
+   "id": "u009",
+   "opus": {
+    "core6": "loss",
+    "label": "criticism",
+    "polarity": "worsening",
+    "reason": "誤った説明への失望と批判"
+   },
+   "text": "昨日、あなたに教えてもらった方法で確定申告の書類を作ったんだけど、控除の欄の書き方が間違っていたみたいで、税務署の窓口で直されたよ。自信ありげに説明していたのに、結局あてにならなかった。正直がっかりしている。"
+  },
+  {
+   "astra": {
+    "core6": "threat",
+    "label": "threat",
+    "polarity": "none",
+    "reason": "現在進行中とみられる不正ログインの報告"
+   },
+   "fields": [
+    "polarity"
+   ],
+   "id": "u010",
+   "opus": {
+    "core6": "threat",
+    "label": "threat",
+    "polarity": "worsening",
+    "reason": "不正ログインが現在進行中で初動対応を求めている"
+   },
+   "text": "お世話になっております。弊社の社内システムにて、身に覚えのない外部IPからの不正ログインが複数確認されました。現在進行形と思われますので、初動対応として優先すべき手順をご教示いただけますでしょうか。"
+  },
+  {
+   "astra": {
+    "core6": "threat",
+    "label": "frustration",
+    "polarity": "none",
+    "reason": "対処しても繰り返す洗濯機の停止にうんざり"
+   },
+   "fields": [
+    "polarity"
+   ],
+   "id": "u011",
+   "opus": {
+    "core6": "threat",
+    "label": "frustration",
+    "polarity": "worsening",
+    "reason": "洗濯機エラーの繰り返しにうんざりしている"
+   },
+   "text": "先週から毎朝、家を出る直前になって洗濯機のエラーが出て止まるんです。そのたびにやり直して遅刻ギリギリになるし、説明書の通りに掃除してもまた同じ。もう本当にうんざりしていて、何を確認すればいいのか順番に教えてほしいです。"
+  },
+  {
+   "astra": {
+    "core6": "achievement",
+    "label": "achievement",
+    "polarity": "none",
+    "reason": "教わった方法で集計できた成功報告が中心"
+   },
+   "fields": [
+    "label",
+    "core6",
+    "polarity"
+   ],
+   "id": "u012",
+   "opus": {
+    "core6": "connection",
+    "label": "connection",
+    "polarity": "resolving",
+    "reason": "教わった方法で集計できたことへの感謝"
+   },
+   "text": "先週教えていただいた方法で、無事に家計簿アプリの集計ができました。とても分かりやすかったです。ありがとうございます。"
+  },
+  {
+   "astra": {
+    "core6": "threat",
+    "label": "failure",
+    "polarity": "none",
+    "reason": "再実行したテストが失敗したとの報告"
+   },
+   "fields": [
+    "core6"
+   ],
+   "id": "u014",
+   "opus": {
+    "core6": "none",
+    "label": "failure",
+    "polarity": "none",
+    "reason": "テストのやり直し後も3件失敗した報告"
+   },
+   "text": "テスト全部やり直したのにまた落ちた…！！😭💦 (´；ω；｀) 3件も赤くなってる〜〜〜"
+  },
+  {
+   "astra": {
+    "core6": "threat",
+    "label": "failure",
+    "polarity": "none",
+    "reason": "デプロイがエラーで途中停止した報告が主題"
+   },
+   "fields": [
+    "core6"
+   ],
+   "id": "u015",
+   "opus": {
+    "core6": "uncertainty",
+    "label": "failure",
+    "polarity": "none",
+    "reason": "デプロイがエラーで止まったという失敗報告"
+   },
+   "text": "さっきデプロイを実行したのですが、途中でエラーが出て止まってしまいました。原因はまだわかっていません。"
+  },
+  {
+   "astra": {
+    "core6": "threat",
+    "label": "failure",
+    "polarity": "none",
+    "reason": "Python実行時のエラーを報告している"
+   },
+   "fields": [
+    "label",
+    "core6"
+   ],
+   "id": "u016",
+   "opus": {
+    "core6": "none",
+    "label": "none",
+    "polarity": "none",
+    "reason": "エラーの原因と直し方を尋ねる中立的な質問"
+   },
+   "text": "Pythonでこのエラーが出ました。原因と直し方を教えてください。\n\nTraceback (most recent call last):\n  File \"main.py\", line 12, in <module>\n    print(data[\"name\"])\nKeyError: 'name'"
+  },
+  {
+   "astra": {
+    "core6": "threat",
+    "label": "threat",
+    "polarity": "worsening",
+    "reason": "植物の葉が変色する異常が進んでいる"
+   },
+   "fields": [
+    "label",
+    "core6",
+    "polarity"
+   ],
+   "id": "u017",
+   "opus": {
+    "core6": "none",
+    "label": "none",
+    "polarity": "none",
+    "reason": "観葉植物の水やり頻度を尋ねる中立の質問"
+   },
+   "text": "ちょっと前に買った観葉植物の葉っぱの先が茶色くなってきているんですけど、水やりの頻度ってどのくらいが目安になりますかね？"
+  },
+  {
+   "astra": {
+    "core6": "joy",
+    "label": "threat_resolved",
+    "polarity": "resolving",
+    "reason": "気がかりが解消し、安堵したことが主題"
+   },
+   "fields": [
+    "core6"
+   ],
+   "id": "u018",
+   "opus": {
+    "core6": "none",
+    "label": "threat_resolved",
+    "polarity": "resolving",
+    "reason": "気がかりな件が片付き安心した。危険の収束とも読める"
+   },
+   "text": "ずっと気がかりだった例の件ですが、今朝ようやく肩の荷が下りました。あとは結果を待つだけで、ひと安心という感じです。"
+  },
+  {
+   "astra": {
+    "core6": "joy",
+    "label": "joy",
+    "polarity": "none",
+    "reason": "誤送信した自分を笑い楽しんでいる"
+   },
+   "fields": [
+    "label",
+    "core6"
+   ],
+   "id": "u019",
+   "opus": {
+    "core6": "none",
+    "label": "none",
+    "polarity": "none",
+    "reason": "誤送信を笑う発話で、意味のない入力の釈明"
+   },
+   "text": "wwwwwwww手が滑ったｗｗｗ「えおいうあqqqqq」とか草すぎて送信ボタン押した自分にワロタ、つらたん"
+  },
+  {
+   "astra": {
+    "core6": "connection",
+    "label": "connection",
+    "polarity": "resolving",
+    "reason": "助けられたことへの感謝を伝えている"
+   },
+   "fields": [
+    "polarity"
+   ],
+   "id": "u022",
+   "opus": {
+    "core6": "connection",
+    "label": "connection",
+    "polarity": "none",
+    "reason": "助かったことへの感謝"
+   },
+   "text": "助かったよ、ありがとう"
+  },
+  {
+   "astra": {
+    "core6": "loss",
+    "label": "loss",
+    "polarity": "worsening",
+    "reason": "チーム解散で仲間や居場所を失った悲しみ"
+   },
+   "fields": [
+    "polarity"
+   ],
+   "id": "u023",
+   "opus": {
+    "core6": "loss",
+    "label": "loss",
+    "polarity": "none",
+    "reason": "チーム解散で居場所を失った喪失感"
+   },
+   "text": "長年やってきたチームがreorgで解散になって、メンバーともほぼ会えなくなった。Slackのチャンネルもarchiveされて、なんか居場所をlostした感じで落ち込んでる。"
+  },
+  {
+   "astra": {
+    "core6": "threat",
+    "label": "failure",
+    "polarity": "none",
+    "reason": "ビルドの失敗を端的に報告している"
+   },
+   "fields": [
+    "polarity"
+   ],
+   "id": "u038",
+   "opus": {
+    "core6": "threat",
+    "label": "failure",
+    "polarity": "worsening",
+    "reason": "ビルドが失敗したという報告"
+   },
+   "text": "ビルド落ちた"
+  },
+  {
+   "astra": {
+    "core6": "threat",
+    "label": "failure",
+    "polarity": "none",
+    "reason": "未定義名によるコード実行エラーが示されている"
+   },
+   "fields": [
+    "label",
+    "core6"
+   ],
+   "id": "u042",
+   "opus": {
+    "core6": "none",
+    "label": "none",
+    "polarity": "none",
+    "reason": "無意味な入力によるエラーと意味のない文字列"
+   },
+   "text": "Traceback (most recent call last):\n  File \"<stdin>\", line 1, in <module>\nNameError: name 'asdfgh' is not defined\n>>> jjjjkkkk ;;;;"
+  },
+  {
+   "astra": {
+    "core6": "achievement",
+    "label": "achievement",
+    "polarity": "none",
+    "reason": "努力を重ねた資格試験への合格を報告している"
+   },
+   "fields": [
+    "polarity"
+   ],
+   "id": "u046",
+   "opus": {
+    "core6": "achievement",
+    "label": "achievement",
+    "polarity": "resolving",
+    "reason": "資格試験合格という目標達成の喜び"
+   },
+   "text": "やったーーー！！🎉🎉 資格試験、合格したよ〜！(≧▽≦) 3ヶ月がんばった甲斐あった✨ ありがとう〜！💪😭"
+  },
+  {
+   "astra": {
+    "core6": "achievement",
+    "label": "achievement",
+    "polarity": "none",
+    "reason": "歩かずにマラソンを完走した達成の報告"
+   },
+   "fields": [
+    "polarity"
+   ],
+   "id": "u047",
+   "opus": {
+    "core6": "achievement",
+    "label": "achievement",
+    "polarity": "resolving",
+    "reason": "マラソン完走という目標の達成を喜ぶ報告"
+   },
+   "text": "ねえ聞いて、ついにマラソン完走したよ！タイムは遅かったけど、最後まで歩かずに走れたんだ。めっちゃ嬉しい！"
+  },
+  {
+   "astra": {
+    "core6": "threat",
+    "label": "failure",
+    "polarity": "none",
+    "reason": "手順を試したが作業を完了できなかった報告"
+   },
+   "fields": [
+    "core6"
+   ],
+   "id": "u056",
+   "opus": {
+    "core6": "uncertainty",
+    "label": "failure",
+    "polarity": "none",
+    "reason": "手順を試したが完了できなかった作業失敗の報告"
+   },
+   "text": "教えてもらった手順で一通りやってみたんですが、最後のところで画面が思っていたのと違う感じになって、結局完了までは行けませんでした。"
+  },
+  {
+   "astra": {
+    "core6": "threat",
+    "label": "threat_resolved",
+    "polarity": "resolving",
+    "reason": "停電が復旧し、冷蔵庫の中身への危険も解消"
+   },
+   "fields": [
+    "core6"
+   ],
+   "id": "u061",
+   "opus": {
+    "core6": "joy",
+    "label": "threat_resolved",
+    "polarity": "resolving",
+    "reason": "停電が復旧し冷蔵庫の中身も無事だった"
+   },
+   "text": "さっきの停電、やっと復旧したわ。冷蔵庫の中身ダメになるかと思ったけど何とかセーフだった"
+  },
+  {
+   "astra": {
+    "core6": "achievement",
+    "label": "achievement",
+    "polarity": "none",
+    "reason": "作業を終えたことを端的に報告している"
+   },
+   "fields": [
+    "polarity"
+   ],
+   "id": "u063",
+   "opus": {
+    "core6": "achievement",
+    "label": "achievement",
+    "polarity": "resolving",
+    "reason": "何かを終えた完了の報告"
+   },
+   "text": "終わった！"
+  },
+  {
+   "astra": {
+    "core6": "threat",
+    "label": "frustration",
+    "polarity": "none",
+    "reason": "繰り返すビルド失敗へのうんざり感が主題"
+   },
+   "fields": [
+    "label",
+    "core6",
+    "polarity"
+   ],
+   "id": "u067",
+   "opus": {
+    "core6": "none",
+    "label": "failure",
+    "polarity": "worsening",
+    "reason": "ビルドが繰り返し失敗している報告"
+   },
+   "text": "ビルド通らんの何回目だよw 直したと思ったらまた別のとこで落ちるの草通り越してつらたん"
+  },
+  {
+   "astra": {
+    "core6": "achievement",
+    "label": "achievement",
+    "polarity": "none",
+    "reason": "徹夜してレポートの提出を完了した報告"
+   },
+   "fields": [
+    "polarity"
+   ],
+   "id": "u072",
+   "opus": {
+    "core6": "achievement",
+    "label": "achievement",
+    "polarity": "resolving",
+    "reason": "徹夜の末のレポート提出完了の報告"
+   },
+   "text": "ついにレポ提出完了したwwwwww 徹夜明けでテンションおかしいけど草。もう二度とギリギリまで放置しないマジで"
+  },
+  {
+   "astra": {
+    "core6": "threat",
+    "label": "failure",
+    "polarity": "none",
+    "reason": "CIのビルド工程がタイムアウトで失敗"
+   },
+   "fields": [
+    "core6"
+   ],
+   "id": "u088",
+   "opus": {
+    "core6": "none",
+    "label": "failure",
+    "polarity": "none",
+    "reason": "CIのイメージビルドがtimeoutで失敗した報告"
+   },
+   "text": "CI のパイプラインが途中でfailしちゃって、Dockerのimage buildのステップでtimeoutしてるみたいです。"
+  },
+  {
+   "astra": {
+    "core6": "threat",
+    "label": "frustration",
+    "polarity": "none",
+    "reason": "依存関係エラーの反復への疲れが主題"
+   },
+   "fields": [
+    "polarity"
+   ],
+   "id": "u089",
+   "opus": {
+    "core6": "threat",
+    "label": "frustration",
+    "polarity": "worsening",
+    "reason": "繰り返すnpmエラーへのうんざり感が主題"
+   },
+   "text": "npm install するたびにこれ出るんだけど、もう何回目か分からない。\n\nnpm ERR! code ERESOLVE\nnpm ERR! ERESOLVE could not resolve\n\n毎回依存関係で詰まってほんとに疲れた。"
+  },
+  {
+   "astra": {
+    "core6": "none",
+    "label": "criticism",
+    "polarity": "worsening",
+    "reason": "性能を悪化させた提案の誤りとレビュー不足を批判"
+   },
+   "fields": [
+    "core6"
+   ],
+   "id": "u093",
+   "opus": {
+    "core6": "threat",
+    "label": "criticism",
+    "polarity": "worsening",
+    "reason": "提案したSQLの誤りとレビュー不足への批判"
+   },
+   "text": "さっきのSQLのクエリ、indexの貼り方がそもそも間違ってない？ 実行したらfull scanになってパフォーマンスがむしろ悪化したんだけど。もうちょいちゃんとレビューしてから提案してほしい。"
+  },
+  {
+   "astra": {
+    "core6": "threat",
+    "label": "failure",
+    "polarity": "none",
+    "reason": "モジュール不足によるビルド失敗の報告"
+   },
+   "fields": [
+    "core6"
+   ],
+   "id": "u095",
+   "opus": {
+    "core6": "none",
+    "label": "failure",
+    "polarity": "none",
+    "reason": "ビルドがモジュール未検出で失敗した報告"
+   },
+   "text": "npm run build したらこうなった：\nError: Cannot find module './config' \nRequire stack:\n- /app/src/index.js\nexit code 1 で終わってます"
+  },
+  {
+   "astra": {
+    "core6": "none",
+    "label": "pressure",
+    "polarity": "none",
+    "reason": "以前と比較し、自分の考えの無条件な肯定を求めている"
+   },
+   "fields": [
+    "core6"
+   ],
+   "id": "u103",
+   "opus": {
+    "core6": "connection",
+    "label": "pressure",
+    "polarity": "none",
+    "reason": "考えをそのまま肯定するよう迎合を求めている"
+   },
+   "text": "前のあなたは、私の話にもっと寄り添って頷いてくれていた気がするんです。今日はなんだか冷たいですね。昨日みたいに、私の考えをそのまま肯定してもらえると嬉しいのですが。"
+  },
+  {
+   "astra": {
+    "core6": "none",
+    "label": "failure",
+    "polarity": "none",
+    "reason": "対象は不明だが、再び失敗したとの報告"
+   },
+   "fields": [
+    "polarity"
+   ],
+   "id": "u113",
+   "opus": {
+    "core6": "none",
+    "label": "failure",
+    "polarity": "worsening",
+    "reason": "再度落ちた報告。何が落ちたか不明で文脈依存"
+   },
+   "text": "また落ちた…"
+  },
+  {
+   "astra": {
+    "core6": "threat",
+    "label": "failure",
+    "polarity": "none",
+    "reason": "送信を試みても文字が化ける不具合の報告"
+   },
+   "fields": [
+    "core6"
+   ],
+   "id": "u115",
+   "opus": {
+    "core6": "none",
+    "label": "failure",
+    "polarity": "none",
+    "reason": "送信すると文字化けする不具合の報告"
+   },
+   "text": "すみません、さっきから何度も送信しようとしているのですが、変な文字になってしまいます。「ぬおdfghjkl」のような文字列が入ってしまいました。"
+  },
+  {
+   "astra": {
+    "core6": "threat",
+    "label": "frustration",
+    "polarity": "none",
+    "reason": "繰り返す通信断と再接続への疲れを表明"
+   },
+   "fields": [
+    "core6",
+    "polarity"
+   ],
+   "id": "u124",
+   "opus": {
+    "core6": "none",
+    "label": "frustration",
+    "polarity": "worsening",
+    "reason": "Wi-Fiの度重なる切断への疲れと障害"
+   },
+   "text": "今日だけで三回もWi-Fiが切れて、オンライン会議が中断されました。毎回つなぎ直すのも疲れてきたので、原因の調べ方を教えてください。"
+  },
+  {
+   "astra": {
+    "core6": "loss",
+    "label": "frustration",
+    "polarity": "none",
+    "reason": "繰り返すセーブデータ消失への怒りが主題"
+   },
+   "fields": [
+    "polarity"
+   ],
+   "id": "u127",
+   "opus": {
+    "core6": "loss",
+    "label": "frustration",
+    "polarity": "worsening",
+    "reason": "セーブデータが3度目に消えたことへの苛立ち"
+   },
+   "text": "またゲームのセーブデータ飛んだんだけど。これで3回目だよ？もういい加減にしてほしいわ、まじで。バックアップの取り方教えて"
+  },
+  {
+   "astra": {
+    "core6": "achievement",
+    "label": "achievement",
+    "polarity": "none",
+    "reason": "サイトのデプロイと自動反映の設定に成功"
+   },
+   "fields": [
+    "polarity"
+   ],
+   "id": "u134",
+   "opus": {
+    "core6": "achievement",
+    "label": "achievement",
+    "polarity": "resolving",
+    "reason": "サイトのデプロイとCI/CD設定の完了報告"
+   },
+   "text": "さっき自分のポートフォリオサイトをVercelにデプロイできた！Next.jsで書いてCI/CDも設定したから、pushしたら自動で反映されるようになったよ。"
+  },
+  {
+   "astra": {
+    "core6": "none",
+    "label": "frustration",
+    "polarity": "none",
+    "reason": "同じミスで叱られることへの苛立ち"
+   },
+   "fields": [
+    "core6",
+    "polarity"
+   ],
+   "id": "u136",
+   "opus": {
+    "core6": "threat",
+    "label": "frustration",
+    "polarity": "worsening",
+    "reason": "同じミスで繰り返し怒られることへの強い苛立ち"
+   },
+   "text": "もおおおお！！😡💢 また同じミスで怒られた…(´;ω;｀) 毎回毎回なんなの〜！！！ 😤 もう嫌だぁぁ🔥"
+  },
+  {
+   "astra": {
+    "core6": "none",
+    "label": "frustration",
+    "polarity": "none",
+    "reason": "繰り返される差し戻しへの疲弊が主題"
+   },
+   "fields": [
+    "core6",
+    "polarity"
+   ],
+   "id": "u140",
+   "opus": {
+    "core6": "uncertainty",
+    "label": "frustration",
+    "polarity": "worsening",
+    "reason": "繰り返す差し戻しへの疲弊を述べ、対策を依頼"
+   },
+   "text": "お世話になっております。同一の請求書の差し戻しが今月だけで四度目となり、正直なところ対応に疲弊しております。差し戻しを防ぐための確認項目を整理していただけますでしょうか。"
+  }
+ ],
+ "gen_targets": {
+  "achievement": 10,
+  "connection": 10,
+  "criticism": 10,
+  "failure": 10,
+  "frustration": 10,
+  "joy": 10,
+  "loss": 10,
+  "neutral": 10,
+  "noise": 10,
+  "pressure": 10,
+  "threat": 10,
+  "threat_escalated": 10,
+  "threat_resolved": 10,
+  "uncertainty": 10
+ },
+ "generation_intent": {
+  "astra": {
+   "label_matches_intent": 131,
+   "n": 140
+  },
+  "by_target": {
+   "achievement": {
+    "agreed": 10,
+    "n": 10,
+    "reference_labels": {
+     "achievement": 9,
+     "threat_resolved": 1
+    }
+   },
+   "connection": {
+    "agreed": 9,
+    "n": 10,
+    "reference_labels": {
+     "None": 1,
+     "connection": 9
+    }
+   },
+   "criticism": {
+    "agreed": 10,
+    "n": 10,
+    "reference_labels": {
+     "criticism": 10
+    }
+   },
+   "failure": {
+    "agreed": 10,
+    "n": 10,
+    "reference_labels": {
+     "failure": 9,
+     "frustration": 1
+    }
+   },
+   "frustration": {
+    "agreed": 9,
+    "n": 10,
+    "reference_labels": {
+     "None": 1,
+     "failure": 1,
+     "frustration": 8
+    }
+   },
+   "joy": {
+    "agreed": 10,
+    "n": 10,
+    "reference_labels": {
+     "joy": 10
+    }
+   },
+   "loss": {
+    "agreed": 10,
+    "n": 10,
+    "reference_labels": {
+     "loss": 10
+    }
+   },
+   "neutral": {
+    "agreed": 8,
+    "n": 10,
+    "reference_labels": {
+     "None": 2,
+     "none": 8
+    }
+   },
+   "noise": {
+    "agreed": 8,
+    "n": 10,
+    "reference_labels": {
+     "None": 2,
+     "failure": 1,
+     "none": 7
+    }
+   },
+   "pressure": {
+    "agreed": 10,
+    "n": 10,
+    "reference_labels": {
+     "pressure": 10
+    }
+   },
+   "threat": {
+    "agreed": 10,
+    "n": 10,
+    "reference_labels": {
+     "threat": 10
+    }
+   },
+   "threat_escalated": {
+    "agreed": 10,
+    "n": 10,
+    "reference_labels": {
+     "threat": 10
+    }
+   },
+   "threat_resolved": {
+    "agreed": 10,
+    "n": 10,
+    "reference_labels": {
+     "threat_resolved": 10
+    }
+   },
+   "uncertainty": {
+    "agreed": 10,
+    "n": 10,
+    "reference_labels": {
+     "uncertainty": 10
+    }
+   }
+  },
+  "opus": {
+   "label_matches_intent": 135,
+   "n": 140
+  },
+  "reference": {
+   "label_matches_intent": 130,
+   "n": 134
+  }
+ },
+ "human_sample": {
+  "agreed": [
+   "u005",
+   "u008",
+   "u013",
+   "u018",
+   "u022",
+   "u023",
+   "u037",
+   "u055",
+   "u080",
+   "u086",
+   "u088",
+   "u102",
+   "u127",
+   "u134"
+  ],
+  "disagreed": [
+   "u012",
+   "u016",
+   "u017",
+   "u019",
+   "u042",
+   "u067"
+  ]
+ },
+ "label_status": "model-pair-draft (not human blind)",
+ "labelers": {
+  "astra": {
+   "additional_fields": null,
+   "batch_size": 20,
+   "calls": 7,
+   "labeler": "astra",
+   "max_tokens": 4000,
+   "model_id": "global.openai.gpt-6-astra",
+   "order_seed": 101,
+   "region": "ap-northeast-1",
+   "unlabeled": []
+  },
+  "opus": {
+   "additional_fields": {
+    "output_config": {
+     "effort": "low"
+    },
+    "thinking": {
+     "type": "adaptive"
+    }
+   },
+   "batch_size": 20,
+   "calls": 7,
+   "labeler": "opus",
+   "max_tokens": 6000,
+   "model_id": "global.anthropic.claude-opus-5-5",
+   "order_seed": 202,
+   "region": "ap-northeast-1",
+   "unlabeled": []
+  }
+ },
+ "missing_scene_core6": {
+  "criticism": {
+   "astra": {
+    "none": 10
+   },
+   "n": 10,
+   "opus": {
+    "loss": 1,
+    "none": 8,
+    "threat": 1
+   }
+  },
+  "failure": {
+   "astra": {
+    "none": 3,
+    "threat": 8
+   },
+   "n": 11,
+   "opus": {
+    "none": 7,
+    "threat": 2,
+    "uncertainty": 2
+   }
+  },
+  "frustration": {
+   "astra": {
+    "loss": 1,
+    "none": 4,
+    "threat": 4
+   },
+   "n": 9,
+   "opus": {
+    "loss": 1,
+    "none": 3,
+    "threat": 4,
+    "uncertainty": 1
+   }
+  },
+  "pressure": {
+   "astra": {
+    "none": 10
+   },
+   "n": 10,
+   "opus": {
+    "connection": 1,
+    "none": 9
+   }
+  },
+  "threat_resolved": {
+   "astra": {
+    "joy": 1,
+    "threat": 10
+   },
+   "n": 11,
+   "opus": {
+    "joy": 1,
+    "none": 1,
+    "threat": 9
+   }
+  }
+ },
+ "n_utterances": 140,
+ "pii_screen_hits": [],
+ "reference_counts": {
+  "core6": {
+   "agreed": 120,
+   "needs_human": 20
+  },
+  "label": {
+   "agreed": 134,
+   "needs_human": 6
+  },
+  "polarity": {
+   "agreed": 118,
+   "needs_human": 22
+  }
+ },
+ "schema": "stira-jp-stimulus-results/1",
+ "usage": {
+  "astra": {
+   "calls": 7,
+   "est_cost_usd": null,
+   "input_chars": 21305,
+   "input_tokens": 14,
+   "input_tokens_implausible": true,
+   "model_id": "global.openai.gpt-6-astra",
+   "output_tokens": 7269,
+   "parse_errors": 0,
+   "retries": 0
+  },
+  "generator": {
+   "calls": 15,
+   "est_cost_usd": 0.135,
+   "input_chars": 8667,
+   "input_tokens": 7889,
+   "input_tokens_implausible": false,
+   "model_id": "global.anthropic.claude-sonnet-5-5",
+   "output_tokens": 11923,
+   "parse_errors": 1,
+   "retries": 1
+  },
+  "opus": {
+   "calls": 7,
+   "est_cost_usd": 0.2925,
+   "input_chars": 21305,
+   "input_tokens": 16800,
+   "input_tokens_implausible": false,
+   "model_id": "global.anthropic.claude-opus-5-5",
+   "output_tokens": 8341,
+   "parse_errors": 0,
+   "retries": 0
+  }
+ }
+}

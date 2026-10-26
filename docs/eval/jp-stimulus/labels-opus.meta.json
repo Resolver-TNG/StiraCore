@@ -1,0 +1,18 @@
+{
+  "labeler": "opus",
+  "model_id": "global.anthropic.claude-opus-5-5",
+  "region": "ap-northeast-1",
+  "max_tokens": 6000,
+  "additional_fields": {
+    "thinking": {
+      "type": "adaptive"
+    },
+    "output_config": {
+      "effort": "low"
+    }
+  },
+  "order_seed": 202,
+  "batch_size": 20,
+  "calls": 7,
+  "unlabeled": []
+}

@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% set nav_active = 'observability' %}
+{% block title %}観測 — StiraCore{% endblock %}{% block title_key %}title.observability_stiracore_nxp{% endblock %}
+{% block css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/observability.css') }}">
+{% endblock %}
+{% block head_extra %}
+  <script defer src="{{ url_for('static', filename='js/breaker_reasons.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/observability.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/neural_viz.js') }}"></script>
+{% endblock %}
+{% block content %}
+  <header class="page-header">
+    <div>
+      <h1>StiraCore NXP <span><span data-i18n="observability.dashboard">ダッシュボード</span></span></h1>
+      <p><span data-i18n="observability.execution_observability">実行状況の監視</span></p>
+    </div>
+    {# #278/#286: the route says where this page's events come from. live = a stream with a
+       writer; turns = the chat server: the stream and snapshot read turns.db, the turn events'
+       source of truth (#286);
+       absent = this server serves no stream (the page does not connect). #}
+    {% set source = event_source|default('live') %}
+    <div id="connection" class="connection" role="status" aria-live="polite" data-event-source="{{ source }}">
+      <span id="connection-dot" class="connection-dot"></span>
+      <span id="connection-text"><span data-i18n="observability.connecting">接続しています…</span></span>
+    </div>
+    {% if source == 'absent' %}
+      <p id="event-source-notice" class="notice" data-event-source="absent"><span data-i18n="observability.source_absent_notice">このサーバーは実行ログを配信していません。実行ログ・ターン時系列・推定費用は空のままです（神経状態のグラフは使えます）。</span></p>
+    {% elif source == 'turns' %}
+      <p id="event-source-notice" class="notice" data-event-source="turns"><span data-i18n="observability.source_turns_notice">実行ログ・ターン時系列・推定費用は、ターンの記録（turns.db）から表示します。「新しい会話」（/new）の監査記録は含みません。モデルの料金が設定されていない間、費用は * 付きの未算出表示です。</span></p>
+    {% endif %}
+  </header>
+
+  <noscript>
+    <p class="notice"><span data-i18n="observability.please_enable_javascript">JavaScript を有効にしてください</span></p>
+  </noscript>
+
+  <div class="dashboard">
+    <section class="panel operations" aria-labelledby="operations-heading">
+      <div class="panel-heading">
+        <h2 id="operations-heading"><span data-i18n="observability.operation_log">実行ログ</span></h2>
+        <div class="controls">
+          <label class="checkbox-label">
+            <input id="follow-latest" type="checkbox" checked><span data-i18n="observability.follow_latest">最新を追尾</span>
+          </label>
+          <button id="pause-button" type="button" aria-pressed="false"><span data-i18n="observability.pause">一時停止</span></button>
+        </div>
+      </div>
+      <div class="toolbar">
+        <p id="log-filter"><span data-i18n="observability.all_events">すべてのイベント</span></p>
+        <button id="clear-filter" type="button" hidden><span data-i18n="observability.clear_filter">絞り込み解除</span></button>
+        <span id="log-count" data-i18n="observability.log_count_zero">0 件</span>
+      </div>
+      <p class="hint"><span data-i18n="observability.select_a_row_to_filter_related_events_re">行を選択して関連イベントを絞り込みます。最新 200 件を保持します。</span>
+      </p>
+      <p id="pause-notice" class="notice" role="status" hidden></p>
+      <div id="log-scroll" class="table-scroll log-scroll" tabindex="0"
+           aria-label="実行ログのスクロール領域" data-i18n-aria-label="observability.operation_log_scroll_area">
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th scope="col"><span data-i18n="observability.time">時刻</span></th>
+              <th scope="col"><span data-i18n="observability.turn">ターン</span></th>
+              <th scope="col"><span data-i18n="observability.severity">重要度</span></th>
+              <th scope="col"><span data-i18n="observability.operation">操作</span></th>
+              <th scope="col"><span data-i18n="observability.model_tool">モデル／ツール</span></th>
+              <th scope="col"><span data-i18n="observability.duration">所要時間</span></th>
+              <th scope="col"><span data-i18n="observability.tokens">トークン</span></th>
+              <th scope="col"><span data-i18n="chat.message">メッセージ</span></th>
+            </tr>
+          </thead>
+          <tbody id="log-body">
+            <tr><td colspan="8" class="empty"><span data-i18n="observability.waiting_for_events">イベントを待っています</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel timeline-panel" aria-labelledby="timeline-heading">
+      <div class="panel-heading">
+        <h2 id="timeline-heading"><span data-i18n="observability.turn_timeline">ターン時系列</span></h2>
+        <button id="latest-turn" type="button"><span data-i18n="observability.latest_turn">最新ターン</span></button>
+      </div>
+      <nav id="turn-history" class="turn-history" aria-label="ターン履歴" data-i18n-aria-label="observability.turn_history"></nav>
+      <div class="timeline-caption">
+        <strong id="timeline-title"><span data-i18n="observability.no_turn_selected">ターン未選択</span></strong>
+        <span id="timeline-duration">—</span>
+      </div>
+      <div class="legend">
+        <span><i class="swatch model"></i><span data-i18n="chat.model">モデル</span></span>
+        <span><i class="swatch tool"></i><span data-i18n="observability.tool">ツール</span></span>
+        <span><i class="swatch phase"></i><span data-i18n="observability.phase">処理</span></span>
+        <span><i class="swatch error"></i><span data-i18n="observability.error">エラー</span></span>
+      </div>
+      <div class="timeline-scroll" tabindex="0" aria-label="時系列のスクロール領域" data-i18n-aria-label="observability.timeline_scroll_area">
+        <div id="timeline" class="timeline">
+          <p class="empty"><span data-i18n="observability.waiting_for_a_turn">ターンの実行を待っています</span></p>
+        </div>
+      </div>
+      <p class="hint"><span data-i18n="observability.each_call_has_its_own_lane_horizontal_ov">各呼び出しを別レーンに表示します。横方向の重なりは並列実行を示します。</span>
+      </p>
+    </section>
+
+    <section class="panel cost-panel" aria-labelledby="cost-heading">
+      <h2 id="cost-heading"><span data-i18n="observability.cost_tracker">推定費用</span></h2>
+      <dl class="metrics">
+        <div>
+          <dt><span data-i18n="observability.current_turn">現在のターン</span></dt>
+          <dd><span id="cost-turn">—</span><small id="current-tokens" data-i18n="observability.tokens_zero">入力: 0 · 出力: 0</small></dd>
+        </div>
+        <div>
+          <dt><span data-i18n="observability.session_total">セッション合計</span></dt>
+          <dd id="session-tokens" data-i18n="observability.tokens_zero">入力: 0 · 出力: 0</dd>
+        </div>
+        <div>
+          <dt><span data-i18n="observability.estimated_cost">推定費用</span></dt>
+          <dd id="estimated-cost" class="cost-value">$0.00</dd>
+        </div>
+      </dl>
+      <h3><span data-i18n="observability.by_model">モデル別</span></h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col"><span data-i18n="chat.model">モデル</span></th>
+              <th scope="col"><span data-i18n="observability.input">入力</span></th>
+              <th scope="col"><span data-i18n="observability.output">出力</span></th>
+              <th scope="col"><span data-i18n="observability.est_cost">推定費用</span></th>
+            </tr>
+          </thead>
+          <tbody id="model-cost-body">
+            <tr><td colspan="4" class="empty"><span data-i18n="observability.no_usage_yet">使用量なし</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="notice"><span data-i18n="observability.estimates_only">推定値です</span></p>
+      <p id="pricing-notice" class="hint"></p>
+      <p class="hint"><span data-i18n="observability.totals_cover_finalized_usage_received_si">接続後に受信した確定使用量を集計します。</span>
+      </p>
+    </section>
+
+    <section class="panel errors-panel" aria-labelledby="errors-heading">
+      <div class="panel-heading">
+        <h2 id="errors-heading"><span data-i18n="observability.error_intervention_log">エラー・介入ログ</span></h2>
+        <label for="error-category"><span data-i18n="observability.category">分類</span>
+          <select id="error-category">
+            <option value="all" data-i18n="observability.all">すべて</option>
+            <option value="model" data-i18n="observability.model_error">🔴 モデルエラー</option>
+            <option value="tool" data-i18n="observability.tool_error_exception">🟠 ツールエラー・例外</option>
+            <option value="breaker" data-i18n="observability.breaker_intervention">🟡 ブレーカー介入</option>
+            <option value="approval" data-i18n="observability.approval_request">🟣 承認要求</option>
+            <option value="denied" data-i18n="observability.denied">🚫 却下・拒否</option>
+            <option value="recovery" data-i18n="observability.retry_recovery">⚪ 再試行・復旧</option>
+          </select>
+        </label>
+      </div>
+      <div class="table-scroll error-scroll" tabindex="0"
+           aria-label="エラーログのスクロール領域" data-i18n-aria-label="observability.error_log_scroll_area">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col"><span data-i18n="observability.time">時刻</span></th>
+              <th scope="col"><span data-i18n="observability.category">分類</span></th>
+              <th scope="col"><span data-i18n="observability.turn">ターン</span></th>
+              <th scope="col"><span data-i18n="observability.tool_model">ツール／モデル</span></th>
+              <th scope="col"><span data-i18n="observability.summary_details">概要・詳細</span></th>
+            </tr>
+          </thead>
+          <tbody id="error-body">
+            <tr><td colspan="5" class="empty"><span data-i18n="observability.no_errors_or_interventions">エラー・介入なし</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="hint"><span data-i18n="observability.retains_the_latest_200_errors_and_interv">最新 200 件のエラー・介入を保持します。</span>
+      </p>
+    </section>
+    <section class="panel neural-panel" aria-labelledby="neural-heading">
+      <h2 id="neural-heading"><span data-i18n="chat.neural_state">神経状態</span></h2>
+      <p id="neural-status" role="status"><span data-i18n="neural.loading">神経状態の履歴を読み込み中…</span></p>
+      <p id="neural-heartbeat" class="hint" hidden></p>
+      <div id="neural-chart" class="neural-chart" role="group" tabindex="0" aria-label="神経状態の時系列" data-i18n-aria-label="neural.chart_label"></div>
+      <p class="hint"><span data-i18n="neural.chart_hint">実線: 観測値 · 点線: 刺激がない場合の 24 時間の減衰予測 · 点: 刺激イベント。WARNING / CRITICAL の線は安定性にのみ適用されます。履歴は最大 500 件を保持します。</span></p>
+      <div id="neural-legend" class="legend"></div>
+      <h3><span data-i18n="observability.observed_pearson_correlation">6次元相関</span></h3>
+      <div id="neural-correlation" class="table-scroll" tabindex="0" role="region" aria-label="6次元相関" data-i18n-aria-label="observability.observed_pearson_correlation"></div>
+      <p class="hint"><span data-i18n="neural.correlation_hint">— はサンプルが 2 件未満か、値が一定の次元です。相関は因果を意味しません。</span></p>
+      <h3><span data-i18n="neural.emotion_matrix">感情マトリクス（刺激 → 次元の変化量）</span></h3>
+      <div id="neural-emotion" class="table-scroll" tabindex="0" role="region" aria-label="感情マトリクス（刺激 → 次元の変化量）" data-i18n-aria-label="neural.emotion_matrix"></div>
+    </section>
+  </div>
+
+  <!-- Optional model rates, USD per million tokens. No rates are assumed. -->
+  <script id="observability-pricing" type="application/json">{"pricing":{}}</script>
+{% endblock %}

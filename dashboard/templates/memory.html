@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% set nav_active = 'memory' %}
+{% block title %}記憶ブラウザ — StiraCore{% endblock %}{% block title_key %}title.memory_browser{% endblock %}
+{% block css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/memory.css') }}">
+{% endblock %}
+{% block head_extra %}
+  <script defer src="{{ url_for('static', filename='js/memory.js') }}"></script>
+{% endblock %}
+{% block content %}
+<div class="memory-page">
+  <header class="page-header">
+    <h1><span data-i18n="memory.title">記憶ブラウザ</span></h1>
+  </header>
+  <div class="tabs" role="group" aria-label="記憶の層" data-i18n-aria-label="memory.layers">
+    <button type="button" class="tab-btn active" data-layer="episodic" aria-pressed="true"><span data-i18n="forest.episodic">エピソード記憶</span></button>
+    <button type="button" class="tab-btn" data-layer="semantic" aria-pressed="false"><span data-i18n="forest.semantic">意味記憶</span></button>
+    <button type="button" class="tab-btn" data-layer="procedural" aria-pressed="false"><span data-i18n="forest.procedural">手続き記憶</span></button>
+  </div>
+  <label for="search" class="visually-hidden" data-i18n="memory.search_label">記憶を検索</label>
+  <input id="search" class="search-bar input" type="search"
+    placeholder="記憶を検索..." data-i18n-placeholder="memory.search_placeholder">
+  <div id="entry-list" aria-live="polite">
+    <div class="empty"><span data-i18n="memory.loading">読み込み中...</span></div>
+  </div>
+</div>
+{% endblock %}

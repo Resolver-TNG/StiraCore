@@ -1,0 +1,110 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stiracore"
+version = "0.1.0.dev0"
+description = "NXP/Stira-powered agent harness built on Strands Agents SDK"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+authors = [
+    { name = "Resolver-TNG" },
+]
+
+dependencies = [
+    "strands-agents>=1.57.1",
+    "strands-agents-tools>=0.8.0",
+"requests>=2.32",
+    # web_tools stops a body read at its deadline with HTTPResponse.shutdown (2.3+, #601).
+    "urllib3>=2.3",
+    "beautifulsoup4>=4.12",
+    "Pillow>=10.0",
+]
+
+[project.scripts]
+# `stira doctor`: read-only write-environment check (#244).
+stira = "stiracore.diagnostics.__main__:main"
+
+[project.optional-dependencies]
+slack = ["slack-bolt>=1.18"]
+discord = ["discord.py>=2.3"]
+# Only the optional official make_subagent adapter needs Harness (#102).
+harness = ["strands-harness>=0.1.2"]
+# Runtime deps for dashboard/stira_server.py and dashboard/app.py (#160).
+dashboard = ["flask>=3.1"]
+# web_fetch reads PDF text (#585); the parser runs in a separate, bounded process.
+pdf = ["pypdf>=5"]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pytest-asyncio>=0.24",
+    # Per-test timeout so one hung subprocess test cannot stall a whole run (#540 §4).
+    "pytest-timeout>=2.3",
+    "ruff>=0.8",
+    "flask>=3.1",
+    "pillow>=12.1.1,<13",
+    # The PDF tests of web_fetch (#585) parse real PDFs; the [pdf] extra itself stays optional.
+    "pypdf>=5",
+]
+bedrock = [
+    "strands-agents-builder>=0.2.0",
+]
+# Model providers other than Bedrock (#204). Each maps onto the Strands extra;
+# llama.cpp needs none (its client is httpx, a core dependency).
+anthropic = ["strands-agents[anthropic]>=1.57.1"]
+openai = ["strands-agents[openai]>=1.57.1"]
+ollama = ["strands-agents[ollama]>=1.57.1"]
+gemini = ["strands-agents[gemini]>=1.57.1"]
+litellm = ["strands-agents[litellm]>=1.57.1"]
+mistral = ["strands-agents[mistral]>=1.57.1"]
+writer = ["strands-agents[writer]>=1.57.1"]
+llamaapi = ["strands-agents[llamaapi]>=1.57.1"]
+sagemaker = ["strands-agents[sagemaker]>=1.57.1"]
+# Phase 1 providers in one go: Anthropic API, OpenAI (chat + responses), Ollama.
+providers = ["strands-agents[anthropic,openai,ollama]>=1.57.1"]
+# Opt-in Japanese rule classifier (#164): ML-Ask emotion words (BSD-3-Clause) +
+# pip-packaged IPADIC for MeCab, so no system MeCab is needed. No network at run
+# time. See docs/ja-rules-classifier.md.
+# Listed explicitly (not left to mlask-official's own requirements): the MeCab
+# binding and the Aho-Corasick matcher ML-Ask runs on, and the dictionary.
+# Versions measured on macOS arm64 / Python 3.11: mlask-official 0.5.0,
+# mecab-python3 1.0.12, pyahocorasick 2.3.1, ipadic 1.0.0.
+ja-rules = [
+    "mlask-official>=0.5,<0.6",
+    "mecab-python3>=1.0.12,<2",
+    "pyahocorasick>=2.0,<3",
+    "ipadic>=1.0,<2",
+]
+# sokudan requires Python 3.11 and runs on CPU; 3.12+ skips this extra.
+jev = [
+    "sokudan; python_version < '3.12'",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+# Fixed evaluation scenarios ship with the package (#143).
+"stiracore.eval" = ["scenarios/*.json"]
+# The settings surface manifest (#468) is read by the settings hub at run time.
+"stiracore.config" = ["settings_surface.json"]
+# The trusted block of a goal iteration (ADR 0011 W5): edited by a person only.
+"stiracore.grants" = ["dev_playbook.md"]
+
+[tool.ruff]
+line-length = 100
+# In-repo virtualenvs (e.g. .venv311 on Windows) are third-party code (#540 §5).
+extend-exclude = [".venv*"]
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "src"]
+# Default per-test timeout (pytest-timeout, #540 §4); slower tests opt in with
+# @pytest.mark.timeout(N). Override from the command line with --timeout=N.
+timeout = 120
+markers = [
+    "live: opt-in smoke against a real model provider (needs STIRA_LIVE_MODEL)",
+]

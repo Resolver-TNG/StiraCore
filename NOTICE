@@ -1,0 +1,68 @@
+StiraCore
+Copyright (c) Resolver-TNG
+
+Licences in this repository
+===========================
+
+1. Code — Apache License, Version 2.0 (see LICENSE). This covers all source code,
+   tests, scripts and documentation, except what is listed in 2 and 3.
+2. Stage assets — Creative Commons Attribution 4.0 International (CC BY 4.0)
+   (see LICENSE-ASSETS). This covers the pixel-art character, background, props and
+   source icon under dashboard/stage/assets/ (char/, bg/, gadgets/, source/ and their
+   JSON), and the screenshots under docs/images/ (which show them). Credit Resolver-TNG
+   when you reuse them; an example line is in dashboard/stage/assets/ASSETS.md.
+3. three.js — MIT License (see below). The bundled copy in dashboard/stage/vendor/ is
+   not part of 1 or 2.
+
+Names and logos of this project are not covered by any of these licences (Apache
+License 2.0, section 6): the licences grant no permission to use them.
+
+StiraCore is built on the Strands Agents SDK (Apache License 2.0, installed from PyPI as
+strands-agents, not bundled).
+
+Bundled third-party components
+==============================
+
+three.js (r186) — MIT License
+  Copyright (c) 2010-2026 three.js authors
+  https://threejs.org
+  A subset of the library code is bundled in dashboard/stage/vendor/three.stage.min.js
+  (Stage spike, #341); the licence text is at the top of that file and in
+  dashboard/stage/vendor/LICENSE.three.txt. No three.js example models, textures or
+  addons are included.
+
+Dependencies installed from PyPI are not bundled. For example, certifi (MPL-2.0, pulled
+in by requests) is used as an unmodified dependency only.
+
+Optional third-party components
+===============================
+
+The following are NOT bundled in this repository. They are optional
+dependencies that a user installs with `pip install 'stiracore[ja-rules]'`
+for the opt-in Japanese rule classifier (docs/ja-rules-classifier.md, #164).
+
+mlask-official (ML-Ask) — BSD 3-Clause License
+  Copyright (c) 2007-2013, Michal Ptaszynski, Pawel Dybala, Rafal Rzepka, Kenji Araki
+  https://github.com/ptaszynski/mlask-official
+  Its emotive-expression dictionaries are, as stated by the package, based on
+  Nakamura Akira, "Kanjo Hyogen Jiten" (Dictionary of Emotive Expressions),
+  Tokyodo Shuppan, 1993, merged with the expansion of Wang & Isomura (2024)
+  (the Hiejima and Murakami emotion dictionaries and automatically extracted
+  expressions). Citation: Ptaszynski, M., Dybala, P., Rzepka, R., Araki, K.,
+  & Masui, F. (2017). ML-Ask: Open source affect analysis software for textual
+  input in Japanese. Journal of Open Research Software, 5(1), 16.
+
+ipadic (IPADIC packaged for Python)
+  Dictionary: Copyright 2000-2003 Nara Institute of Science and Technology
+  (NAIST); a large portion of the entries originate from ICOT Free Software.
+  Use, reproduction and distribution are permitted with the copyright notice
+  and the NAIST / ICOT terms included in the package.
+
+mecab-python3 — BSD License (bundles MeCab)
+pyahocorasick — BSD 3-Clause License
+
+Evaluation data
+===============
+
+docs/eval/jp-stimulus/ contains only synthetic utterances generated for this
+project. WRIME and other research-only corpora are not included.

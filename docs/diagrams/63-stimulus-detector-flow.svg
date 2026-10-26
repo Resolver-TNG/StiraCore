@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 540" font-family="system-ui,-apple-system,'Segoe UI',sans-serif">
+  <style>
+    :root{--bg:#fff;--card:#f6f8fa;--text:#1f2328;--muted:#656d76;--border:#d0d7de;--accent:#0969da;--ok:#1a7f37;--warn:#9a6700;--danger:#cf222e;--accentbg:#ddf4ff;--okbg:#dafbe1;--warnbg:#fff8c5;--dangerbg:#ffebe9;--muts:#424a53}
+    @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--card:#161b22;--text:#e6edf3;--muted:#8b949e;--border:#30363d;--accent:#4493f8;--ok:#3fb950;--warn:#d29922;--danger:#f85149;--accentbg:#0c2d6b;--okbg:#0f5323;--warnbg:#4b3d00;--dangerbg:#67060c;--muts:#9198a1}}
+    .bg{fill:var(--bg)}.card{fill:var(--card)}.txt{fill:var(--text)}.mut{fill:var(--muted)}.acc{fill:var(--accent)}.ok{fill:var(--ok)}.warn{fill:var(--warn)}.dgr{fill:var(--danger)}
+    .smut{stroke:var(--muts)}.sacc{stroke:var(--accent)}.sbd{stroke:var(--border)}.swarn{stroke:var(--warn)}.sok{stroke:var(--ok)}.sdgr{stroke:var(--danger)}
+  </style>
+  <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><polygon points="0,1 8,4 0,7" fill="var(--muts)"/></marker>
+  <marker id="arY" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><polygon points="0,1 8,4 0,7" fill="var(--ok)"/></marker></defs>
+  <rect class="bg" x="0" y="0" width="660" height="540" rx="10"/>
+  <text class="txt" x="20" y="26" font-size="15" font-weight="700">detect_stimulus() — 判定フロー (zero-LLM, 早期return)</text>
+  <text class="mut" x="20" y="43" font-size="10.5">agent/stimulus_detector.py — 上から順に評価し最初に当たった (category, intensity) を返す。intensity 上限 0.8</text>
+
+  <!-- vertical spine of priority checks; each match exits right to a result -->
+  <g transform="translate(0,4)">
+    <!-- start -->
+    <rect x="40" y="56" width="150" height="30" rx="15" fill="var(--accentbg)" class="sacc"/>
+    <text class="acc" x="115" y="75" text-anchor="middle" font-size="10" font-weight="700">detect_stimulus(入力)</text>
+    <line class="smut" x1="115" y1="86" x2="115" y2="104" stroke-width="1.4" marker-end="url(#ar)"/>
+
+    <!-- helper for a decision row: diamond at x=115, result box at right -->
+    <!-- 1 breaker -->
+    <polygon points="115,106 195,134 115,162 35,134" fill="var(--warnbg)" class="swarn"/>
+    <text class="warn" x="115" y="132" text-anchor="middle" font-size="8.5" font-weight="700">breaker_result?</text>
+    <text class="warn" x="115" y="144" text-anchor="middle" font-size="7">CRITICAL / WARNING</text>
+    <line class="sok" x1="195" y1="134" x2="410" y2="134" stroke-width="1.3" marker-end="url(#arY)"/>
+    <text class="ok" x="300" y="128" text-anchor="middle" font-size="8">Yes</text>
+    <rect x="410" y="116" width="230" height="36" rx="5" fill="var(--dangerbg)" class="sdgr"/>
+    <text class="dgr" x="525" y="132" text-anchor="middle" font-size="8.5" font-weight="700">threat</text>
+    <text class="dgr" x="525" y="144" text-anchor="middle" font-size="8">CRITICAL→0.8 / WARNING→0.6</text>
+    <line class="smut" x1="115" y1="162" x2="115" y2="178" stroke-width="1.3" marker-end="url(#ar)"/>
+
+    <!-- 2 tool_results -->
+    <polygon points="115,180 195,206 115,232 35,206" fill="var(--accentbg)" class="sacc"/>
+    <text class="acc" x="115" y="204" text-anchor="middle" font-size="8.5" font-weight="700">tool_results に</text>
+    <text class="acc" x="115" y="216" text-anchor="middle" font-size="7.5">error / success?</text>
+    <line class="sok" x1="195" y1="206" x2="410" y2="206" stroke-width="1.3" marker-end="url(#arY)"/>
+    <text class="ok" x="300" y="200" text-anchor="middle" font-size="8">Yes</text>
+    <rect x="410" y="188" width="230" height="36" rx="5" class="card sbd"/>
+    <text class="txt" x="525" y="204" text-anchor="middle" font-size="8">error→threat 0.4</text>
+    <text class="txt" x="525" y="216" text-anchor="middle" font-size="8">success→achievement 0.4</text>
+    <line class="smut" x1="115" y1="232" x2="115" y2="248" stroke-width="1.3" marker-end="url(#ar)"/>
+
+    <!-- 3 gratitude -->
+    <polygon points="115,250 195,274 115,298 35,274" fill="var(--accentbg)" class="sacc"/>
+    <text class="acc" x="115" y="278" text-anchor="middle" font-size="8.5" font-weight="700">gratitude?</text>
+    <line class="sok" x1="195" y1="274" x2="410" y2="274" stroke-width="1.3" marker-end="url(#arY)"/>
+    <rect x="410" y="258" width="230" height="32" rx="5" class="card sbd"/>
+    <text class="txt" x="525" y="278" text-anchor="middle" font-size="8">connection 0.5 (thanks/appreciate…)</text>
+    <line class="smut" x1="115" y1="298" x2="115" y2="312" stroke-width="1.3" marker-end="url(#ar)"/>
+
+    <!-- 4 joy/loss -->
+    <polygon points="115,314 195,338 115,362 35,338" fill="var(--accentbg)" class="sacc"/>
+    <text class="acc" x="115" y="342" text-anchor="middle" font-size="8.5" font-weight="700">joy / loss?</text>
+    <line class="sok" x1="195" y1="338" x2="410" y2="338" stroke-width="1.3" marker-end="url(#arY)"/>
+    <rect x="410" y="322" width="230" height="32" rx="5" class="card sbd"/>
+    <text class="txt" x="525" y="342" text-anchor="middle" font-size="8">joy 0.4 / loss 0.4</text>
+    <line class="smut" x1="115" y1="362" x2="115" y2="376" stroke-width="1.3" marker-end="url(#ar)"/>
+
+    <!-- 5 greeting -->
+    <polygon points="115,378 195,402 115,426 35,402" fill="var(--accentbg)" class="sacc"/>
+    <text class="acc" x="115" y="406" text-anchor="middle" font-size="8.5" font-weight="700">greeting?</text>
+    <line class="sok" x1="195" y1="402" x2="410" y2="402" stroke-width="1.3" marker-end="url(#arY)"/>
+    <rect x="410" y="386" width="230" height="32" rx="5" class="card sbd"/>
+    <text class="txt" x="525" y="406" text-anchor="middle" font-size="8">connection 0.2 (hi/hello…)</text>
+    <line class="smut" x1="115" y1="426" x2="115" y2="440" stroke-width="1.3" marker-end="url(#ar)"/>
+
+    <!-- 6 question/long -->
+    <polygon points="115,442 200,468 115,494 30,468" fill="var(--accentbg)" class="sacc"/>
+    <text class="acc" x="115" y="465" text-anchor="middle" font-size="8" font-weight="700">question? / long?</text>
+    <text class="acc" x="115" y="477" text-anchor="middle" font-size="6.5">resp&gt;800</text>
+    <line class="sok" x1="200" y1="468" x2="410" y2="468" stroke-width="1.3" marker-end="url(#arY)"/>
+    <rect x="410" y="450" width="230" height="38" rx="5" class="card sbd"/>
+    <text class="txt" x="525" y="466" text-anchor="middle" font-size="7.5">Q&amp;long→uncertainty 0.3 / Q→0.35</text>
+    <text class="txt" x="525" y="478" text-anchor="middle" font-size="7.5">long→connection 0.3</text>
+    <line class="smut" x1="115" y1="494" x2="115" y2="508" stroke-width="1.3" marker-end="url(#ar)"/>
+
+    <!-- None -->
+    <rect x="55" y="510" width="120" height="26" rx="5" class="card sbd"/>
+    <text class="txt" x="115" y="527" text-anchor="middle" font-size="9" font-weight="700">return None</text>
+    <text class="mut" x="330" y="527" font-size="8">None なら post_turn は state を更新しない（安全側）</text>
+  </g>
+</svg>

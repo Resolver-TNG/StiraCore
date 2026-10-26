@@ -1,0 +1,30 @@
+/* /schedules page (#239): status, jobs, runs, notifications. */
+/* minmax(0, 1fr): a wide table scrolls inside its wrapper instead of widening the page. */
+.schedules-page { max-width: 1200px; margin: auto; padding: 20px 24px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.schedules-page .page-header h1 { margin: 0; }
+.schedules-lead { margin: 6px 0 0; color: var(--muted); max-width: 75ch; }
+.schedules-section { padding: 14px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+.schedules-note { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
+.sched-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 16px; margin: 0; }
+.sched-facts[hidden] { display: none; }
+.sched-facts > div { display: grid; gap: 2px; }
+.sched-facts dt { color: var(--muted); font-size: 12px; }
+.sched-facts dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.sched-table-wrap { overflow-x: auto; }
+.sched-table { width: 100%; font-size: 13px; }
+.sched-table td { vertical-align: top; }
+.sched-name { display: block; font-weight: 600; color: var(--text); }
+.sched-id, .sched-mono { font: 12px var(--font-mono); color: var(--muted); }
+.sched-id { display: block; }
+.sched-num { font-variant-numeric: tabular-nums; text-align: right; }
+.sched-actions { white-space: nowrap; }
+.sched-table td[data-state="failed"], .sched-table td[data-state="awaiting_approval"] { color: var(--crit-fg); }
+.sched-table td[data-state="paused"], .sched-table td[data-state="cancelled"] { color: var(--warn-fg); }
+.sched-notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.sched-note { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+.sched-note[data-severity="warning"] { border-color: var(--warn-border); background: var(--warn-bg); }
+.sched-note[data-severity="critical"] { border-color: var(--crit-fg); }
+.sched-note-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.sched-note-code { font: 600 12px var(--font-mono); color: var(--text); }
+.sched-note-text { flex: 1 1 30ch; color: var(--text); overflow-wrap: anywhere; }
+.sched-note-detail { color: var(--muted); font-size: 12px; }

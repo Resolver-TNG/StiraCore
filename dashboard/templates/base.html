@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  {# No favicon file: an empty icon stops the 404 + console error on every page. #}
+  <link rel="icon" href="data:,">
+  <meta name="csrf-token" content="{{ csrf_token() if csrf_token is defined else '' }}">
+  <title data-i18n="{% block title_key %}{% endblock %}">{% block title %}StiraCore{% endblock %}</title>
+  <script type="application/json" id="i18n-catalog">{{ (i18n_catalog | default({"ja": {}, "en": {}})) | tojson }}</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='ui/tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='ui/components.css') }}">
+  {% block css %}{% endblock %}
+  <script defer src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/api.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/poll.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/shell.js') }}"></script>
+  {% block head_extra %}{% endblock %}
+</head>
+{% set nav_active = nav_active | default('') %}
+{% set _status = shell_status if shell_status is defined else {
+  'status_url': '/api/gateway/status', 'approvals_url': '/api/hitl/pending'} %}
+<body class="app{% block body_class %}{% endblock %}">
+  <a class="skip-link" href="#main-content"><span data-i18n="base.skip_to_content">本文へ移動</span></a>
+  <div class="app-shell" id="app-shell" data-sidebar="expanded"
+       data-status-url="{{ _status.status_url }}" data-approvals-url="{{ _status.approvals_url }}">
+    <div class="app-topbar">
+      <button type="button" class="btn btn-ghost app-sidebar-toggle" id="app-sidebar-toggle"
+              aria-controls="app-sidebar" aria-expanded="true">
+        <span aria-hidden="true">☰</span>
+        <span class="visually-hidden"><span data-i18n="base.menu">メニュー</span></span>
+      </button>
+      <span class="app-brand" aria-hidden="true">STIRACORE</span>
+    </div>
+    <div class="app-scrim" id="app-scrim" hidden></div>
+    <aside class="app-sidebar" id="app-sidebar">
+      <p class="app-brand app-sidebar-brand">STIRACORE</p>
+      <nav class="app-nav" aria-label="メインナビゲーション" data-i18n-aria-label="base.main_navigation">
+        <ul>
+          {# Apps pass their own items via install_shell(); bare apps get the stage-1 set. #}
+          {% for key, href, label in (shell_nav if shell_nav is defined else [
+            ('chat', '/chat', 'base.chat'),
+            ('settings', '/settings', 'base.settings'),
+            ('observability', '/observability', 'base.observability'),
+          ]) %}
+          <li>
+            <a class="app-nav-link" href="{{ href }}"
+               {% if nav_active == key %}aria-current="page"{% endif %}>
+              <span class="app-nav-label" data-i18n="{{ label }}">{{ ja(label) if ja is defined else label }}</span>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </nav>
+      <section class="app-attention" aria-label="注意" data-i18n-aria-label="base.attention">
+        {% if _status.approvals_url %}
+        <a class="chip" href="{{ _status.approvals_page | default('/chat') }}" id="nav-approvals" data-state="unknown">
+          <span data-i18n="base.pending_approvals">保留中の承認</span> <span data-role="value">—</span>
+        </a>
+        {% endif %}
+        <span class="chip" id="nav-breaker" data-state="unknown">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span data-i18n="base.breaker">ブレーカー</span> <span data-role="value"><span data-i18n="base.unknown">不明</span></span>
+        </span>
+        <span class="chip" id="nav-connection" role="status" data-state="unknown">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span data-role="value"><span data-i18n="base.checking">接続確認中</span></span>
+        </span>
+      </section>
+      <div class="app-lang">
+        <label for="app-lang" class="visually-hidden" data-i18n="base.language">言語</label>
+        <select id="app-lang" aria-label="言語" data-i18n-aria-label="base.language">
+          <option value="ja">日本語</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+    </aside>
+    <main class="app-main" id="main-content" tabindex="-1">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

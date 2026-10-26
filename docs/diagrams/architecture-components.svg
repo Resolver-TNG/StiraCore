@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 440" font-family="system-ui,-apple-system,'Segoe UI',sans-serif">
+  <style>
+    :root{--bg:#fff;--card:#f6f8fa;--text:#1f2328;--muted:#656d76;--border:#d0d7de;--accent:#0969da;--ok:#1a7f37;--warn:#9a6700;--danger:#cf222e;--info:#8250df;--accentbg:#ddf4ff;--okbg:#dafbe1;--warnbg:#fff8c5;--infobg:#fbefff;--elev:#eaeef2;--muts:#424a53}
+    @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--card:#161b22;--text:#e6edf3;--muted:#8b949e;--border:#30363d;--accent:#4493f8;--ok:#3fb950;--warn:#d29922;--danger:#f85149;--info:#bc8cff;--accentbg:#0c2d6b;--okbg:#0f5323;--warnbg:#4b3d00;--infobg:#2d1e40;--elev:#1c2129;--muts:#9198a1}}
+    .bg{fill:var(--bg)}.card{fill:var(--card)}.txt{fill:var(--text)}.mut{fill:var(--muted)}.acc{fill:var(--accent)}.ok{fill:var(--ok)}.warn{fill:var(--warn)}.info{fill:var(--info)}
+    .sacc{stroke:var(--accent)}.sbd{stroke:var(--border)}.sok{stroke:var(--ok)}.swarn{stroke:var(--warn)}.smut{stroke:var(--muts)}.sinfo{stroke:var(--info)}
+    .band{fill:var(--elev)}
+  </style>
+  <defs><marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><polygon points="0,1 8,4 0,7" fill="var(--muts)"/></marker>
+  <marker id="aa" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><polygon points="0,1 8,4 0,7" fill="var(--accent)"/></marker></defs>
+  <rect class="bg" x="0" y="0" width="660" height="440" rx="10"/>
+  <text class="txt" x="20" y="26" font-size="15" font-weight="700">StiraCore アーキテクチャ — 実パッケージ構成</text>
+  <text class="mut" x="20" y="43" font-size="10.5">src/stiracore/ — Strands Agent を NXP/Stira でラップ。observability は Flask+SSE の別レイヤー</text>
+
+  <g transform="translate(0,10)">
+    <!-- bands -->
+    <rect class="band sbd" x="8" y="40" width="644" height="58" rx="8" fill-opacity="0.5" stroke-dasharray="4 3"/>
+    <text class="mut" x="18" y="55" font-size="9" font-weight="700">表示 / 観測層</text>
+    <rect class="band sbd" x="8" y="106" width="644" height="66" rx="8" fill-opacity="0.5" stroke-dasharray="4 3"/>
+    <text class="mut" x="18" y="121" font-size="9" font-weight="700">agent/ (Strands ラッパ)</text>
+    <rect class="band sbd" x="8" y="180" width="644" height="66" rx="8" fill-opacity="0.5" stroke-dasharray="4 3"/>
+    <text class="mut" x="18" y="195" font-size="9" font-weight="700">middleware/ (pre/post フック)</text>
+    <rect class="band sbd" x="8" y="254" width="644" height="76" rx="8" fill-opacity="0.5" stroke-dasharray="4 3"/>
+    <text class="mut" x="18" y="269" font-size="9" font-weight="700">core/ (安全エンジン + 状態)</text>
+    <rect class="band sbd" x="8" y="338" width="644" height="60" rx="8" fill-opacity="0.5" stroke-dasharray="4 3"/>
+    <text class="mut" x="18" y="353" font-size="9" font-weight="700">tools/ (memory) + 永続</text>
+
+    <!-- L0 observability -->
+    <rect x="300" y="62" width="150" height="30" rx="5" class="card sacc" stroke-width="1.3"/>
+    <text class="acc" x="375" y="76" text-anchor="middle" font-size="9" font-weight="700">dashboard/ the chat server GUI</text>
+    <text class="mut" x="375" y="87" text-anchor="middle" font-size="6.5">stira_server (chat UI)</text>
+    <rect x="464" y="62" width="180" height="30" rx="5" class="card sbd" stroke-width="1.3"/>
+    <text class="txt" x="554" y="76" text-anchor="middle" font-size="8" font-weight="700">observability/ Flask API + SSE</text>
+    <text class="mut" x="554" y="87" text-anchor="middle" font-size="6.5">breaker_api / chat_api / memory_api</text>
+
+    <!-- agent layer -->
+    <rect x="120" y="126" width="150" height="40" rx="5" class="card sbd" stroke-width="1.3"/>
+    <text class="txt" x="195" y="143" text-anchor="middle" font-size="9.5" font-weight="700">NXPAgent</text>
+    <text class="mut" x="195" y="156" text-anchor="middle" font-size="7">__call__ (pre/post を包む)</text>
+    <rect x="290" y="126" width="150" height="40" rx="5" fill="var(--accentbg)" class="sacc" stroke-width="1.3"/>
+    <text class="acc" x="365" y="143" text-anchor="middle" font-size="9" font-weight="700">stimulus_detector</text>
+    <text class="acc" x="365" y="156" text-anchor="middle" font-size="7">detect_stimulus (#63)</text>
+    <rect x="460" y="126" width="184" height="40" rx="5" class="card sbd" stroke-width="1.3"/>
+    <text class="txt" x="552" y="143" text-anchor="middle" font-size="8" font-weight="700">context_assembler / model_factory</text>
+    <text class="mut" x="552" y="156" text-anchor="middle" font-size="7">プロンプト組立 / Bedrock モデル生成</text>
+
+    <!-- middleware -->
+    <rect x="120" y="200" width="130" height="38" rx="5" class="card sbd" stroke-width="1.3"/>
+    <text class="txt" x="185" y="216" text-anchor="middle" font-size="8.5" font-weight="700">neural_state_mw</text>
+    <text class="mut" x="185" y="229" text-anchor="middle" font-size="7">wrap_turn / 状態context</text>
+    <rect x="262" y="200" width="120" height="38" rx="5" class="card sbd" stroke-width="1.3"/>
+    <text class="txt" x="322" y="216" text-anchor="middle" font-size="8.5" font-weight="700">identity_guard</text>
+    <text class="mut" x="322" y="229" text-anchor="middle" font-size="7">L3 anchors 保護</text>
+    <rect x="394" y="200" width="140" height="38" rx="5" class="card sbd" stroke-width="1.3"/>
+    <text class="txt" x="464" y="216" text-anchor="middle" font-size="8.5" font-weight="700">sycophancy_monitor</text>
+    <text class="mut" x="464" y="229" text-anchor="middle" font-size="7">迎合検出 (agreement窓)</text>
+
+    <!-- core -->
+    <rect x="120" y="274" width="140" height="46" rx="5" fill="var(--warnbg)" class="swarn" stroke-width="1.3"/>
+    <text class="warn" x="190" y="292" text-anchor="middle" font-size="9" font-weight="700">engine.py</text>
+    <text class="warn" x="190" y="304" text-anchor="middle" font-size="6.5">StiraEngine / BreakLevel</text>
+    <text class="warn" x="190" y="313" text-anchor="middle" font-size="6.5">pre_turn / post_turn</text>
+    <rect x="272" y="274" width="140" height="46" rx="5" fill="var(--okbg)" class="sok" stroke-width="1.3"/>
+    <text class="ok" x="342" y="292" text-anchor="middle" font-size="9" font-weight="700">neural_state.py</text>
+    <text class="ok" x="342" y="304" text-anchor="middle" font-size="6.5">6次元 + decay + bcWindow</text>
+    <text class="ok" x="342" y="313" text-anchor="middle" font-size="6.5">EMOTION_MATRIX</text>
+    <rect x="424" y="274" width="140" height="46" rx="5" fill="var(--infobg)" class="sinfo" stroke-width="1.3"/>
+    <text class="info" x="494" y="292" text-anchor="middle" font-size="9" font-weight="700">amygdala.py</text>
+    <text class="info" x="494" y="304" text-anchor="middle" font-size="6.5">AmygdalaPass</text>
+    <text class="info" x="494" y="313" text-anchor="middle" font-size="6.5">score / route (記憶取捨)</text>
+
+    <!-- tools/persist -->
+    <rect x="180" y="358" width="150" height="32" rx="5" class="card sbd" stroke-width="1.3"/>
+    <text class="txt" x="255" y="374" text-anchor="middle" font-size="8.5" font-weight="700">tools/ memory_store</text>
+    <text class="mut" x="255" y="385" text-anchor="middle" font-size="6.5">read/write/search + tool_registry</text>
+    <rect x="344" y="358" width="150" height="32" rx="5" fill="var(--okbg)" class="sok" stroke-width="1.3"/>
+    <text class="ok" x="419" y="374" text-anchor="middle" font-size="8.5" font-weight="700">NeuralState.save()</text>
+    <text class="ok" x="419" y="385" text-anchor="middle" font-size="6.5">JSON atomic (schema v2)</text>
+
+    <!-- edges -->
+    <path class="smut" d="M375 92 C300 108 240 114 210 124" fill="none" stroke-width="1.2" marker-end="url(#a)"/>
+    <path class="sacc" d="M270 146 h18" fill="none" stroke-width="1.4" marker-end="url(#aa)"/>
+    <path class="smut" d="M195 166 v32" fill="none" stroke-width="1.2" marker-end="url(#a)"/>
+    <path class="smut" d="M195 238 C190 254 190 262 190 272" fill="none" stroke-width="1.2" marker-end="url(#a)"/>
+    <path class="sacc" d="M365 166 C360 210 320 250 342 272" fill="none" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#a)"/>
+    <path class="smut" d="M260 297 h10" fill="none" stroke-width="1.2" marker-end="url(#a)"/>
+    <path class="smut" d="M342 320 v14 h-80 v22" fill="none" stroke-width="1.1" marker-end="url(#a)"/>
+    <path class="sok" d="M342 320 v14 h77 v22" fill="none" stroke-width="1.2" marker-end="url(#a)"/>
+    <path class="smut" d="M554 92 C556 108 500 118 465 132" fill="none" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#a)"/>
+
+    <text class="mut" x="330" y="410" text-anchor="middle" font-size="8" font-style="italic">点線 = #63 で追加した detect_stimulus 経路。observability は状態を読むだけ(no-store)。MCP レイヤーは本リポジトリには無い</text>
+  </g>
+</svg>

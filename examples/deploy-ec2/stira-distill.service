@@ -1,0 +1,42 @@
+# OPTIONAL model-free memory maintenance on an always-on host (docs/deploy-ec2.md,
+# docs/memory-maintenance.md pattern B). Nothing runs unless you enable stira-distill.timer.
+# Copy this file and stira-distill.timer to /etc/systemd/system/, adjust the paths, then:
+#   sudo systemctl daemon-reload
+#   sudo systemctl start stira-distill.service       # run once now (the server is stopped meanwhile)
+#   sudo systemctl enable --now stira-distill.timer  # only when you want it every day
+# The wrapper holds the data directory's owner lock, so the chat server must not be running:
+# this unit stops it first and, afterwards (also when the run failed), starts it again ONLY IF it
+# was running when this unit began. A server you stopped on purpose stays stopped.
+# It does not know about your backups, updates or restores: before you stop the server for any of
+# those, stop the timer and wait for a run in progress (docs/deploy-ec2.md, "Before you stop the
+# server on purpose"), or this unit can run, and start the server, in the middle of your work.
+[Unit]
+Description=StiraCore memory maintenance (rule distiller, no model call)
+After=stiracore.service
+
+[Service]
+Type=oneshot
+User=stira
+Group=stira
+WorkingDirectory=/opt/stira/StiraCore
+Environment=STIRA_ROOT=/opt/stira/StiraCore PYTHONDONTWRITEBYTECODE=1 PYTHONUTF8=1
+# "+" = run as root, outside the sandbox below. The marker file remembers whether to start the server again.
+ExecStartPre=+/bin/sh -c 'rm -f /run/stira-distill.restart; if systemctl is-active --quiet stiracore.service; then : > /run/stira-distill.restart; fi; systemctl stop stiracore.service'
+ExecStart=/bin/bash /opt/stira/StiraCore/examples/memory-maintenance/stira-distill.sh
+ExecStopPost=+/bin/sh -c 'if [ -e /run/stira-distill.restart ]; then rm -f /run/stira-distill.restart; systemctl start --no-block stiracore.service; fi'
+SyslogIdentifier=stira-distill
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=1h
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/stira/StiraCore/.local
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

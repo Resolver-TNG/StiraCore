@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% set nav_active = 'schedules' %}
+{% block title %}定期タスク — StiraCore{% endblock %}{% block title_key %}title.schedules{% endblock %}
+{% block css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/schedules.css') }}">
+{% endblock %}
+{% block head_extra %}
+  <script defer src="{{ url_for('static', filename='js/confirm_dialog.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/schedules_page.js') }}"></script>
+{% endblock %}
+{% block content %}
+<div class="schedules-page">
+  <header class="page-header">
+    <h1><span data-i18n="schedules.title">定期タスク</span></h1>
+    <p class="schedules-lead"><span data-i18n="schedules.lead">人間が定義・確認したジョブだけが実行されます。ジョブが使えるのは読み取り系のツールだけで、承認が必要な操作に当たると実行を止めて通知します。停止中に過ぎた時刻は既定で実行せず記録だけします。</span></p>
+  </header>
+
+  <section class="card schedules-section" aria-labelledby="sched-status-title">
+    <header class="panel-header">
+      <h2 id="sched-status-title"><span data-i18n="schedules.status">状態</span></h2>
+      <span id="sched-message" role="status"></span>
+    </header>
+    <p id="sched-disabled" class="empty" hidden><span data-i18n="schedules.disabled">スケジューラは無効です（STIRA_SCHEDULER=1 で有効化。既定は無効）</span></p>
+    <dl class="sched-facts" id="sched-facts">
+      <div><dt><span data-i18n="schedules.state">スケジューラ</span></dt><dd id="sched-state">—</dd></div>
+      <div><dt><span data-i18n="schedules.breaker">ブレーカー</span></dt><dd id="sched-breaker">—</dd></div>
+      <div><dt><span data-i18n="schedules.last_tick">最終評価</span></dt><dd id="sched-last-tick">—</dd></div>
+      <div><dt><span data-i18n="schedules.alerts">未解決の通知</span></dt><dd id="sched-alerts">—</dd></div>
+      <div><dt><span data-i18n="schedules.agent_layer">エージェントジョブ</span></dt><dd id="sched-agent-layer">—</dd></div>
+    </dl>
+  </section>
+
+  <section class="card schedules-section" aria-labelledby="sched-jobs-title">
+    <header class="panel-header">
+      <h2 id="sched-jobs-title"><span data-i18n="schedules.jobs">ジョブ</span></h2>
+    </header>
+    <div class="sched-table-wrap" tabindex="0" role="region" aria-label="ジョブ一覧のスクロール領域" data-i18n-aria-label="schedules.jobs_scroll">
+      <table class="table sched-table">
+        <caption class="sr-only"><span data-i18n="schedules.jobs_caption">登録済みのジョブ（スケジュール・状態・次回予定・直近の結果）</span></caption>
+        <thead>
+          <tr>
+            <th scope="col"><span data-i18n="schedules.col_name">名前</span></th>
+            <th scope="col"><span data-i18n="schedules.col_schedule">スケジュール</span></th>
+            <th scope="col"><span data-i18n="schedules.col_kind">種類</span></th>
+            <th scope="col"><span data-i18n="schedules.col_state">状態</span></th>
+            <th scope="col"><span data-i18n="schedules.col_next">次回予定</span></th>
+            <th scope="col"><span data-i18n="schedules.col_failures">連続失敗</span></th>
+            <th scope="col"><span data-i18n="schedules.col_actions">操作</span></th>
+          </tr>
+        </thead>
+        <tbody id="sched-jobs">
+          <tr><td colspan="7" class="empty"><span data-i18n="memory.loading">読み込み中...</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card schedules-section" aria-labelledby="sched-runs-title">
+    <header class="panel-header">
+      <h2 id="sched-runs-title"><span data-i18n="schedules.runs">直近の実行</span></h2>
+    </header>
+    <div class="sched-table-wrap" tabindex="0" role="region" aria-label="直近の実行のスクロール領域" data-i18n-aria-label="schedules.runs_scroll">
+      <table class="table sched-table">
+        <caption class="sr-only"><span data-i18n="schedules.runs_caption">新しい順。開始時刻・ジョブ・結果・理由・トークン</span></caption>
+        <thead>
+          <tr>
+            <th scope="col"><span data-i18n="schedules.col_started">開始</span></th>
+            <th scope="col"><span data-i18n="schedules.col_job">ジョブ</span></th>
+            <th scope="col"><span data-i18n="schedules.col_result">結果</span></th>
+            <th scope="col"><span data-i18n="schedules.col_reason">理由</span></th>
+            <th scope="col"><span data-i18n="schedules.col_tokens">トークン</span></th>
+            <th scope="col"><span data-i18n="schedules.col_actions">操作</span></th>
+          </tr>
+        </thead>
+        <tbody id="sched-runs">
+          <tr><td colspan="6" class="empty"><span data-i18n="memory.loading">読み込み中...</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card schedules-section" aria-labelledby="sched-notes-title">
+    <header class="panel-header">
+      <h2 id="sched-notes-title"><span data-i18n="schedules.notifications">通知</span></h2>
+    </header>
+    <p class="schedules-note"><span data-i18n="schedules.notifications_note">通知はこの画面とサーバーログだけに出ます（外部への送信はしません）。</span></p>
+    <ul id="sched-notes" class="sched-notes"></ul>
+    <p id="sched-notes-empty" class="empty"><span data-i18n="schedules.notifications_empty">通知はありません</span></p>
+  </section>
+  <p id="sched-live" class="sr-only" role="status" aria-live="polite"></p>
+</div>
+{% endblock %}

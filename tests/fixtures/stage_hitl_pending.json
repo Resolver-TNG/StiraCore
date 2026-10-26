@@ -1,0 +1,33 @@
+{
+ "requests": [
+  {
+   "agent_id": "nxp-agent",
+   "args_hash": "25b9383ec0c4b6444e942b8502b81e13b492d06eb800f5ee4a0ebbdcd37a0ee8",
+   "break_level": "normal",
+   "created_at": 1792194594.908947,
+   "cwd": null,
+   "editable": false,
+   "expires_at": 1792194714.90891,
+   "id": "9dbb43f2972040e78caeb9a20bfabc8b",
+   "masked": true,
+   "normalized_input": "{\"content\":\"token sk-***\",\"path\":\"notes/a.md\"}",
+   "reason": "Tool policy is Ask: every call of this tool needs a human approval.",
+   "reason_code": "rule_ask",
+   "status": "pending",
+   "supersedes": null,
+   "tool_input": {
+    "content": "token sk-***",
+    "path": "notes/a.md"
+   },
+   "tool_name": "file_write",
+   "tool_use_id": "tooluse_fake_10",
+   "turn_id": "31218c0c0bfa4a61a51ce2e4f48ec706"
+  }
+ ],
+ "server_time": 1792194595.104328,
+ "store": {
+  "error": null,
+  "events": 1,
+  "ok": true
+ }
+}

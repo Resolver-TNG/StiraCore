@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% set nav_active = 'observer' %}
+{% block title %}神経状態オブザーバー — StiraCore{% endblock %}{% block title_key %}title.observer{% endblock %}
+{% block css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+{% endblock %}
+{% block head_extra %}
+  <script defer src="{{ url_for('static', filename='app.js') }}"></script>
+{% endblock %}
+{% block content %}
+<div class="observer">
+  <header class="observer-header">
+    <div>
+      <h1><span data-i18n="observer.title">神経状態オブザーバー</span></h1>
+      <p class="observer-sub"><span data-i18n="observer.subtitle">Neural State の観測と手動刺激（PoC 状態ファイル）</span></p>
+    </div>
+    <div class="connection" role="status">
+      <span class="status-dot" id="connection-dot"></span>
+      <span id="connection"><span data-i18n="observer.connecting">接続中</span></span>
+      <span class="divider" aria-hidden="true">/</span>
+      <span data-i18n="observer.sync_interval">2 秒ごとに同期</span>
+    </div>
+  </header>
+  <div class="section-line">
+    <span data-i18n="observer.live_telemetry">01 — ライブテレメトリ</span>
+    <span id="last-sync"><span data-i18n="observer.waiting_first_snapshot">最初のスナップショットを待っています</span></span>
+  </div>
+  <div id="error" class="error" role="alert" hidden></div>
+  <div class="layout">
+    <section class="panel anchors" aria-labelledby="anchors-title">
+      <div class="panel-head">
+        <h2 id="anchors-title"><span data-i18n="observer.identity_anchors">自己同一性の軸</span></h2>
+        <span class="tag">🔒 L3</span>
+      </div>
+      <p class="intro"><span data-i18n="observer.anchors_intro">効率化でも消せないもの。</span></p>
+      {% if anchors is none %}
+      <p class="intro" role="status"><span data-i18n="observer.anchors_unavailable">{{ ja('observer.anchors_unavailable') }}</span></p>
+      {% elif not anchors %}
+      <p class="intro" role="status"><span data-i18n="observer.anchors_empty">{{ ja('observer.anchors_empty') }}</span></p>
+      {% else %}
+      {% if anchors_source == 'saved' %}
+      <p class="intro" data-anchors-source="saved"><span data-i18n="observer.anchors_saved_note">{{ ja('observer.anchors_saved_note') }}</span></p>
+      {% else %}
+      <p class="intro" data-anchors-source="running"><span data-i18n="observer.anchors_running_note">{{ ja('observer.anchors_running_note') }}</span></p>
+      {% endif %}
+      <ol>
+        {% for anchor in anchors %}
+        <li>
+          <span class="anchor-no" aria-hidden="true">{{ '%02d' % loop.index }}</span>
+          <h3 data-user-text>{{ anchor }}</h3>
+          <span class="lock" aria-hidden="true">🔒</span>
+        </li>
+        {% endfor %}
+      </ol>
+      {% endif %}
+      <div class="boundary">
+        <span class="boundary-icon" aria-hidden="true">◈</span>
+        <div>
+          <strong data-i18n="observer.protected_by_design">設計上の保護</strong>
+          <p><span data-i18n="observer.protected_detail">L3〜L5 は最適化の対象外です。これらの軸は読み取り専用です。</span></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel breaker unknown" id="breaker-panel" aria-live="polite" aria-labelledby="breaker-title">
+      <div class="panel-head">
+        <h2 id="breaker-title"><span data-i18n="observer.circuit_breaker">ブレーカー</span></h2>
+        <span class="tag" id="break-level"><span data-i18n="observer.awaiting_state">状態待ち</span></span>
+      </div>
+      <div class="signal-row">
+        <div class="traffic" aria-hidden="true"><i class="lamp red"></i><i class="lamp yellow"></i><i class="lamp green"></i></div>
+        <div class="signal" id="signal">—</div>
+        <div class="signal-copy">
+          <strong id="signal-title"><span data-i18n="observer.connecting_core">コアに接続中</span></strong>
+          <p id="signal-detail"><span data-i18n="observer.needs_snapshot">安全状態の表示にはライブのスナップショットが必要です。</span></p>
+        </div>
+      </div>
+      <div class="breaker-foot">
+        <span>GO <b data-i18n="observer.foot_normal">正常</b></span>
+        <span>HOLD <b data-i18n="observer.foot_hold">警告 / 一貫性低下</b></span>
+        <span>NO-GO <b data-i18n="observer.foot_critical">危険</b></span>
+      </div>
+    </section>
+
+    <section class="panel coherence" aria-labelledby="coherence-title">
+      <div class="panel-head">
+        <h2 id="coherence-title"><span data-i18n="observer.behavioral_coherence">行動一貫性</span></h2>
+        <span class="tag">BC</span>
+      </div>
+      <div class="dial" id="bc-dial" data-state="ok">
+        <svg viewBox="0 0 180 180" aria-hidden="true">
+          <circle class="dial-track" cx="90" cy="90" r="72"/>
+          <circle id="bc-arc" cx="90" cy="90" r="72"/>
+          <line x1="90" y1="8" x2="90" y2="28" transform="rotate(216 90 90)" class="threshold-tick"/>
+        </svg>
+        <div class="dial-value"><strong id="bc-score">—</strong><span>bcScore / 1.00</span></div>
+      </div>
+      <div class="coherence-summary">
+        <span id="bc-status"><span data-i18n="observer.awaiting_sample">サンプル待ち</span></span>
+        <span><span data-i18n="observer.threshold">閾値</span> <b id="bc-threshold">0.60</b></span>
+      </div>
+      <p class="micro" id="bc-window"><span data-i18n="observer.window_empty">— / 20 ウィンドウサンプル</span></p>
+    </section>
+
+    <section class="panel dimensions" aria-labelledby="dimensions-title">
+      <div class="panel-head">
+        <h2 id="dimensions-title"><span data-i18n="chat.neural_state">神経状態</span></h2>
+        <span class="tag" data-i18n="observer.six_dimensions">6 次元</span>
+      </div>
+      <div class="scale">
+        <span data-i18n="observer.regularization">最適化ではなく正則化</span>
+        <span>0.00 — 1.00</span>
+      </div>
+      <div id="gauges"></div>
+      <div class="zone-legend">
+        <span><i class="red-key"></i><span data-i18n="observer.zone_critical">危険 &lt; 0.30</span></span>
+        <span><i class="yellow-key"></i><span data-i18n="observer.zone_warning">警告 &lt; 0.50</span></span>
+        <span><i class="green-key"></i><span data-i18n="observer.zone_stable">安定 ≥ 0.50</span></span>
+      </div>
+    </section>
+
+    <section class="panel stimulus" aria-labelledby="stimulus-title">
+      <div class="panel-head">
+        <h2 id="stimulus-title"><span data-i18n="observer.stimulus_console">刺激入力</span></h2>
+        <span class="tag" data-i18n="observer.manual">手動</span>
+      </div>
+      <p class="intro"><span data-i18n="observer.stimulus_intro">オペレーターのイベントをライブ状態に適用します。</span></p>
+      <form id="stimulus-form">
+        <label for="stimulus" data-i18n="observer.stimulus">刺激</label>
+        <select id="stimulus" name="stimulus">
+          {% for stimulus in stimuli %}<option value="{{ stimulus }}" data-i18n="stimulus.{{ stimulus }}">{{ ja('stimulus.' ~ stimulus) }}</option>{% endfor %}
+        </select>
+        <div class="range-label">
+          <label for="intensity" data-i18n="observer.intensity">強度</label>
+          <output id="intensity-value" for="intensity">0.80</output>
+        </div>
+        <input type="range" id="intensity" min="0" max="1" step="0.05" value="0.8">
+        <button id="apply" disabled type="submit"><span data-i18n="observer.apply_stimulus">刺激を適用</span> <span class="arrow" aria-hidden="true">↗</span></button>
+      </form>
+      <p class="micro"><span data-i18n="observer.stimulus_note">PoC の状態ファイルに書き込みます。モデル呼び出しはなく、自律動作を許可するものではありません。</span></p>
+      <p id="stimulus-result" class="form-result" role="status"></p>
+    </section>
+
+    <section class="panel transcription" aria-labelledby="transcription-title">
+      <div class="panel-head">
+        <h2 id="transcription-title"><span data-i18n="observer.emotion_transcription">感情の言語化</span></h2>
+        <span class="tag" data-i18n="observer.self_reported">自己申告</span>
+      </div>
+      <div class="quote-mark" aria-hidden="true">“</div>
+      <p id="emotion"><span data-i18n="observer.awaiting_words">エージェント自身の言葉を待っています…</span></p>
+      <div class="transcription-foot">
+        <span>emotion_transcription</span>
+        <span data-i18n="observer.observed_never_inferred">観測のみ・推測しない</span>
+      </div>
+    </section>
+
+    <section class="panel history" aria-labelledby="history-title">
+      <div class="panel-head">
+        <h2 id="history-title"><span data-i18n="observer.turn_history">ターン履歴</span></h2>
+        <span class="tag" id="history-count">0 / 10</span>
+      </div>
+      <div class="log-head">
+        <span data-i18n="observer.time_event">時刻 / イベント</span>
+        <span data-i18n="observer.dimension_deltas">次元の変化量</span>
+      </div>
+      <div id="history" class="log" role="region" tabindex="0" aria-label="直近のオペレーター操作" data-i18n-aria-label="observer.recent_turns">
+        <p class="empty"><span data-i18n="observer.waiting_history">イベント履歴を待っています…</span></p>
+      </div>
+    </section>
+  </div>
+  <footer class="observer-footer">
+    <span><i></i> STIRA ENGINE <span class="dim" data-i18n="observer.identity_safety_layer">/ 自己同一性の安全層</span></span>
+    <span id="source-label"><span data-i18n="observer.local_observation">ローカル観測 · ループバックのみ</span></span>
+  </footer>
+</div>
+{% endblock %}

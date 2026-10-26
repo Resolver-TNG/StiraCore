@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% set nav_active = 'memory' %}
+{% block title %}記憶 — StiraCore{% endblock %}{% block title_key %}title.memory{% endblock %}
+{% block css %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/forest.css') }}">
+{% endblock %}
+{% block head_extra %}
+  <script defer src="{{ url_for('static', filename='js/forest.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/confirm_dialog.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/procedural_review.js') }}"></script>
+{% endblock %}
+{% block content %}
+<div class="forest-page">
+  <header class="page-header">
+    <div>
+      <h1><span data-i18n="forest.title">記憶の森</span></h1>
+      <p class="muted"><span data-i18n="forest.subtitle">3 層の記憶（エピソード・意味・手続き）の最新エントリ</span></p>
+    </div>
+    <button id="refresh" type="button" class="btn btn-secondary"><span data-i18n="forest.refresh">再読み込み</span></button>
+  </header>
+  <p id="status" role="status" aria-live="polite"></p>
+  <div class="root"><span data-i18n="forest.agent_memory">エージェントの記憶</span></div>
+  <div class="trunk" aria-hidden="true"></div>
+  <div class="branches" id="forest" aria-busy="true">
+    <section class="branch episodic" aria-labelledby="episodic-title">
+      <h2 id="episodic-title"><span data-i18n="forest.episodic">エピソード記憶</span> <span class="count"></span></h2>
+      <div class="nodes"></div>
+    </section>
+    <section class="branch semantic" aria-labelledby="semantic-title">
+      <h2 id="semantic-title"><span data-i18n="forest.semantic">意味記憶</span> <span class="count"></span></h2>
+      <div class="nodes"></div>
+    </section>
+    <section class="branch procedural" aria-labelledby="procedural-title">
+      <h2 id="procedural-title"><span data-i18n="forest.procedural">手続き記憶</span> <span class="count"></span></h2>
+      <div class="nodes"></div>
+    </section>
+  </div>
+  <section class="proposals" id="procedural-review" aria-labelledby="proposals-title">
+    <h2 id="proposals-title"><span data-i18n="procreview.title">手続き記憶の提案（レビュー）</span> <span class="count" id="proposals-count"></span></h2>
+    <p class="muted"><span data-i18n="procreview.intro">エージェントにできるのは提案だけです。規則にするか（承認）、捨てるか（却下）は人が決めます。</span></p>
+    <p class="muted" id="proposals-effective"></p>
+    <p class="proposals-breaker" id="proposals-breaker" hidden></p>
+    <p id="proposals-status" role="status" aria-live="polite"></p>
+    <div id="proposals-list"></div>
+    <h3><span data-i18n="procreview.history">最近のレビュー</span></h3>
+    <ul id="proposals-history" class="proposals-history"></ul>
+  </section>
+</div>
+{% endblock %}

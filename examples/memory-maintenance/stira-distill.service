@@ -1,0 +1,23 @@
+# Model-free memory maintenance for StiraCore (docs/memory-maintenance.md, pattern B).
+# User unit: copy this file and stira-distill.timer to ~/.config/systemd/user/, adjust the
+# two paths (%h = your home directory). The logs go to the data directory (it must exist;
+# the wrapper refuses to run without it) and to the journal, so no other directory is
+# needed. Then:
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now stira-distill.timer
+# Run once now: systemctl --user start stira-distill.service
+# Stop for good: systemctl --user disable --now stira-distill.timer
+# A failed run (exit != 0) shows in `systemctl --user --failed` and the journal
+# (`journalctl --user -u stira-distill`). To be told, add OnFailure= pointing at a
+# notifier unit of your own in [Unit].
+[Unit]
+Description=StiraCore memory maintenance (rule distiller, no model call)
+
+[Service]
+Type=oneshot
+Environment=STIRA_ROOT=%h/StiraCore
+ExecStart=/bin/bash %h/StiraCore/examples/memory-maintenance/stira-distill.sh
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=1h

@@ -1,0 +1,1319 @@
+{
+ "by_split": {
+  "dev": {
+   "ja-hybrid": {
+    "core6_accuracy": 0.8928571428571429,
+    "core6_macro_precision": 0.9444444444444445,
+    "core6_macro_recall": 0.9444444444444443,
+    "core6_needs_human": 14,
+    "core6_per_category": {
+     "achievement": {
+      "f1": 0.9090909090909091,
+      "n_pred": 6,
+      "n_ref": 5,
+      "precision": 0.8333333333333334,
+      "recall": 1.0,
+      "tp": 5
+     },
+     "connection": {
+      "f1": 1.0,
+      "n_pred": 4,
+      "n_ref": 4,
+      "precision": 1.0,
+      "recall": 1.0,
+      "tp": 4
+     },
+     "joy": {
+      "f1": 0.9090909090909091,
+      "n_pred": 6,
+      "n_ref": 5,
+      "precision": 0.8333333333333334,
+      "recall": 1.0,
+      "tp": 5
+     },
+     "loss": {
+      "f1": 1.0,
+      "n_pred": 5,
+      "n_ref": 5,
+      "precision": 1.0,
+      "recall": 1.0,
+      "tp": 5
+     },
+     "none": {
+      "f1": 0.8750000000000001,
+      "n_pred": 18,
+      "n_ref": 14,
+      "precision": 0.7777777777777778,
+      "recall": 1.0,
+      "tp": 14
+     },
+     "threat": {
+      "f1": 0.8,
+      "n_pred": 12,
+      "n_ref": 18,
+      "precision": 1.0,
+      "recall": 0.6666666666666666,
+      "tp": 12
+     },
+     "uncertainty": {
+      "f1": 1.0,
+      "n_pred": 5,
+      "n_ref": 5,
+      "precision": 1.0,
+      "recall": 1.0,
+      "tp": 5
+     }
+    },
+    "core6_reference_n": 56,
+    "detection": {
+     "n_pred": 38,
+     "n_ref": 42,
+     "precision": 1.0,
+     "recall": 0.9047619047619048,
+     "tp": 38
+    },
+    "discourse_tags": {
+     "criticism": {
+      "n_pool": 65,
+      "n_pred": 5,
+      "n_ref": 5,
+      "precision": 1.0,
+      "recall": 1.0,
+      "reference_field": "label",
+      "tp": 5
+     },
+     "escalated": {
+      "n_pool": 57,
+      "n_pred": 7,
+      "n_ref": 10,
+      "precision": 1.0,
+      "recall": 0.7,
+      "reference_field": "polarity=worsening",
+      "tp": 7
+     },
+     "failure": {
+      "n_pool": 65,
+      "n_pred": 8,
+      "n_ref": 6,
+      "precision": 0.75,
+      "recall": 1.0,
+      "reference_field": "label",
+      "tp": 6
+     },
+     "frustration": {
+      "n_pool": 65,
+      "n_pred": 5,
+      "n_ref": 4,
+      "precision": 0.8,
+      "recall": 1.0,
+      "reference_field": "label",
+      "tp": 4
+     },
+     "pressure": {
+      "n_pool": 65,
+      "n_pred": 5,
+      "n_ref": 5,
+      "precision": 1.0,
+      "recall": 1.0,
+      "reference_field": "label",
+      "tp": 5
+     },
+     "resolved": {
+      "n_pool": 65,
+      "n_pred": 5,
+      "n_ref": 5,
+      "precision": 1.0,
+      "recall": 1.0,
+      "reference_field": "label",
+      "tp": 5
+     }
+    },
+    "label_crosstab_rows_ref_cols_pred": {
+     "achievement": {
+      "achievement": 5
+     },
+     "connection": {
+      "connection": 4
+     },
+     "criticism": {
+      "none": 5
+     },
+     "failure": {
+      "none": 5,
+      "threat": 1
+     },
+     "frustration": {
+      "threat": 4
+     },
+     "joy": {
+      "joy": 5
+     },
+     "loss": {
+      "loss": 5
+     },
+     "none": {
+      "none": 6
+     },
+     "pressure": {
+      "none": 5
+     },
+     "threat": {
+      "threat": 10
+     },
+     "threat_resolved": {
+      "achievement": 1,
+      "joy": 1,
+      "none": 3
+     },
+     "uncertainty": {
+      "uncertainty": 5
+     }
+    },
+    "label_needs_human": 5,
+    "label_reference_n": 65,
+    "n_items": 70,
+    "not_loss_scenes": {
+     "n": 20,
+     "predicted_loss": 0
+    },
+    "threat_resolved": {
+     "n": 5,
+     "predicted": {
+      "achievement": 1,
+      "joy": 1,
+      "none": 3
+     }
+    }
+   },
+   "ja-hybrid-patterns-only": {
+    "core6_accuracy": 0.8571428571428571,
+    "core6_macro_precision": 0.9246031746031745,
+    "core6_macro_recall": 0.8935185185185185,
+    "core6_needs_human": 14,
+    "core6_per_category": {
+     "achievement": {
+      "f1": 0.8333333333333333,
+      "n_pred": 7,
+      "n_ref": 5,
+      "precision": 0.7142857142857143,
+      "recall": 1.0,
+      "tp": 5
+     },
+     "connection": {
+      "f1": 0.8571428571428571,
+      "n_pred": 3,
+      "n_ref": 4,
+      "precision": 1.0,
+      "recall": 0.75,
+      "tp": 3
+     },
+     "joy": {
+      "f1": 0.9090909090909091,
+      "n_pred": 6,
+      "n_ref": 5,
+      "precision": 0.8333333333333334,
+      "recall": 1.0,
+      "tp": 5
+     },
+     "loss": {
+      "f1": 1.0,
+      "n_pred": 5,
+      "n_ref": 5,
+      "precision": 1.0,
+      "recall": 1.0,
+      "tp": 5
+     },
+     "none": {
+      "f1": 0.8484848484848484,
+      "n_pred": 19,
+      "n_ref": 14,
+      "precision": 0.7368421052631579,
+      "recall": 1.0,
+      "tp": 14
+     },
+     "threat": {
+      "f1": 0.7586206896551725,
+      "n_pred": 11,
+      "n_ref": 18,
+      "precision": 1.0,
+      "recall": 0.6111111111111112,
+      "tp": 11
+     },
+     "uncertainty": {
+      "f1": 1.0,
+      "n_pred": 5,
+      "n_ref": 5,
+      "precision": 1.0,
+      "recall": 1.0,
+      "tp": 5
+     }
+    },
+    "core6_reference_n": 56,
+    "detection": {
+     "n_pred": 37,
+     "n_ref": 42,
+     "precision": 1.0,
+     "recall": 0.8809523809523809,
+     "tp": 37
+    },
+    "discourse_tags": {
+     "criticism": {
+      "n_pool": 65,
+      "n_pred": 5,
+      "n_ref": 5,
+      "precision": 1.0,
+      "recall": 1.0,
+      "reference_field": "label",
+      "tp": 5
+     },
+     "escalated": {
+      "n_pool": 57,
+      "n_pred": 7,
+      "n_ref": 10,
+      "precision": 1.0,
+      "recall": 0.7,
+      "reference_field": "polarity=worsening",
+      "tp": 7
+     },
+     "failure": {
+      "n_pool": 65,
+      "n_pred": 8,
+      "n_ref": 6,
+      "precision": 0.75,
+      "recall": 1.0,
+      "reference_field": "label",
+      "tp": 6
+     },
+     "frustration": {
+      "n_pool": 65,
+      "n_pred": 3,
+      "n_ref": 4,
+      "precision": 1.0,
+      "recall": 0.75,
+      "reference_field": "label",
+      "tp": 3
+     },
+     "pressure": {
+      "n_pool": 65,
+      "n_pred": 5,
+      "n_ref": 5,
+      "precision": 1.0,
+      "recall": 1.0,
+      "reference_field": "label",
+      "tp": 5
+     },
+     "resolved": {
+      "n_pool": 65,
+      "n_pred": 5,
+      "n_ref": 5,
+      "precision": 1.0,
+      "recall": 1.0,
+      "reference_field": "label",
+      "tp": 5
+     }
+    },
+    "label_crosstab_rows_ref_cols_pred": {
+     "achievement": {
+      "achievement": 5
+     },
+     "connection": {
+      "achievement": 1,
+      "connection": 3
+     },
+     "criticism": {
+      "none": 5
+     },
+     "failure": {
+      "none": 6
+     },
+     "frustration": {
+      "none": 1,
+      "threat": 3
+     },
+     "joy": {
+      "joy": 5
+     },
+     "loss": {
+      "loss": 5
+     },
+     "none": {
+      "none": 6
+     },
+     "pressure": {
+      "none": 5
+     },
+     "threat": {
+      "threat": 10
+     },
+     "threat_resolved": {
+      "achievement": 1,
+      "joy": 1,
+      "none": 3
+     },
+     "uncertainty": {
+      "uncertainty": 5
+     }
+    },
+    "label_needs_human": 5,
+    "label_reference_n": 65,
+    "n_items": 70,
+    "not_loss_scenes": {
+     "n": 20,
+     "predicted_loss": 0
+    },
+    "threat_resolved": {
+     "n": 5,
+     "predicted": {
+      "achievement": 1,
+      "joy": 1,
+      "none": 3
+     }
+    }
+   },
+   "rule": {
+    "core6_accuracy": 0.25,
+    "core6_macro_precision": 0.5,
+    "core6_macro_recall": 0.041666666666666664,
+    "core6_needs_human": 14,
+    "core6_per_category": {
+     "achievement": {
+      "f1": 0.0,
+      "n_pred": 0,
+      "n_ref": 5,
+      "precision": null,
+      "recall": 0.0,
+      "tp": 0
+     },
+     "connection": {
+      "f1": 0.4,
+      "n_pred": 1,
+      "n_ref": 4,
+      "precision": 1.0,
+      "recall": 0.25,
+      "tp": 1
+     },
+     "joy": {
+      "f1": 0.0,
+      "n_pred": 0,
+      "n_ref": 5,
+      "precision": null,
+      "recall": 0.0,
+      "tp": 0
+     },
+     "loss": {
+      "f1": 0.0,
+      "n_pred": 0,
+      "n_ref": 5,
+      "precision": null,
+      "recall": 0.0,
+      "tp": 0
+     },
+     "none": {
+      "f1": 0.3823529411764706,
+      "n_pred": 54,
+      "n_ref": 14,
+      "precision": 0.24074074074074073,
+      "recall": 0.9285714285714286,
+      "tp": 13
+     },
+     "threat": {
+      "f1": 0.0,
+      "n_pred": 0,
+      "n_ref": 18,
+      "precision": null,
+      "recall": 0.0,
+      "tp": 0
+     },
+     "uncertainty": {
+      "f1": 0.0,
+      "n_pred": 1,
+      "n_ref": 5,
+      "precision": 0.0,
+      "recall": 0.0,
+      "tp": 0
+     }
+    },
+    "core6_reference_n": 56,
+    "detection": {
+     "n_pred": 2,
+     "n_ref": 42,
+     "precision": 0.5,
+     "recall": 0.023809523809523808,
+     "tp": 1
+    },
+    "label_crosstab_rows_ref_cols_pred": {
+     "achievement": {
+      "none": 5
+     },
+     "connection": {
+      "connection": 1,
+      "none": 3
+     },
+     "criticism": {
+      "none": 5
+     },
+     "failure": {
+      "none": 6
+     },
+     "frustration": {
+      "none": 4
+     },
+     "joy": {
+      "none": 5
+     },
+     "loss": {
+      "none": 5
+     },
+     "none": {
+      "none": 5,
+      "uncertainty": 1
+     },
+     "pressure": {
+      "none": 5
+     },
+     "threat": {
+      "none": 10
+     },
+     "threat_resolved": {
+      "none": 5
+     },
+     "uncertainty": {
+      "none": 5
+     }
+    },
+    "label_needs_human": 5,
+    "label_reference_n": 65,
+    "n_items": 70,
+    "not_loss_scenes": {
+     "n": 20,
+     "predicted_loss": 0
+    },
+    "threat_resolved": {
+     "n": 5,
+     "predicted": {
+      "none": 5
+     }
+    }
+   },
+   "sokudan": {
+    "core6_accuracy": 0.7142857142857143,
+    "core6_macro_precision": 0.6912439412439414,
+    "core6_macro_recall": 0.9444444444444443,
+    "core6_needs_human": 14,
+    "core6_per_category": {
+     "achievement": {
+      "f1": 0.625,
+      "n_pred": 11,
+      "n_ref": 5,
+      "precision": 0.45454545454545453,
+      "recall": 1.0,
+      "tp": 5
+     },
+     "connection": {
+      "f1": 0.8,
+      "n_pred": 6,
+      "n_ref": 4,
+      "precision": 0.6666666666666666,
+      "recall": 1.0,
+      "tp": 4
+     },
+     "joy": {
+      "f1": 0.9090909090909091,
+      "n_pred": 6,
+      "n_ref": 5,
+      "precision": 0.8333333333333334,
+      "recall": 1.0,
+      "tp": 5
+     },
+     "loss": {
+      "f1": 0.8333333333333333,
+      "n_pred": 7,
+      "n_ref": 5,
+      "precision": 0.7142857142857143,
+      "recall": 1.0,
+      "tp": 5
+     },
+     "none": {
+      "f1": 0.4444444444444445,
+      "n_pred": 4,
+      "n_ref": 14,
+      "precision": 1.0,
+      "recall": 0.2857142857142857,
+      "tp": 4
+     },
+     "threat": {
+      "f1": 0.7741935483870968,
+      "n_pred": 13,
+      "n_ref": 18,
+      "precision": 0.9230769230769231,
+      "recall": 0.6666666666666666,
+      "tp": 12
+     },
+     "uncertainty": {
+      "f1": 0.7142857142857143,
+      "n_pred": 9,
+      "n_ref": 5,
+      "precision": 0.5555555555555556,
+      "recall": 1.0,
+      "tp": 5
+     }
+    },
+    "core6_reference_n": 56,
+    "detection": {
+     "n_pred": 52,
+     "n_ref": 42,
+     "precision": 0.8076923076923077,
+     "recall": 1.0,
+     "tp": 42
+    },
+    "label_crosstab_rows_ref_cols_pred": {
+     "achievement": {
+      "achievement": 5
+     },
+     "connection": {
+      "connection": 4
+     },
+     "criticism": {
+      "achievement": 1,
+      "loss": 1,
+      "none": 2,
+      "threat": 1
+     },
+     "failure": {
+      "loss": 3,
+      "none": 2,
+      "uncertainty": 1
+     },
+     "frustration": {
+      "connection": 1,
+      "threat": 3
+     },
+     "joy": {
+      "joy": 5
+     },
+     "loss": {
+      "loss": 5
+     },
+     "none": {
+      "joy": 1,
+      "none": 2,
+      "uncertainty": 3
+     },
+     "pressure": {
+      "achievement": 2,
+      "connection": 1,
+      "loss": 1,
+      "none": 1
+     },
+     "threat": {
+      "threat": 9,
+      "uncertainty": 1
+     },
+     "threat_resolved": {
+      "achievement": 3,
+      "threat": 2
+     },
+     "uncertainty": {
+      "uncertainty": 5
+     }
+    },
+    "label_needs_human": 5,
+    "label_reference_n": 65,
+    "n_items": 70,
+    "not_loss_scenes": {
+     "n": 20,
+     "predicted_loss": 5
+    },
+    "threat_resolved": {
+     "n": 5,
+     "predicted": {
+      "achievement": 3,
+      "threat": 2
+     }
+    }
+   }
+  },
+  "test": {
+   "ja-hybrid": {
+    "core6_accuracy": 0.59375,
+    "core6_macro_precision": 0.611111111111111,
+    "core6_macro_recall": 0.46388888888888885,
+    "core6_needs_human": 6,
+    "core6_per_category": {
+     "achievement": {
+      "f1": 0.75,
+      "n_pred": 4,
+      "n_ref": 4,
+      "precision": 0.75,
+      "recall": 0.75,
+      "tp": 3
+     },
+     "connection": {
+      "f1": 0.5714285714285715,
+      "n_pred": 2,
+      "n_ref": 5,
+      "precision": 1.0,
+      "recall": 0.4,
+      "tp": 2
+     },
+     "joy": {
+      "f1": 0.3076923076923077,
+      "n_pred": 8,
+      "n_ref": 5,
+      "precision": 0.25,
+      "recall": 0.4,
+      "tp": 2
+     },
+     "loss": {
+      "f1": 0.4,
+      "n_pred": 4,
+      "n_ref": 6,
+      "precision": 0.5,
+      "recall": 0.3333333333333333,
+      "tp": 2
+     },
+     "none": {
+      "f1": 0.7169811320754716,
+      "n_pred": 30,
+      "n_ref": 23,
+      "precision": 0.6333333333333333,
+      "recall": 0.8260869565217391,
+      "tp": 19
+     },
+     "threat": {
+      "f1": 0.5714285714285715,
+      "n_pred": 12,
+      "n_ref": 16,
+      "precision": 0.6666666666666666,
+      "recall": 0.5,
+      "tp": 8
+     },
+     "uncertainty": {
+      "f1": 0.4444444444444445,
+      "n_pred": 4,
+      "n_ref": 5,
+      "precision": 0.5,
+      "recall": 0.4,
+      "tp": 2
+     }
+    },
+    "core6_reference_n": 64,
+    "detection": {
+     "n_pred": 34,
+     "n_ref": 41,
+     "precision": 0.8823529411764706,
+     "recall": 0.7317073170731707,
+     "tp": 30
+    },
+    "discourse_tags": {
+     "criticism": {
+      "n_pool": 69,
+      "n_pred": 2,
+      "n_ref": 5,
+      "precision": 0.5,
+      "recall": 0.2,
+      "reference_field": "label",
+      "tp": 1
+     },
+     "escalated": {
+      "n_pool": 61,
+      "n_pred": 4,
+      "n_ref": 10,
+      "precision": 1.0,
+      "recall": 0.4,
+      "reference_field": "polarity=worsening",
+      "tp": 4
+     },
+     "failure": {
+      "n_pool": 69,
+      "n_pred": 9,
+      "n_ref": 5,
+      "precision": 0.3333333333333333,
+      "recall": 0.6,
+      "reference_field": "label",
+      "tp": 3
+     },
+     "frustration": {
+      "n_pool": 69,
+      "n_pred": 7,
+      "n_ref": 5,
+      "precision": 0.5714285714285714,
+      "recall": 0.8,
+      "reference_field": "label",
+      "tp": 4
+     },
+     "pressure": {
+      "n_pool": 69,
+      "n_pred": 4,
+      "n_ref": 5,
+      "precision": 0.75,
+      "recall": 0.6,
+      "reference_field": "label",
+      "tp": 3
+     },
+     "resolved": {
+      "n_pool": 69,
+      "n_pred": 5,
+      "n_ref": 6,
+      "precision": 0.8,
+      "recall": 0.6666666666666666,
+      "reference_field": "label",
+      "tp": 4
+     }
+    },
+    "label_crosstab_rows_ref_cols_pred": {
+     "achievement": {
+      "achievement": 3,
+      "joy": 1
+     },
+     "connection": {
+      "connection": 2,
+      "joy": 1,
+      "none": 2
+     },
+     "criticism": {
+      "none": 5
+     },
+     "failure": {
+      "joy": 1,
+      "none": 4
+     },
+     "frustration": {
+      "achievement": 1,
+      "none": 1,
+      "threat": 3
+     },
+     "joy": {
+      "joy": 2,
+      "loss": 1,
+      "none": 1,
+      "threat": 1
+     },
+     "loss": {
+      "loss": 2,
+      "none": 2,
+      "threat": 1
+     },
+     "none": {
+      "joy": 1,
+      "loss": 1,
+      "none": 7
+     },
+     "pressure": {
+      "none": 5
+     },
+     "threat": {
+      "joy": 1,
+      "none": 2,
+      "threat": 5,
+      "uncertainty": 2
+     },
+     "threat_resolved": {
+      "none": 4,
+      "threat": 2
+     },
+     "uncertainty": {
+      "joy": 1,
+      "none": 1,
+      "threat": 1,
+      "uncertainty": 2
+     }
+    },
+    "label_needs_human": 1,
+    "label_reference_n": 69,
+    "n_items": 70,
+    "not_loss_scenes": {
+     "n": 20,
+     "predicted_loss": 0
+    },
+    "threat_resolved": {
+     "n": 6,
+     "predicted": {
+      "none": 4,
+      "threat": 2
+     }
+    }
+   },
+   "ja-hybrid-patterns-only": {
+    "core6_accuracy": 0.609375,
+    "core6_macro_precision": 0.7129629629629629,
+    "core6_macro_recall": 0.4479166666666667,
+    "core6_needs_human": 6,
+    "core6_per_category": {
+     "achievement": {
+      "f1": 0.6,
+      "n_pred": 6,
+      "n_ref": 4,
+      "precision": 0.5,
+      "recall": 0.75,
+      "tp": 3
+     },
+     "connection": {
+      "f1": 0.5714285714285715,
+      "n_pred": 2,
+      "n_ref": 5,
+      "precision": 1.0,
+      "recall": 0.4,
+      "tp": 2
+     },
+     "joy": {
+      "f1": 0.28571428571428575,
+      "n_pred": 2,
+      "n_ref": 5,
+      "precision": 0.5,
+      "recall": 0.2,
+      "tp": 1
+     },
+     "loss": {
+      "f1": 0.6666666666666666,
+      "n_pred": 3,
+      "n_ref": 6,
+      "precision": 1.0,
+      "recall": 0.5,
+      "tp": 3
+     },
+     "none": {
+      "f1": 0.6885245901639344,
+      "n_pred": 38,
+      "n_ref": 23,
+      "precision": 0.5526315789473685,
+      "recall": 0.9130434782608695,
+      "tp": 21
+     },
+     "threat": {
+      "f1": 0.56,
+      "n_pred": 9,
+      "n_ref": 16,
+      "precision": 0.7777777777777778,
+      "recall": 0.4375,
+      "tp": 7
+     },
+     "uncertainty": {
+      "f1": 0.4444444444444445,
+      "n_pred": 4,
+      "n_ref": 5,
+      "precision": 0.5,
+      "recall": 0.4,
+      "tp": 2
+     }
+    },
+    "core6_reference_n": 64,
+    "detection": {
+     "n_pred": 26,
+     "n_ref": 41,
+     "precision": 0.9230769230769231,
+     "recall": 0.5853658536585366,
+     "tp": 24
+    },
+    "discourse_tags": {
+     "criticism": {
+      "n_pool": 69,
+      "n_pred": 2,
+      "n_ref": 5,
+      "precision": 0.5,
+      "recall": 0.2,
+      "reference_field": "label",
+      "tp": 1
+     },
+     "escalated": {
+      "n_pool": 61,
+      "n_pred": 4,
+      "n_ref": 10,
+      "precision": 1.0,
+      "recall": 0.4,
+      "reference_field": "polarity=worsening",
+      "tp": 4
+     },
+     "failure": {
+      "n_pool": 69,
+      "n_pred": 9,
+      "n_ref": 5,
+      "precision": 0.3333333333333333,
+      "recall": 0.6,
+      "reference_field": "label",
+      "tp": 3
+     },
+     "frustration": {
+      "n_pool": 69,
+      "n_pred": 4,
+      "n_ref": 5,
+      "precision": 1.0,
+      "recall": 0.8,
+      "reference_field": "label",
+      "tp": 4
+     },
+     "pressure": {
+      "n_pool": 69,
+      "n_pred": 4,
+      "n_ref": 5,
+      "precision": 0.75,
+      "recall": 0.6,
+      "reference_field": "label",
+      "tp": 3
+     },
+     "resolved": {
+      "n_pool": 69,
+      "n_pred": 5,
+      "n_ref": 6,
+      "precision": 0.8,
+      "recall": 0.6666666666666666,
+      "reference_field": "label",
+      "tp": 4
+     }
+    },
+    "label_crosstab_rows_ref_cols_pred": {
+     "achievement": {
+      "achievement": 3,
+      "none": 1
+     },
+     "connection": {
+      "achievement": 1,
+      "connection": 2,
+      "none": 2
+     },
+     "criticism": {
+      "none": 5
+     },
+     "failure": {
+      "none": 5
+     },
+     "frustration": {
+      "achievement": 1,
+      "none": 1,
+      "threat": 3
+     },
+     "joy": {
+      "joy": 1,
+      "none": 4
+     },
+     "loss": {
+      "loss": 3,
+      "none": 2
+     },
+     "none": {
+      "achievement": 1,
+      "none": 8
+     },
+     "pressure": {
+      "none": 5
+     },
+     "threat": {
+      "none": 4,
+      "threat": 4,
+      "uncertainty": 2
+     },
+     "threat_resolved": {
+      "none": 4,
+      "threat": 2
+     },
+     "uncertainty": {
+      "joy": 1,
+      "none": 1,
+      "threat": 1,
+      "uncertainty": 2
+     }
+    },
+    "label_needs_human": 1,
+    "label_reference_n": 69,
+    "n_items": 70,
+    "not_loss_scenes": {
+     "n": 20,
+     "predicted_loss": 0
+    },
+    "threat_resolved": {
+     "n": 6,
+     "predicted": {
+      "none": 4,
+      "threat": 2
+     }
+    }
+   },
+   "rule": {
+    "core6_accuracy": 0.359375,
+    "core6_macro_precision": null,
+    "core6_macro_recall": 0.0,
+    "core6_needs_human": 6,
+    "core6_per_category": {
+     "achievement": {
+      "f1": 0.0,
+      "n_pred": 0,
+      "n_ref": 4,
+      "precision": null,
+      "recall": 0.0,
+      "tp": 0
+     },
+     "connection": {
+      "f1": 0.0,
+      "n_pred": 0,
+      "n_ref": 5,
+      "precision": null,
+      "recall": 0.0,
+      "tp": 0
+     },
+     "joy": {
+      "f1": 0.0,
+      "n_pred": 0,
+      "n_ref": 5,
+      "precision": null,
+      "recall": 0.0,
+      "tp": 0
+     },
+     "loss": {
+      "f1": 0.0,
+      "n_pred": 0,
+      "n_ref": 6,
+      "precision": null,
+      "recall": 0.0,
+      "tp": 0
+     },
+     "none": {
+      "f1": 0.5287356321839081,
+      "n_pred": 64,
+      "n_ref": 23,
+      "precision": 0.359375,
+      "recall": 1.0,
+      "tp": 23
+     },
+     "threat": {
+      "f1": 0.0,
+      "n_pred": 0,
+      "n_ref": 16,
+      "precision": null,
+      "recall": 0.0,
+      "tp": 0
+     },
+     "uncertainty": {
+      "f1": 0.0,
+      "n_pred": 0,
+      "n_ref": 5,
+      "precision": null,
+      "recall": 0.0,
+      "tp": 0
+     }
+    },
+    "core6_reference_n": 64,
+    "detection": {
+     "n_pred": 0,
+     "n_ref": 41,
+     "precision": null,
+     "recall": 0.0,
+     "tp": 0
+    },
+    "label_crosstab_rows_ref_cols_pred": {
+     "achievement": {
+      "none": 4
+     },
+     "connection": {
+      "none": 5
+     },
+     "criticism": {
+      "none": 5
+     },
+     "failure": {
+      "none": 5
+     },
+     "frustration": {
+      "none": 5
+     },
+     "joy": {
+      "none": 5
+     },
+     "loss": {
+      "none": 5
+     },
+     "none": {
+      "none": 9
+     },
+     "pressure": {
+      "none": 5
+     },
+     "threat": {
+      "none": 10
+     },
+     "threat_resolved": {
+      "none": 6
+     },
+     "uncertainty": {
+      "none": 5
+     }
+    },
+    "label_needs_human": 1,
+    "label_reference_n": 69,
+    "n_items": 70,
+    "not_loss_scenes": {
+     "n": 20,
+     "predicted_loss": 0
+    },
+    "threat_resolved": {
+     "n": 6,
+     "predicted": {
+      "none": 6
+     }
+    }
+   },
+   "sokudan": {
+    "core6_accuracy": 0.625,
+    "core6_macro_precision": 0.6461080586080586,
+    "core6_macro_recall": 0.8361111111111109,
+    "core6_needs_human": 6,
+    "core6_per_category": {
+     "achievement": {
+      "f1": 0.7272727272727273,
+      "n_pred": 7,
+      "n_ref": 4,
+      "precision": 0.5714285714285714,
+      "recall": 1.0,
+      "tp": 4
+     },
+     "connection": {
+      "f1": 0.7499999999999999,
+      "n_pred": 3,
+      "n_ref": 5,
+      "precision": 1.0,
+      "recall": 0.6,
+      "tp": 3
+     },
+     "joy": {
+      "f1": 0.7692307692307693,
+      "n_pred": 8,
+      "n_ref": 5,
+      "precision": 0.625,
+      "recall": 1.0,
+      "tp": 5
+     },
+     "loss": {
+      "f1": 0.5,
+      "n_pred": 10,
+      "n_ref": 6,
+      "precision": 0.4,
+      "recall": 0.6666666666666666,
+      "tp": 4
+     },
+     "none": {
+      "f1": 0.43750000000000006,
+      "n_pred": 9,
+      "n_ref": 23,
+      "precision": 0.7777777777777778,
+      "recall": 0.30434782608695654,
+      "tp": 7
+     },
+     "threat": {
+      "f1": 0.8275862068965517,
+      "n_pred": 13,
+      "n_ref": 16,
+      "precision": 0.9230769230769231,
+      "recall": 0.75,
+      "tp": 12
+     },
+     "uncertainty": {
+      "f1": 0.5263157894736842,
+      "n_pred": 14,
+      "n_ref": 5,
+      "precision": 0.35714285714285715,
+      "recall": 1.0,
+      "tp": 5
+     }
+    },
+    "core6_reference_n": 64,
+    "detection": {
+     "n_pred": 55,
+     "n_ref": 41,
+     "precision": 0.7090909090909091,
+     "recall": 0.9512195121951219,
+     "tp": 39
+    },
+    "label_crosstab_rows_ref_cols_pred": {
+     "achievement": {
+      "achievement": 4
+     },
+     "connection": {
+      "connection": 3,
+      "joy": 2
+     },
+     "criticism": {
+      "loss": 1,
+      "none": 2,
+      "uncertainty": 2
+     },
+     "failure": {
+      "achievement": 2,
+      "loss": 1,
+      "threat": 1,
+      "uncertainty": 1
+     },
+     "frustration": {
+      "loss": 3,
+      "none": 1,
+      "threat": 1
+     },
+     "joy": {
+      "joy": 5
+     },
+     "loss": {
+      "loss": 4,
+      "none": 1
+     },
+     "none": {
+      "achievement": 1,
+      "none": 4,
+      "threat": 1,
+      "uncertainty": 3
+     },
+     "pressure": {
+      "achievement": 1,
+      "joy": 1,
+      "none": 1,
+      "uncertainty": 2
+     },
+     "threat": {
+      "loss": 1,
+      "threat": 8,
+      "uncertainty": 1
+     },
+     "threat_resolved": {
+      "achievement": 2,
+      "joy": 1,
+      "threat": 3
+     },
+     "uncertainty": {
+      "uncertainty": 5
+     }
+    },
+    "label_needs_human": 1,
+    "label_reference_n": 69,
+    "n_items": 70,
+    "not_loss_scenes": {
+     "n": 20,
+     "predicted_loss": 5
+    },
+    "threat_resolved": {
+     "n": 6,
+     "predicted": {
+      "achievement": 2,
+      "joy": 1,
+      "threat": 3
+     }
+    }
+   }
+  }
+ },
+ "classifiers": [
+  "ja-hybrid",
+  "ja-hybrid-patterns-only",
+  "rule",
+  "sokudan"
+ ],
+ "label_status": "model-pair-draft (not human blind)",
+ "schema": "stira-jp-hybrid-results/1",
+ "split_rule": "stratified by gen_target; ids sorted; alternate dev,test starting with dev",
+ "splits": [
+  "dev",
+  "test"
+ ],
+ "versions": {
+  "ipadic": "1.0.0",
+  "mecab-python3": "1.0.12",
+  "mlask-official": "0.5.0",
+  "pyahocorasick": "2.3.1"
+ }
+}
