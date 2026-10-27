@@ -6,11 +6,12 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const zlib = require('node:zlib');
 
 const ROOT = path.join(__dirname, '..', 'dashboard', 'stage');
 const CHAR = path.join(ROOT, 'assets', 'char');
-const load = (name) => import(path.join(ROOT, 'js', name));
+const load = (name) => import(pathToFileURL(path.join(ROOT, 'js', name)).href);
 const META = JSON.parse(fs.readFileSync(path.join(CHAR, 'hair.json'), 'utf8'));
 
 // Minimal PNG reader (8-bit RGB / RGBA, not interlaced: what build_char/build_hair write).
@@ -388,7 +389,7 @@ test('the ear beside the face shows skin and the earbud, not hair colour', () =>
 // --- the hair stays in the character layer --------------------------------------------------
 
 async function fakeStage() {
-  const THREE = await import(path.join(ROOT, 'vendor', 'three.stage.min.js'));
+  const THREE = await import(pathToFileURL(path.join(ROOT, 'vendor', 'three.stage.min.js')).href);
   const scene = new THREE.Scene();
   const mk = (name, x, y, order) => {
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.ShaderMaterial({ uniforms: { uLevel: { value: 0.5 } } }));

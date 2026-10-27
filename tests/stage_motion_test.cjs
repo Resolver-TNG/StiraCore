@@ -5,11 +5,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const crypto = require('node:crypto');
 const { decodePng } = require('./stage_png.cjs');
 
 const STAGE = path.join(__dirname, '..', 'dashboard', 'stage');
-const load = (name) => import(path.join(STAGE, 'js', name));
+const load = (name) => import(pathToFileURL(path.join(STAGE, 'js', name)).href);
 const N = (values) => ({ type: 'neural', values });
 
 let rigCache = null;

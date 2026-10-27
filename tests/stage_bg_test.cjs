@@ -5,9 +5,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const ROOT = path.join(__dirname, '..', 'dashboard', 'stage');
-const load = (name) => import(path.join(ROOT, 'js', name));
+const load = (name) => import(pathToFileURL(path.join(ROOT, 'js', name)).href);
 // The page's asset allow-list (src/stiracore/observability/stage.py, _ASSETS)
 const ALLOWED = /^assets\/(?!source\/)[a-z0-9_-]+\/[a-z0-9_-]+\.(?:png|json)$/;
 

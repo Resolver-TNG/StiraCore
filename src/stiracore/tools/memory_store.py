@@ -59,23 +59,27 @@ class MemoryStore:
 
     def __init__(self, base_dir: Path, agent_id: str, read_only_paths: set[str] | None = None):
         self._validate_component(agent_id, "agent_id")
-        base_path = Path(base_dir)
+        base_path = Path(base_dir).absolute()
+        # The ancestors of the configured root are the operator's choice (macOS /tmp and
+        # /var are links, a home or project folder may be one): they are resolved once
+        # here. A link at the root itself or anywhere below it is still refused (#296).
+        base_path = base_path.parent.resolve() / base_path.name
         self._reject_symlinks(base_path)
         self.base_dir = base_path.resolve()
         self.agent_id = agent_id
         self.memory_dir = self.base_dir / "agents" / agent_id / "memory"
         self.read_only_paths: set[str] = set(DEFAULT_READ_ONLY_PATHS) | set(read_only_paths or ())
-        self._reject_symlinks(self.memory_dir)
+        self._reject_links(self.memory_dir)
         for layer in MemoryLayer:
             directory = self.memory_dir / layer.value
-            self._reject_symlinks(directory)
+            self._reject_links(directory)
             directory.mkdir(parents=True, exist_ok=True)
-            self._reject_symlinks(directory)
+            self._reject_links(directory)
             if not directory.resolve().is_relative_to(self.base_dir):
                 raise ValueError("Memory directories must remain inside base_dir.")
 
         self.index_path = self.memory_dir / "index.sqlite3"
-        self._reject_symlinks(self.index_path)
+        self._reject_links(self.index_path)
         with self._connection() as connection:
             connection.execute(
                 """
@@ -102,12 +106,24 @@ class MemoryStore:
             )
 
     @staticmethod
-    def _reject_symlinks(path: Path) -> None:
-        """Reject symbolic links in the path itself or any parent component."""
+    def _reject_symlinks(path: Path, *, root: Path | None = None) -> None:
+        """Reject symbolic links in the path itself or any parent component.
+
+        With ``root`` (a store's resolved ``base_dir``) and a ``path`` lexically inside it,
+        only ``root`` itself and the components below it are checked: the ancestors were
+        resolved once when the store was built (the operator's choice). Any other path
+        (outside ``root``, or with a ``..``) is checked from the filesystem root."""
         path = Path(path).absolute()
-        for component in (*reversed(path.parents), path):
+        components = (*reversed(path.parents), path)
+        if root is not None and ".." not in path.parts and path.is_relative_to(root):
+            components = components[len(root.parents) :]
+        for component in components:
             if component.is_symlink():
                 raise MemorySymlinkError("Memory paths must not contain symbolic links.")
+
+    def _reject_links(self, path: Path) -> None:
+        """:meth:`_reject_symlinks` for a path of this store: from ``base_dir`` down."""
+        self._reject_symlinks(path, root=self.base_dir)
 
     @staticmethod
     def _validate_component(value: str, name: str) -> None:
@@ -134,14 +150,14 @@ class MemoryStore:
         parts = self._validate_key(key)
         directory = self.memory_dir / layer.value
         path = directory.joinpath(*parts[:-1], f"{parts[-1]}.md")
-        self._reject_symlinks(path)
+        self._reject_links(path)
         if not path.resolve().is_relative_to(self.memory_dir.resolve()):
             raise ValueError("Memory entries must remain inside the memory directory.")
         return path
 
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
-        self._reject_symlinks(self.index_path)
+        self._reject_links(self.index_path)
         connection = sqlite3.connect(self.index_path, timeout=30)
         try:
             with connection:
@@ -232,7 +248,7 @@ class MemoryStore:
             raise
         try:
             opened = os.fstat(descriptor)
-            self._reject_symlinks(path)  # a parent swapped before the open
+            self._reject_links(path)  # a parent swapped before the open
             now = os.stat(path)
             if not stat.S_ISREG(opened.st_mode) or (now.st_dev, now.st_ino) != (
                 opened.st_dev,
@@ -344,9 +360,9 @@ class MemoryStore:
         self._require_writable(path)
         self._parse(text)  # invalid frontmatter is refused before anything is replaced
 
-        self._reject_symlinks(path.parent)
+        self._reject_links(path.parent)
         path.parent.mkdir(parents=True, exist_ok=True)
-        self._reject_symlinks(path.parent)
+        self._reject_links(path.parent)
         if not path.parent.resolve().is_relative_to(self.memory_dir.resolve()):
             raise ValueError("Memory entries must remain inside the memory directory.")
 
@@ -437,11 +453,11 @@ class MemoryStore:
     def _entry_keys(self, layer: MemoryLayer) -> Iterator[str]:
         """Keys of the regular ``*.md`` entries of ``layer``; no file is opened."""
         directory = self.memory_dir / layer.value
-        self._reject_symlinks(directory)
+        self._reject_links(directory)
         for path in sorted(directory.rglob("*.md")):
             if path.is_symlink() or not path.is_file():
                 continue
-            self._reject_symlinks(path)
+            self._reject_links(path)
             yield path.relative_to(directory).with_suffix("").as_posix()
 
     def count_entries(self, layer: MemoryLayer, *, exclude_prefix: str | None = None) -> int:

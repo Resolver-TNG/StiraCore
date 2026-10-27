@@ -102,7 +102,8 @@ roots; they have their own boundary, set by the host:
 `memory_tools.memory_write(layer, key, content)` → only `episodic` (other layers:
 "denied") → `MemoryStore.write` → `_path`: `key` must be a relative POSIX path without
 `.`/`..`/`\`/NUL, under the host-configured `memory_dir/<layer>/`, no symlinked
-component, resolved inside `memory_dir` → `_require_writable` (floor: SOUL/IPD and the
+component at or below the store root (its ancestors are resolved once when the store is
+built, #296), resolved inside `memory_dir` → `_require_writable` (floor: SOUL/IPD and the
 store's `read_only_paths`) → symlink re-check → `mkdir(parents)` below
 `memory_dir/<layer>` → resolved parent inside `memory_dir` → `NamedTemporaryFile` in that
 same parent → `os.replace` onto the checked path. So the temp file, the rename and the

@@ -501,6 +501,34 @@ def test_pinned_upstream_source_audit():
     assert {name: _source_audit(name) for name in EXEC_TOOLS} == AUDITED_SOURCE
 
 
+def test_pyproject_does_not_admit_a_tools_release_newer_than_the_audited_one():
+    # A fresh install resolves to the newest admitted release: it must be one the exec
+    # bridge accepts, and nothing newer than the audited releases may be admitted (#296).
+    import tomllib
+    from pathlib import Path
+
+    from packaging.requirements import Requirement
+    from packaging.version import Version
+
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    dependencies = tomllib.loads(pyproject.read_text("utf-8"))["project"]["dependencies"]
+    (requirement,) = [
+        Requirement(text)
+        for text in dependencies
+        if Requirement(text).name == tool_consent.UPSTREAM_DISTRIBUTION
+    ]
+    newest = max(Version(v) for v in tool_consent.VERIFIED_EXEC_UPSTREAM)
+    assert requirement.specifier.contains(newest)
+    major, minor, micro = newest.release
+    newer = [
+        f"{major}.{minor}.{micro + 1}",
+        f"{major}.{minor + 1}.0",
+        f"{major + 1}.0.0",
+        f"{major}.{minor}.{micro + 1}rc1",
+    ]
+    assert [v for v in newer if requirement.specifier.contains(v, prereleases=True)] == []
+
+
 def test_unaudited_upstream_release_drops_every_exec_tool(monkeypatch, caplog):
     monkeypatch.setattr(tool_consent, "upstream_version", lambda: "0.9.0")
     covered = tool_consent.install_consent_bridge()

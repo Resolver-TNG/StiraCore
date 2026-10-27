@@ -11,6 +11,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const crypto = require('node:crypto');
 const { decodePng } = require('./stage_png.cjs');
 
@@ -19,7 +20,7 @@ const STAGE = path.join(ROOT, 'dashboard', 'stage');
 const CHAR = path.join(STAGE, 'assets', 'char');
 const FIXTURE = path.join(__dirname, 'fixtures', 'stage_body_outside.json');
 const REPORT = process.env.STAGE_BODY_REPORT === '1';
-const load = (name) => import(path.join(STAGE, 'js', name));
+const load = (name) => import(pathToFileURL(path.join(STAGE, 'js', name)).href);
 const readJson = (name) => JSON.parse(fs.readFileSync(path.join(CHAR, name), 'utf8'));
 const png = (name) => decodePng(fs.readFileSync(path.join(CHAR, name)));
 const CALM = { emotion: 'calm', eyes: 'open', mouth: 'neutral', headY: 0, ears: 0, blush: 0, sweat: 0 };

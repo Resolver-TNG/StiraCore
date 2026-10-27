@@ -18,7 +18,7 @@ StiraCore は**アルファ版**です。動きますが、未完成の部分が
 - **安定性の約束はありません。** バージョンは `0.1.0.dev0` です。Python API、設定キー、イベントやファイルの形式、データディレクトリ（`.local/stira/`）の構成は、移行コードなしにコミット間で変わることがあります（[CHANGELOG](CHANGELOG.md)）。
 - **ローカル・単一ユーザー向けのサーバーです。** Web アプリにログインはありません。ループバックで待ち受け、`STIRA_ALLOW_REMOTE=1` がない限りそれ以外のアドレスを拒否します。1 つのデータディレクトリで動かせるサーバーは 1 つです（[セキュリティモデル](#セキュリティモデル)、[運用 §1](docs/operations_ja.md#1-起動停止状態確認)）。
 - **目標グラント（自律）は実験的で、既定オフです。** Amazon Bedrock のみ、反復内のプロンプトキャッシュなし、費用は見守り付きの 1 回の実行からの推定だけ、グラント内の `run_checks` は macOS のみです（[既知の制約](docs/autonomy_ja.md#4-既知の制約)）。
-- **実行系ツール**（`shell`・`batch`・`cron`・`graph`・`swarm`・`think`・`use_agent`）は既定で非公開で、sandbox もバックグラウンド実行もまだありません。`STIRA_ENABLE_EXEC_TOOLS=1` にしても、導入済みの `strands-agents-tools` が実行系ブリッジの監査済みリリース（現在は **0.8.9** のみ）でなければ登録されません。`pyproject.toml` は `>=0.8.0` を許すので、新しく入れると新しいリリース（執筆時点で 0.8.10）が入ることがあり、そのときログに `Not registering shell: …` と出ます。確認は `python -m pip show strands-agents-tools`、固定は `python -m pip install 'strands-agents-tools==0.8.9'` です。
+- **実行系ツール**（`shell`・`batch`・`cron`・`graph`・`swarm`・`think`・`use_agent`）は既定で非公開で、sandbox もバックグラウンド実行もまだありません。`STIRA_ENABLE_EXEC_TOOLS=1` にしても、導入済みの `strands-agents-tools` が実行系ブリッジの監査済みリリース（現在は **0.8.9** のみ）でなければ登録されません。そのため `pyproject.toml` は `strands-agents-tools` を 0.8.10 未満（`>=0.8.0,<0.8.10`）に固定しており、新規インストールでは 0.8.9 が入ります。この固定は、新しいリリースを監査するまでの意図的な安全上の選択です。古いリリースや手動で上げたリリースでは実行系は登録されず、ログに `Not registering shell: …` と出ます。確認は `python -m pip show strands-agents-tools` です。
 - **感情の分類は簡素です。** 既定のインストールでは刺激分類器はルールベースで、そのパターンは英語のため、日本語ではほとんど何も検出しません。日本語の Sokudan 分類器には Python 3.11 と `jev` extra が必要です（[刺激分類器](#刺激分類器)、[日本語ルール分類器（任意）](docs/ja-rules-classifier_ja.md)）。失敗・苛立ち・圧力の刺激カテゴリはまだありません。
 - **一方向の長い対話では Neural State が飽和します。** stability は 0 に近づき、ブレーカーはほとんどのターンで CRITICAL（書き込みツールが制限される）になります。これは設計どおりで、調整できる設定は [neural-saturation_ja](docs/neural-saturation_ja.md) にあります。
 - **記憶ページ**は、各層の最新 20 件を本文だけ表示する読み取り専用の一覧です。検索・編集はできず、重要度や保持期間も表示されません。手続き記憶の提案はこのページでレビューできますが、意味記憶の staging はコマンドライン（`stira_ctl.sh staging`）だけです。
@@ -315,7 +315,7 @@ tests/              # テスト（既定はオフライン）
 
 - Python **3.11 以上**（全 OS の基準は 3.11。`jev` extra は 3.11 が必要）
 - `strands-agents >= 1.57.1`
-- `strands-agents-tools >= 0.8.0`
+- `strands-agents-tools >= 0.8.0, < 0.8.10`（実行系ブリッジの監査済みリリースに固定）
 - モデルプロバイダ: Amazon Bedrock（既定。AWS 認証が必要）**または** AWS 不要の Strands プロバイダ（Ollama / llama.cpp / OpenAI / Anthropic / Gemini など）。[モデルプロバイダ](docs/providers_ja.md)を参照
 - Web アプリには Flask（`dashboard` または `dev` extra）
 - Sokudan 分類器を使う場合は **Python 3.11** と `jev` extra

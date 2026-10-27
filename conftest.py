@@ -124,6 +124,30 @@ def _yolo_off_unless_asked(monkeypatch):
     yield
 
 
+# --- YOLO clocks off macOS: the runtime gate sees a measured clock (#296) ---------------
+# ADR 0012 §7 measured the clocks on macOS only, so the product refuses a YOLO window
+# elsewhere (``clock_not_measured``). The window logic itself is platform independent:
+# off macOS the tests see the runtime gate (``stiracore.yolo.runtime.clock_support``) as
+# measured, and the readings stay the product's own fallback (``host_ops.default_clock``:
+# wall + ``time.monotonic``). Nothing changes on macOS. The refusal itself stays covered
+# with explicit platforms / ``clocks_supported=False`` (test_yolo_allowance,
+# test_yolo_requests); a test that needs the real gate uses ``@pytest.mark.real_yolo_clock``.
+
+
+@pytest.fixture(autouse=True)
+def _yolo_clock_gate_measured_off_macos(request, monkeypatch):
+    try:
+        from stiracore.yolo import allowance, runtime
+    except ImportError:  # pragma: no cover
+        yield
+        return
+    real = allowance.clock_support()
+    if not real.supported and request.node.get_closest_marker("real_yolo_clock") is None:
+        measured = allowance.ClockSupport(True, None, real.platform)
+        monkeypatch.setattr(runtime, "clock_support", lambda: measured)
+    yield
+
+
 # --- YOLO host dialog: never on the developer's screen (ADR 0012 §8b) ------------------
 # A test that builds the server with STIRA_YOLO_ALLOW would otherwise check for, and
 # show, the macOS host-confirmation dialog. Every osascript call answers "no" here (no

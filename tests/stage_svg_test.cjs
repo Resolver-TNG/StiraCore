@@ -6,10 +6,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const ROOT = path.join(__dirname, '..');
 const STAGE = path.join(ROOT, 'dashboard', 'stage', 'js');
-const load = (name) => import(path.join(STAGE, name));
+const load = (name) => import(pathToFileURL(path.join(STAGE, name)).href);
 const ja = JSON.parse(fs.readFileSync(path.join(ROOT, 'dashboard/static/i18n/catalog.ja.json'), 'utf8'));
 const en = JSON.parse(fs.readFileSync(path.join(ROOT, 'dashboard/static/i18n/catalog.en.json'), 'utf8'));
 const t = (key, vars = {}) => String(ja[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k]));
@@ -476,7 +477,7 @@ test('main.js: pictures only with data-board-svg="on", checked again by the brow
 });
 
 test('the browser check finds Chrome for this platform (CHROME first, then the usual places)', async () => {
-  const { findChrome } = await import(path.join(ROOT, 'scripts', 'find_chrome.mjs'));
+  const { findChrome } = await import(pathToFileURL(path.join(ROOT, 'scripts', 'find_chrome.mjs')).href);
   const os = require('node:os');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'find-chrome-'));
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'find-chrome-home-'));

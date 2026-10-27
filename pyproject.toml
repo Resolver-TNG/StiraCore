@@ -15,7 +15,9 @@ authors = [
 
 dependencies = [
     "strands-agents>=1.57.1",
-    "strands-agents-tools>=0.8.0",
+    # Held below 0.8.10: the exec bridge refuses a release it was not audited against
+    # (tool_consent.VERIFIED_EXEC_UPSTREAM = 0.8.9). Raise only together with an audit.
+    "strands-agents-tools>=0.8.0,<0.8.10",
 "requests>=2.32",
     # web_tools stops a body read at its deadline with HTTPResponse.shutdown (2.3+, #601).
     "urllib3>=2.3",
@@ -107,4 +109,5 @@ pythonpath = [".", "src"]
 timeout = 120
 markers = [
     "live: opt-in smoke against a real model provider (needs STIRA_LIVE_MODEL)",
+    "real_yolo_clock: keep the real YOLO clock gate off macOS (conftest.py, ADR 0012 §7)",
 ]

@@ -79,11 +79,13 @@ from view, it keeps its lock and databases open on the old file system, and a se
 started on the new, empty directory ran at the same time (the data-directory lock no longer
 excluded it). An existing installation is moved with the steps in §6.
 
-The checkout and `.local/stira` must be real directories: **a symbolic link anywhere on the
-data path stops the server** (measured: with `.local/stira` as a symlink to another
-directory the server dies at start-up with `MemorySymlinkError: Memory paths must not
-contain symbolic links.` and a traceback). To put the data on its own volume, mount it at
-that path ([§6](#6-data-backup-and-restore)).
+**A symbolic link at or below the memory directory (`.local/stira/memory`) stops the
+server** at start-up with `MemorySymlinkError: Memory paths must not contain symbolic
+links.` and a traceback. The directories above it are the operator's choice and are
+resolved once at start (#296); before that change a symlinked `.local/stira` stopped the
+server too (measured on this guide's instance; the new behaviour was not re-measured on
+EC2). To put the data on its own volume, mount it at that path
+([§6](#6-data-backup-and-restore)).
 
 ## 3. Reaching the server without opening it
 
@@ -677,7 +679,7 @@ Run on 2026-10-18 (Ubuntu 24.04 aarch64 VM, systemd 255, Python 3.12.3, the serv
 | Flush before the snapshot; migration and `environ` check as a normal administrator | `sync -f` (exit 0 / 1 for a bad path), `fsfreeze -f/-u`, `cd` into `0700` `.local`, `sudo tr < …/environ` vs `sudo cat` | `sync -f` and the absolute-path forms work; the redirect forms are refused |
 | Volume mounted over a running server | start, then `mount` | files hidden, old file system still open, a second server ran: mount before the first start; moving existing data (copy + `diff`) works |
 | Anchor drop-in without `daemon-reload` | add drop-in to a running unit, `restart` | warning, variable and state directory absent; with `daemon-reload` both present |
-| Symlinked data directory | symlink as `.local/stira` | server dies: `MemorySymlinkError` |
+| Symlinked data directory (before #296) | symlink as `.local/stira` | server dies: `MemorySymlinkError` (since #296 only a link at or below `.local/stira/memory`) |
 | Restore lock | `stira tool-rules lock` / `status` as `stira` | `locked (restored_backup)`, status exit 1 |
 | Rule-rollback anchor with `StateDirectory=` | `init-anchor`, then data directory wiped | `LOCKED (anchor_rollback)`; variable set before the anchor exists → `anchor_missing` |
 | `smoke_server.py` as `stira` | run | `smoke: PASS in 1.0s` |

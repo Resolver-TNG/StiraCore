@@ -220,7 +220,8 @@ Sources: [tool audit](tool-audit.md), current
 and upstream `strands-agents-tools` 0.8.9 dependency/source inspection. The audit
 is a catalog decision record, **not an OS test matrix**. Entries below describe
 expected native-OS support, not successful end-to-end execution on every OS.
-Dependency versions can change because installation is not pinned.
+`strands-agents-tools` is held below 0.8.10 (`pyproject.toml`, the audited 0.8.9); other
+dependency versions are not pinned and can change.
 
 - ✅ = registered candidate with no known OS-specific blocker in this inspection;
   still requires successful dependency imports, permissions, and any service setup.

@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const ROOT = path.join(__dirname, '..');
 const words = require(path.join(ROOT, 'dashboard', 'static', 'js', 'breaker_reasons.js'));
@@ -58,7 +59,7 @@ test('no code reaches the screen, in either language', () => {
 });
 
 test('the Stage adapter forwards codes and numbers only', async () => {
-  const { fromTurnEvent } = await import(path.join(ROOT, 'dashboard', 'stage', 'js', 'adapter.js'));
+  const { fromTurnEvent } = await import(pathToFileURL(path.join(ROOT, 'dashboard', 'stage', 'js', 'adapter.js')).href);
   const [ev] = fromTurnEvent({
     type: 'breaker.transition', turn_id: 't', seq: 2,
     data: { from: 'normal', to: 'warning', reasons: ['stability_below_warning', 'Has Text!'],

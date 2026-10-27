@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 import os
-import pty
 import secrets
 import selectors
 import subprocess
@@ -309,6 +308,8 @@ def test_cli_without_a_server_says_so(tmp_path, capsys):
 @posix_only
 def test_the_real_command_on_a_pty_confirms_end_to_end(channel, tmp_path):
     """``stira approvals decide`` in its own process, on a pseudo-terminal, typing the word."""
+    import pty  # POSIX only (termios): imported here so the module collects on Windows
+
     desk, _server = channel(own_pid=NOT_IN_ANY_TREE)
     op = _op(desk)
     master, slave = pty.openpty()
