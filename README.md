@@ -54,8 +54,12 @@ yet. Known gaps on current `main`:
 - **`distiller_mode: "jev"` is a stub**: every episode fails. Use `rule` (the default, no model
   call) or `llm` ([memory maintenance](docs/memory-maintenance.md)).
 - **Platforms.** Developed on macOS (Apple Silicon). The CI workflow runs the offline test suite
-  and a server start-up smoke on Ubuntu, macOS and Windows (Python 3.11; 3.12 on Ubuntu too).
-  Beyond CI, Linux was checked by hand only in a VM for the
+  on Ubuntu (Python 3.11 and 3.12) and macOS (3.11) — these are blocking — and a server start-up
+  smoke plus the PowerShell control-script tests on Windows. **On Windows the full test suite also
+  runs, but it is informational only (`continue-on-error`): several hundred tests still fail
+  there** (path semantics, the scheduler, grants progress, timing; tracked in
+  Issue #662 of this repository), so Windows is **not** a verified
+  platform yet. Beyond CI, Linux was checked by hand only in a VM for the
   [EC2 reference setup](docs/deploy-ec2.md) (its AWS parts unverified), and Windows not at all
   (`stira_ctl.ps1`, the chat server; no `shell` or `cron` tool there). The YOLO window is
   offered on macOS only (the one platform whose clocks were measured), and the per-OS tool table
