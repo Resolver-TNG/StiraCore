@@ -6,9 +6,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const ROOT = path.join(__dirname, '..', 'dashboard', 'stage');
-const load = (name) => import(path.join(ROOT, 'js', name));
+const load = (name) => import(pathToFileURL(path.join(ROOT, 'js', name)).href);
 const META = JSON.parse(fs.readFileSync(path.join(ROOT, 'assets', 'char', 'hair.json'), 'utf8'));
 
 // A display: rAF timestamps at `hz` with deterministic jitter (ms). Calls onRun(dt, tMs) for each

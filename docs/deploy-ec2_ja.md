@@ -71,10 +71,11 @@ sudo install -d -o stira -g stira -m 0700 /opt/stira/StiraCore/.local /opt/stira
 サーバーは古いファイルシステム上でロックとデータベースを開いたままで、新しい空のディレクトリで起動した 2 台目のサーバーが同時に
 動きました（データディレクトリのロックでは排除されなくなる）。既存の環境を移す手順は §6 にあります。
 
-チェックアウトと `.local/stira` は実ディレクトリでなければなりません。**データのパスのどこかにシンボリックリンクがあると
-サーバーは止まります**（実測: `.local/stira` を別ディレクトリへのシンボリックリンクにすると、起動時に
-`MemorySymlinkError: Memory paths must not contain symbolic links.` とトレースバックを出して終了）。データを専用ボリュームに
-置くには、そのパスにマウントします（[§6](#6-データバックアップ復元)）。
+**メモリのディレクトリ（`.local/stira/memory`）またはその下にシンボリックリンクがあるとサーバーは止まります**
+（起動時に `MemorySymlinkError: Memory paths must not contain symbolic links.` とトレースバックを出して終了）。
+それより上のディレクトリは運用者の選択で、起動時に一度だけ実パスに解決されます（#296）。この変更の前は `.local/stira`
+自体がシンボリックリンクでも止まりました（このガイドのインスタンスで実測。新しい挙動は EC2 では再測定していません）。
+データを専用ボリュームに置くには、そのパスにマウントします（[§6](#6-データバックアップ復元)）。
 
 ## 3. サーバーを開けずに使う
 
@@ -590,7 +591,7 @@ AWS 上のものは**実施していません**。
 | スナップショット前のフラッシュ。通常の管理者としての移行と `environ` の確認 | `sync -f`（終了コード 0 / 不正パスで 1）、`fsfreeze -f/-u`、`0700` の `.local` への `cd`、`sudo tr < …/environ` と `sudo cat` | `sync -f` と絶対パスの形は動き、リダイレクトの形は拒否される |
 | 稼働中のサーバーの上にボリュームをマウント | 起動してから `mount` | ファイルが見えなくなり、古いファイルシステムが開いたままで 2 台目が動いた: 最初の起動前にマウント。既存データの移動（コピー + `diff`）は動く |
 | `daemon-reload` なしのアンカーのドロップイン | 稼働中のユニットにドロップインを足し `restart` | 警告が出て、変数も状態ディレクトリも無い。`daemon-reload` すると両方ある |
-| シンボリックリンクのデータディレクトリ | `.local/stira` をシンボリックリンクに | サーバーが停止: `MemorySymlinkError` |
+| シンボリックリンクのデータディレクトリ（#296 以前） | `.local/stira` をシンボリックリンクに | サーバーが停止: `MemorySymlinkError`（#296 以降は `.local/stira/memory` 以下のリンクのみ） |
 | 復元時のロック | `stira` として `stira tool-rules lock` / `status` | `locked (restored_backup)`、終了コード 1 |
 | `StateDirectory=` を使ったルール巻き戻し防止のアンカー | `init-anchor`、その後データディレクトリを消去 | `LOCKED (anchor_rollback)`。アンカー作成前に変数を設定 → `anchor_missing` |
 | `stira` としての `smoke_server.py` | 実行 | `smoke: PASS in 1.0s` |

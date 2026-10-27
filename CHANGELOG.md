@@ -255,6 +255,17 @@ Overview, how to try it and the known limits: docs/autonomy.md.
 
 ### Fixed
 
+- **Memory store** — a symbolic link *above* the configured memory root (macOS `/tmp` and
+  `/var`, a symlinked home or project folder, `STIRA_CHAT_DATA_DIR` or a `--base-dir` under
+  them) no longer refuses the store with `MemorySymlinkError`: the ancestors are the
+  operator's choice and are resolved once when the store is built. A link at the root
+  itself, at `agents/<id>/memory`, at a layer or `emotion/` directory, at `index.sqlite3`
+  or at an entry file is still refused, also when swapped in later; the per-read check now
+  starts at the root, which halves the `lstat` calls of a read (#296).
+- **Dependencies** — `strands-agents-tools` is held below 0.8.10 (`>=0.8.0,<0.8.10`): the
+  exec bridge refuses a release it was not audited against (0.8.9), so a fresh install
+  got 0.8.10 and no exec-class tools. Deliberate until a newer release is audited (#296).
+
 - **Schedules** — Resume on `/schedules` with the default browser confirmation channel opens the
   confirmation (checkbox) dialog after the resume dialog instead of answering "Cancelled; nothing
   was applied": the shared dialog lets the pending request's own host confirmation open

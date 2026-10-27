@@ -124,6 +124,78 @@ def _yolo_off_unless_asked(monkeypatch):
     yield
 
 
+# --- YOLO clocks off macOS: the runtime gate sees a measured clock (#296) ---------------
+# ADR 0012 §7 measured the clocks on macOS only, so the product refuses a YOLO window
+# elsewhere (``clock_not_measured``). The window logic itself is platform independent:
+# off macOS the tests see the runtime gate (``stiracore.yolo.runtime.clock_support``) as
+# measured, and the readings stay the product's own fallback (``host_ops.default_clock``:
+# wall + ``time.monotonic``). Nothing changes on macOS. The refusal itself stays covered
+# with explicit platforms / ``clocks_supported=False`` (test_yolo_allowance,
+# test_yolo_requests); a test that needs the real gate uses ``@pytest.mark.real_yolo_clock``.
+
+
+@pytest.fixture(autouse=True)
+def _yolo_clock_gate_measured_off_macos(request, monkeypatch):
+    try:
+        from stiracore.yolo import allowance, runtime
+    except ImportError:  # pragma: no cover
+        yield
+        return
+    real = allowance.clock_support()
+    if not real.supported and request.node.get_closest_marker("real_yolo_clock") is None:
+        measured = allowance.ClockSupport(True, None, real.platform)
+        monkeypatch.setattr(runtime, "clock_support", lambda: measured)
+    yield
+
+
+# --- Server apps built by a test are stopped and closed after it (#296) ----------------
+# ``create_app`` registers its stops with ``atexit`` (one app per process in production)
+# and holds ``server.lock`` until the process exits. A test process builds hundreds of
+# apps: each kept its SQLite connections (with -wal/-shm) and its lock descriptor open,
+# ~14 descriptors per app, which exhausted the macOS runner's limit of 256 (EMFILE).
+# After each test the app ``atexit`` stops it registered (``stiracore`` / ``dashboard``
+# functions only) run (idempotent) and are removed,
+# and the data-directory locks it took are released. Higher-scoped fixtures are untouched.
+
+
+@pytest.fixture(autouse=True)
+def _close_what_the_test_built(monkeypatch):
+    import atexit
+    import gc
+
+    from stiracore import owner_lock
+
+    registered, locks = [], []
+    real_register, real_acquire = atexit.register, owner_lock.OwnerLockFile.acquire
+
+    def register(function, *args, **kwargs):
+        # Only the app's own stops: pytest's (tmp_path cleanup) and others stay at exit.
+        if getattr(function, "__module__", "").startswith(
+            ("stiracore", "dashboard", "stira_server")
+        ):
+            registered.append(function)
+        return real_register(function, *args, **kwargs)
+
+    def acquire(self, *args, **kwargs):
+        result = real_acquire(self, *args, **kwargs)
+        locks.append(self)
+        return result
+
+    monkeypatch.setattr(atexit, "register", register)
+    monkeypatch.setattr(owner_lock.OwnerLockFile, "acquire", acquire)
+    yield
+    for function in reversed(registered):
+        atexit.unregister(function)
+        with contextlib.suppress(Exception):
+            function()
+    for lock in locks:
+        if lock.held:
+            with contextlib.suppress(Exception):
+                lock.release()
+    if registered or locks:
+        gc.collect()
+
+
 # --- YOLO host dialog: never on the developer's screen (ADR 0012 §8b) ------------------
 # A test that builds the server with STIRA_YOLO_ALLOW would otherwise check for, and
 # show, the macOS host-confirmation dialog. Every osascript call answers "no" here (no

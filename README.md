@@ -30,10 +30,10 @@ yet. Known gaps on current `main`:
   hidden by default and have no sandbox or background execution yet. Even with
   `STIRA_ENABLE_EXEC_TOOLS=1` they are registered only when the installed `strands-agents-tools`
   is a release the exec bridge was audited against — today **0.8.9** only. `pyproject.toml`
-  allows `>=0.8.0`, so a fresh install can get a newer release (0.8.10 at the time of writing);
-  the log then says `Not registering shell: …`. Check with
-  `python -m pip show strands-agents-tools`, pin with
-  `python -m pip install 'strands-agents-tools==0.8.9'`.
+  therefore holds `strands-agents-tools` below 0.8.10 (`>=0.8.0,<0.8.10`), so a fresh install
+  gets 0.8.9; this pin is a deliberate safety choice until a newer release is audited. An older
+  or a manually upgraded release is refused for the exec class (the log says
+  `Not registering shell: …`). Check with `python -m pip show strands-agents-tools`.
 - **Emotion classification is basic.** With the default install the stimulus classifier is the
   rule-based one: its patterns are English and it detects almost nothing in Japanese. The
   Japanese Sokudan classifier needs the `jev` extra on Python 3.11
@@ -536,7 +536,7 @@ tests/              # test suite (offline by default)
 
 - Python 3.11+ (3.11 is the baseline on every OS; the `jev` extra needs 3.11)
 - strands-agents >= 1.57.1
-- strands-agents-tools >= 0.8.0
+- strands-agents-tools >= 0.8.0, < 0.8.10 (held at the release the exec bridge was audited against)
 - A model provider: Amazon Bedrock (default; AWS credentials) **or** any Strands
   provider without AWS — Ollama, llama.cpp, OpenAI, Anthropic, Gemini, … — see
   [Model providers](docs/providers.md)

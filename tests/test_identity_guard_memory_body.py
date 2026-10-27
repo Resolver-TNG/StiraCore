@@ -31,7 +31,12 @@ def data_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture()
-def guard(data_dir: Path) -> IdentityGuard:
+def guard(data_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> IdentityGuard:
+    # The home holds the data directory, as in a real install: "~" names a protected path then.
+    # Without this the cases "~" depend on where the runner's temp directory is (under the
+    # home on a workstation, /tmp or /var/folders on a CI runner).
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     read_only = [str(data_dir / n) for n in ("tool-config.json", "neural-state.json")]
     policy = WritePathPolicy(
         read_only + ["SOUL.md"], base_dir=data_dir / "workspace", write_roots=[WORKSPACE_ROOT]

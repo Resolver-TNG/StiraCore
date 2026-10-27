@@ -7,12 +7,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const crypto = require('node:crypto');
 const { decodePng } = require('./stage_png.cjs');
 
 const STAGE = path.join(__dirname, '..', 'dashboard', 'stage');
 const FIXTURE = path.join(__dirname, 'fixtures', 'stage_front_frames.json');
-const load = (name) => import(path.join(STAGE, 'js', name));
+const load = (name) => import(pathToFileURL(path.join(STAGE, 'js', name)).href);
 const readJson = (...p) => JSON.parse(fs.readFileSync(path.join(STAGE, ...p), 'utf8'));
 const CALM = { emotion: 'calm', eyes: 'open', mouth: 'neutral', headY: 0, ears: 0, blush: 0, sweat: 0 };
 const hash = (px) => crypto.createHash('sha1').update(px).digest('hex').slice(0, 16);

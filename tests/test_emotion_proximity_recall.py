@@ -741,6 +741,10 @@ def _eval_module():
     return module
 
 
+# ~30 s on macOS; more than the default 120 s on the Windows runner, where every memory
+# read pays an lstat per path component below the store root (#296). The thread-based
+# timeout there ends the whole session, so this evaluation gets its own bound.
+@pytest.mark.timeout(900)
 def test_the_preregistered_criteria_are_met_on_both_fixture_versions():
     module = _eval_module()
     result = module.evaluate()  # deterministic: the exact numbers below are asserted

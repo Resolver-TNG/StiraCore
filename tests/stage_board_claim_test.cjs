@@ -12,6 +12,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
 
 let JSDOM = null;
@@ -24,7 +25,7 @@ try {
 }
 const ROOT = path.join(__dirname, '..');
 const STAGE = path.join(ROOT, 'dashboard', 'stage', 'js');
-const load = (name) => import(path.join(STAGE, name));
+const load = (name) => import(pathToFileURL(path.join(STAGE, name)).href);
 const CAT = {
   ja: JSON.parse(fs.readFileSync(path.join(ROOT, 'dashboard/static/i18n/catalog.ja.json'), 'utf8')),
   en: JSON.parse(fs.readFileSync(path.join(ROOT, 'dashboard/static/i18n/catalog.en.json'), 'utf8')),
@@ -247,7 +248,7 @@ test('no claim: the grant panel is the one of before W6c', { skip: JSDOM ? false
   const old = path.join(dir, 'activity.mjs');
   fs.writeFileSync(old, before);
   for (const dep of fs.readdirSync(STAGE)) if (dep !== 'activity.js') fs.copyFileSync(path.join(STAGE, dep), path.join(dir, dep));
-  const A0 = await import(old);
+  const A0 = await import(pathToFileURL(old).href);
   const A = await load('activity.js');
   const t = tr('ja');
   const dom = new JSDOM(BOARD_HTML);

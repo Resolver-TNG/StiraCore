@@ -297,8 +297,13 @@ def delete_emotion_snapshot(store: MemoryStore, key: str) -> bool:
     return True
 
 
-def _read_record(path: Path) -> dict[str, Any] | None:
-    MemoryStore._reject_symlinks(path.parent)
+def _store_root(store: MemoryStore) -> Path | None:
+    """The resolved root of a real store (its ancestors were resolved when it was built)."""
+    return store.base_dir if isinstance(store, MemoryStore) else None
+
+
+def _read_record(path: Path, root: Path | None = None) -> dict[str, Any] | None:
+    MemoryStore._reject_symlinks(path.parent, root=root)
     if not _NOFOLLOW:
         # Windows has no O_NOFOLLOW: refuse a link by lstat first (best effort, racy).
         try:
@@ -336,7 +341,7 @@ def read_emotion_snapshot(store: MemoryStore, entry: MemoryEntry) -> EmotionSnap
         metadata = entry.metadata if isinstance(entry.metadata, Mapping) else {}
         if entry.layer is not MemoryLayer.EPISODIC or metadata.get("format") != FORMAT_V2:
             return empty_snapshot("v1")
-        record = _read_record(emotion_record_path(store, entry.key))
+        record = _read_record(emotion_record_path(store, entry.key), _store_root(store))
         if record is None or record.get("schema") != RECORD_SCHEMA:
             return empty_snapshot("missing")
         if record.get("key") != entry.key or record.get("content_sha256") != _digest(entry.content):
@@ -390,7 +395,7 @@ def find_orphan_records(store: MemoryStore, *, now: float | None = None) -> list
             orphans.append(OrphanRecord(name, "unreadable"))  # a link or a special file
             continue
         try:
-            record = _read_record(path)
+            record = _read_record(path, _store_root(store))
         except (OSError, ValueError):
             record = None
         key = record.get("key") if isinstance(record, dict) else None

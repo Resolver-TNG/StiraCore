@@ -10,10 +10,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const ROOT = path.join(__dirname, '..');
 const STAGE = path.join(ROOT, 'dashboard', 'stage', 'js');
-const load = (name) => import(path.join(STAGE, name));
+const load = (name) => import(pathToFileURL(path.join(STAGE, name)).href);
 const TURNS = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'stage_turn_events.json'), 'utf8'));
 const PENDING = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'stage_hitl_pending.json'), 'utf8'));
 const turnWith = (name) => TURNS.find((t) => t.events.some((e) => e.data && e.data.name === name));
