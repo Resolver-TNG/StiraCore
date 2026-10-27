@@ -262,6 +262,18 @@ Overview, how to try it and the known limits: docs/autonomy.md.
   itself, at `agents/<id>/memory`, at a layer or `emotion/` directory, at `index.sqlite3`
   or at an entry file is still refused, also when swapped in later; the per-read check now
   starts at the root, which halves the `lstat` calls of a read (#296).
+- **Memory store (cost of a read)** — the memory root is resolved once when the store is
+  built and the entry enumeration no longer walks every entry's components again: a read
+  no longer calls `Path.resolve()` at all (the link walk from the resolved root already
+  proves the entry is inside it). Measured on the proximity-recall evaluation: 1,171,359
+  `lstat` and 117,124 `resolve` calls become 10,097 and 986 (the whole test 27.6 s → 24.7 s
+  on macOS, where both are cheap; Windows pays far more per call). The no-follow open, the
+  identity compare and the component walk before and after the open are unchanged, and a
+  link swapped in just before the open — on the entry or on a parent — is still refused
+  (two new tests) (#662).
+- **PDF extraction** — a memory limit of zero or less is no longer taken as an enforced
+  limit: Linux accepts a negative `RLIMIT_AS` as "unlimited", so the child parsed where it
+  should have refused with `pdf_limits_unavailable` (#662).
 - **Dependencies** — `strands-agents-tools` is held below 0.8.10 (`>=0.8.0,<0.8.10`): the
   exec bridge refuses a release it was not audited against (0.8.9), so a fresh install
   got 0.8.10 and no exec-class tools. Deliberate until a newer release is audited (#296).

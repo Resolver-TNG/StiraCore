@@ -292,10 +292,7 @@ def load(data_dir: Path) -> LoadResult:
             opened = os.fstat(fd)
         except OSError:
             return LoadResult("bad", reason="epoch_store_unreadable")
-        # The path and the descriptor are the same file (device / inode): a size or
-        # change-time difference here is a concurrent append, not a swap; the full
-        # identity returned below is compared with the writer's own by the caller.
-        if _unsafe(opened) or (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+        if _unsafe(opened) or identity(opened) != identity(info):
             return LoadResult("bad", reason="epoch_store_unsafe")
         if opened.st_size > _MAX_BYTES:
             return LoadResult("bad", reason="epoch_store_malformed")

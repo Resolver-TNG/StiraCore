@@ -521,6 +521,37 @@ def test_audit_failure_after_compression_reports_applied_and_reconciles(
     assert store.read_text(MemoryLayer.SEMANTIC, first.key) == before[first.key]
 
 
+def _why_not_reconciled(store, archive_id):
+    """What :meth:`MemoryMaintenance.reconcile` saw, for a failure message (#662).
+
+    The CI job that runs the whole suite on 3.12 reports ``reconciled == []`` here, while
+    the test passes alone and with its own file on 3.12 and 3.11 and in the full suite on
+    3.11. The branch that is taken depends on the kinds logged for the record and on the
+    entry's current digest, so the message shows both instead of only the empty list.
+    """
+    from stiracore.control.forgetting_archive import sha256_text
+
+    maintenance = MemoryMaintenance(store)
+    try:
+        maintenance.archive.prepare()
+        kinds = sorted(
+            event["kind"]
+            for event in maintenance.archive.logged()
+            if event["body"].get("id") == archive_id
+        )
+        record = maintenance.archive.load(archive_id)
+        current = store.read_text(MemoryLayer.SEMANTIC, record.key)
+        return (
+            f"ids={maintenance.archive.ids()} kinds={kinds} key={record.key!r} "
+            f"digest={None if current is None else sha256_text(current)} "
+            f"compressed={record.compressed_sha256} original={record.original_sha256}"
+        )
+    except Exception as error:  # noqa: BLE001 - a diagnosis, never the result
+        return f"diagnosis failed: {type(error).__name__}: {error}"
+    finally:
+        maintenance.archive.close()
+
+
 def test_cli_exits_non_zero_when_the_audit_line_after_a_change_fails(tmp_path, monkeypatch, capsys):
     base = tmp_path / "memory"
     config = tmp_path / "agent.json"
@@ -544,7 +575,9 @@ def test_cli_exits_non_zero_when_the_audit_line_after_a_change_fails(tmp_path, m
     assert code == 1 and undo["restored"] is True and undo["refused"] is None
     assert "injected" in undo["audit_error"]
     # The interrupted apply was completed in the log by this run before the undo.
-    assert undo["reconciled"] == [{"id": archive_id, "action": "forget.recovered"}]
+    assert undo["reconciled"] == [{"id": archive_id, "action": "forget.recovered"}], (
+        _why_not_reconciled(store, archive_id)
+    )
 
 
 def test_audit_failure_after_restore_reports_restored_and_reconciles(tmp_path, monkeypatch):
