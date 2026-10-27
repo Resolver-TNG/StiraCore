@@ -572,7 +572,11 @@ def test_wait_for_a_selector_and_a_text_then_a_timeout(form):
         ],
     )
     steps = result["steps"]
-    assert steps[1]["ok"] and 250 <= steps[1]["waited_ms"] < 2500, steps[1]
+    # The page arms its 400 ms timer in the click handler, and the wait step's own clock
+    # starts after that step returned: on a busy CI macOS runner 234 ms was measured for a
+    # wait that really did wait (#662). The bound says "it waited for the element instead of
+    # returning at once", not how fast the harness gets from one step to the next.
+    assert steps[1]["ok"] and 100 <= steps[1]["waited_ms"] < 2500, steps[1]
     assert steps[2]["ok"] and steps[2]["waited_ms"] < 500
     assert (steps[3]["ok"], steps[3]["code"]) == (False, "timeout")
     assert 400 <= steps[3]["waited_ms"] < 1500
