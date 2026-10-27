@@ -119,6 +119,7 @@ def test_precedence_env_config_default(env, section, enabled, source):
     assert settings.sources["allow"] == source
 
 
+@pytest.mark.real_yolo_clock  # offered only where the clocks were measured (conftest.py)
 @pytest.mark.parametrize("page", ["/chat?lang=en", "/stage/"])
 def test_the_default_shows_the_button_and_status_says_where_it_came_from(make_app, page):
     app = make_app()
