@@ -47,6 +47,7 @@ REQUIRED_ON = (
     "no request to any probe URL (whole session)",
     "no request other than the page APIs while the reply was shown",
     "no console error / exception while the reply was shown",
+    "every security log entry is a CSP report (the policy working)",
     "no dialog opened",
     "control: the raw SVG in the DOM does reach the probes (the monitor works)",
     "log: the reply is drawn without pictures (SVG blocks stay code)",

@@ -302,7 +302,17 @@ async function run(label, boardSvg) {
     report.requests = { total: reqs.length, api: reqs.filter((u) => u.startsWith(`${BASE}/api/`)).length, data: reqs.filter((u) => u.startsWith('data:')).length, other: foreign };
     check('no request to any probe URL (whole session)', probes.length === 0, probes);
     check('no request other than the page APIs while the reply was shown', foreign.length === 0, foreign);
-    const errors = after.filter((e) => e.method === 'Runtime.exceptionThrown' || (e.method === 'Runtime.consoleAPICalled' && e.params.type === 'error') || (e.method === 'Log.entryAdded' && e.params.entry.level === 'error'));
+    // A CSP report is the policy doing its work, not a page error: Chrome logs a security
+    // entry at error level for the hostile SVG's own inline onload ("Executing inline event
+    // handler violates the following Content Security Policy directive ..." in 156, "Refused
+    // to execute ..." before), which is exactly what must happen. Those are taken out of the
+    // error check and checked on their own: every security entry of this window must be such
+    // a CSP report, and the canary / probe checks above already prove nothing ran (#662).
+    const cspReport = (e) => e.method === 'Log.entryAdded' && e.params.entry.source === 'security' && /Content Security Policy/.test(e.params.entry.text || '');
+    const security = after.filter((e) => e.method === 'Log.entryAdded' && e.params.entry.source === 'security');
+    report.cspReports = security.filter(cspReport).map((e) => (e.params.entry.text || '').slice(0, 200));
+    check('every security log entry is a CSP report (the policy working)', security.every(cspReport), security.map((e) => (e.params.entry.text || '').slice(0, 200)));
+    const errors = after.filter((e) => !cspReport(e) && (e.method === 'Runtime.exceptionThrown' || (e.method === 'Runtime.consoleAPICalled' && e.params.type === 'error') || (e.method === 'Log.entryAdded' && e.params.entry.level === 'error')));
     report.consoleErrors = errors.map((e) => JSON.stringify(e.params).slice(0, 300));
     check('no console error / exception while the reply was shown', errors.length === 0, report.consoleErrors);
     check('no dialog opened', !events.some((e) => e.method === 'Page.javascriptDialogOpening'));
