@@ -584,10 +584,26 @@ def test_the_marker_write_is_durable_in_order(tmp_path, monkeypatch):
     from stiracore.yolo import window
 
     calls = []
+    me = threading.get_ident()
     real_flush, real_replace = window._flush, os.replace
-    monkeypatch.setattr(window, "_flush", lambda fd: (calls.append("flush"), real_flush(fd))[1])
+    # Both patches are process-wide (``window.os`` is the ``os`` module): count only the calls
+    # of this thread. One run on a CI macOS runner (public #662) listed an extra "flush"; the
+    # likely cause is a thread left over from an earlier test writing a marker meanwhile
+    # (a hypothesis, not reproduced locally), and this makes the order check independent of it.
     monkeypatch.setattr(
-        window.os, "replace", lambda a, b: (calls.append("rename"), real_replace(a, b))[1]
+        window,
+        "_flush",
+        lambda fd: (calls.append("flush") if threading.get_ident() == me else None, real_flush(fd))[
+            1
+        ],
+    )
+    monkeypatch.setattr(
+        window.os,
+        "replace",
+        lambda a, b: (
+            calls.append("rename") if threading.get_ident() == me else None,
+            real_replace(a, b),
+        )[1],
     )
     WindowMarker(tmp_path).write("open", "a" * 32, "b" * 64)
     assert calls == ["flush", "rename", "flush"]  # file, rename, directory
