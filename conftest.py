@@ -26,6 +26,26 @@ try:
 finally:
     del os.environ["STIRA_DATA_DIR"]
 
+# --- Test HTTP helpers: no reverse DNS at bind (#662) ---------------------------------
+# ``http.server.HTTPServer.server_bind`` asks ``socket.getfqdn(host)``. On a CI macOS
+# runner that reverse lookup can take tens of seconds (it blocked the fake helper servers
+# past their 20-30 s timeouts: four smoke failures and "fake model did not start"). Every
+# helper here binds 127.0.0.1 and no test reads ``server_name``, so the name is the
+# address. Product code does not use ``http.server``; subprocess helpers do the same in
+# their own source.
+import http.server as _http_server
+import socketserver as _socketserver
+
+if not getattr(_http_server.HTTPServer.server_bind, "_stira_no_reverse_dns", False):
+
+    def _server_bind(self):
+        _socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
+    _server_bind._stira_no_reverse_dns = True
+    _http_server.HTTPServer.server_bind = _server_bind
+
+
 if not getattr(FlaskClient.open, "_stira_csrf_wrapped", False):
     _original_open = FlaskClient.open
 

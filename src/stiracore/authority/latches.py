@@ -217,7 +217,7 @@ class LatchStore:
         self._dir = None if data_dir is None else Path(data_dir)
         self._lock = threading.Lock()
         self._records: list[dict] = []
-        self._identity: tuple[int, int] | None = None
+        self._identity: tuple[int, ...] | None = None
         self._bad: str | None = None
         if self._dir is None:
             return

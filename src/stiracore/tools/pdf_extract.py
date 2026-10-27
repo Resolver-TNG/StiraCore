@@ -62,7 +62,9 @@ limited = False
 try:
     import resource
     resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu))
-    if sys.platform != "darwin":  # macOS accepts RLIMIT_AS but does not enforce it
+    # macOS accepts RLIMIT_AS but does not enforce it. A limit <= 0 is no limit (as in the
+    # parent): Linux takes a negative value as a huge unsigned one, i.e. unlimited (#662).
+    if sys.platform != "darwin" and mem > 0:
         resource.setrlimit(resource.RLIMIT_AS, (mem, mem))
         limited = True
 except (ImportError, ValueError, OSError):

@@ -56,7 +56,10 @@ __all__ = [
     "EPOCH_FILE",
     "KEEP_RECORDS",
     "EpochRecord",
+    "Identity",
     "LoadResult",
+    "identity",
+    "install",
     "load",
     "next_record",
     "write",
@@ -116,7 +119,7 @@ class LoadResult:
     status: str  # missing | ok | bad
     records: tuple[EpochRecord, ...] = ()
     reason: str | None = None
-    identity: tuple[int, int] | None = None  # (st_dev, st_ino) of the file that was read
+    identity: Identity | None = None  # :func:`identity` of the file that was read
 
     @property
     def last(self) -> EpochRecord | None:
@@ -212,6 +215,46 @@ def _parse(raw: bytes) -> LoadResult:
     return LoadResult("ok", tuple(records))
 
 
+Identity = tuple[int, int, int, int]
+
+
+def identity(info: os.stat_result) -> Identity:
+    """``(st_dev, st_ino, st_size, st_ctime_ns)``: the file a writer left behind (#661).
+    The device / inode pair alone is not enough on Linux: ext4 and tmpfs hand a freed inode
+    number to the next new file at once, so a delete + recreate (any bytes) between two
+    passes would keep it. Every write, append, rename or chmod sets ``st_ctime``; a writer
+    records this value after its own last change (write, flush, rename), so only a change
+    made by someone else differs. (``grants/progress.py`` uses the same idea.)"""
+    return (info.st_dev, info.st_ino, info.st_size, info.st_ctime_ns)
+
+
+def install(fd: int, tmp: Path, path: Path) -> Identity:
+    """Rename the written temporary file ``tmp`` (open as ``fd``, closed here) over
+    ``path``; the :func:`identity` of the installed file, taken *after* the rename (a
+    rename sets ``st_ctime`` on Linux). On POSIX the descriptor stays open across the
+    rename, so the inode cannot be freed and reused before it is identified; Windows
+    cannot rename an open file, so there the path is checked to still be the written
+    file (same device / file index) right after the rename."""
+    if os.name == "posix":
+        try:
+            os.replace(tmp, path)
+            return identity(os.fstat(fd))
+        finally:
+            os.close(fd)
+    try:
+        written = os.fstat(fd)
+    finally:
+        os.close(fd)
+    os.replace(tmp, path)
+    after = os.lstat(path)
+    if not stat.S_ISREG(after.st_mode) or (after.st_dev, after.st_ino) != (
+        written.st_dev,
+        written.st_ino,
+    ):
+        raise OSError(errno.EEXIST, "replaced right after the rename", str(path))
+    return identity(after)
+
+
 def _unsafe(info: os.stat_result) -> bool:
     """Not a regular, singly linked file of this user with mode ``0600`` or tighter."""
     if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
@@ -249,7 +292,7 @@ def load(data_dir: Path) -> LoadResult:
             opened = os.fstat(fd)
         except OSError:
             return LoadResult("bad", reason="epoch_store_unreadable")
-        if _unsafe(opened) or (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+        if _unsafe(opened) or identity(opened) != identity(info):
             return LoadResult("bad", reason="epoch_store_unsafe")
         if opened.st_size > _MAX_BYTES:
             return LoadResult("bad", reason="epoch_store_malformed")
@@ -262,7 +305,7 @@ def load(data_dir: Path) -> LoadResult:
     result = _parse(raw)
     if result.status != "ok":
         return result
-    return LoadResult("ok", result.records, identity=(opened.st_dev, opened.st_ino))
+    return LoadResult("ok", result.records, identity=identity(opened))
 
 
 def _flush(fd: int) -> None:
@@ -278,9 +321,9 @@ def _flush(fd: int) -> None:
     os.fsync(fd)
 
 
-def write(data_dir: Path, records: tuple[EpochRecord, ...]) -> tuple[int, int]:
+def write(data_dir: Path, records: tuple[EpochRecord, ...]) -> Identity:
     """Replace the file with ``records`` (the newest :data:`KEEP_RECORDS`), durably; the
-    new file's ``(st_dev, st_ino)``. The caller checks the current file first
+    new file's :func:`identity`. The caller checks the current file first
     (:func:`load`): this function replaces whatever is there."""
     directory = Path(data_dir)
     path = directory / EPOCH_FILE
@@ -297,13 +340,13 @@ def write(data_dir: Path, records: tuple[EpochRecord, ...]) -> tuple[int, int]:
             while view:
                 view = view[os.write(fd, view) :]
             _flush(fd)
-            written = os.fstat(fd)
-        finally:
+        except BaseException:
             os.close(fd)
-        os.replace(tmp, path)
+            raise
+        written = install(fd, tmp, path)
     except BaseException:
         with contextlib.suppress(OSError):
             os.unlink(tmp)
         raise
     fsync_dir(directory, _flush)
-    return (written.st_dev, written.st_ino)
+    return written

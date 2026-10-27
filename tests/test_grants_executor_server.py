@@ -126,9 +126,15 @@ def test_a_persons_chat_message_signals_before_the_turn_lock(stage_c_exec):
     assert executor.preempt_signal.seq == before + 1
 
 
-def test_the_shutdown_step_joins_a_running_iteration(stage_c_exec):
+def test_the_shutdown_step_joins_a_running_iteration(stage_c_exec, monkeypatch):
     from grants_exec_helpers import Counter, ScriptedProvider, use
 
+    from stiracore.grants import executor as executor_module
+
+    # The call ends by itself (0.5 s hold) after the stop; the 0.5 s grace measured from
+    # the stop could run out on a slow runner before the rest of the call (the report
+    # tool, the end) is done, which is the "abandoned" path, not this one (#662).
+    monkeypatch.setattr(executor_module, "ABANDON_GRACE_SEC", 4.0)
     app, _data, ws = stage_c_exec
     executor = app.extensions["grant_executor"]
     hold, started = threading.Event(), threading.Event()

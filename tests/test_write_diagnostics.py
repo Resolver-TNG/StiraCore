@@ -9,6 +9,7 @@ a fake ``HOME`` and a spy proves that no system call reaches them.
 from __future__ import annotations
 
 import asyncio
+import errno
 import json
 import os
 import stat
@@ -235,9 +236,14 @@ def test_volumes_are_tcc_zones_but_volumes_itself_is_not():
 @pytest.mark.skipif(not DARWIN, reason="SIP is macOS")
 @pytest.mark.parametrize("target", ["/System/Library/stira-x.txt", "/usr/bin/stira-x"])
 def test_sip_location_is_protected_by_os(target):
-    """Measured: /System and /usr/bin answer EPERM; their folder carries SF_RESTRICTED."""
-    with pytest.raises(PermissionError) as raised:
+    """Measured: /System and /usr/bin refuse the write and their folder carries
+    SF_RESTRICTED, so the diagnosis is SIP. Which error the kernel gives depends on the
+    machine: EPERM from the restricted flag locally, EROFS on a CI macOS runner, where the
+    signed system volume is mounted read-only (#662). The flag is checked before the mount,
+    so the diagnosis is the same for both."""
+    with pytest.raises(OSError) as raised:
         open(target, "w")  # noqa: SIM115 - the OS refuses; nothing is created
+    assert raised.value.errno in (errno.EPERM, errno.EROFS)
     text = f"Error writing file: [Errno {raised.value.errno}] {raised.value.strerror}: '{target}'"
     failure = classify_write_failure("file_write", {"path": target, "content": "x"}, text)
     assert (failure.category, failure.remedy) == ("protected_by_os", "sip")
@@ -442,7 +448,10 @@ def test_responsible_process_estimates():
     launchd = probes.responsible_process(
         {"XPC_SERVICE_NAME": "com.example.stira"}, "/opt/homebrew/bin/python3", platform="darwin"
     )
-    assert launchd["kind"] == "launchd" and launchd["executable"].endswith("python3")
+    # The executable is reported resolved, and what /opt/homebrew/bin/python3 points at
+    # differs per machine (a CI runner: .../Cellar/python@3.15/.../bin/python3.15, #662).
+    assert launchd["kind"] == "launchd"
+    assert os.path.basename(launchd["executable"]).startswith("python3")
     assert probes.responsible_process({}, "/usr/bin/python3", platform="linux")["kind"] == "user"
 
 

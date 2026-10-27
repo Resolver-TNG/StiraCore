@@ -14,6 +14,10 @@ store, the lifecycle log, the outbox and the watchdog's last-pass record (W2):
   O_NONBLOCK`` (created ``0600`` with ``O_EXCL`` when missing), the descriptor checked as
   above and against the identity the caller saw last, one line written and flushed.
 
+The identity is :func:`.epoch_store.identity` — device, inode, size and ``st_ctime_ns``
+(#661: Linux reuses a freed inode number at once) — recorded by the writer after its own
+last change, so a delete + recreate by someone else differs even with the same bytes.
+
 Reason codes are ``<prefix>_unsafe`` / ``_unreadable`` / ``_malformed`` (the caller's
 parser adds its own). Nothing here repairs a file. Same limits as the epoch store: an
 unkeyed hash chain detects corruption, not tampering by the same user; the checks narrow
@@ -31,7 +35,7 @@ from pathlib import Path
 
 from stiracore.durable_dir import fsync_dir
 
-from .epoch_store import _flush, _unsafe
+from .epoch_store import Identity, _flush, _unsafe, identity, install
 
 __all__ = ["ReadResult", "Replaced", "append_line", "read", "replace"]
 
@@ -41,7 +45,7 @@ class ReadResult:
     status: str  # missing | ok | bad
     raw: bytes = b""
     reason: str | None = None
-    identity: tuple[int, int] | None = None
+    identity: Identity | None = None
 
 
 def read(path: Path, *, max_bytes: int, prefix: str) -> ReadResult:
@@ -68,7 +72,7 @@ def read(path: Path, *, max_bytes: int, prefix: str) -> ReadResult:
             opened = os.fstat(fd)
         except OSError:
             return ReadResult("bad", reason=f"{prefix}_unreadable")
-        if _unsafe(opened) or (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+        if _unsafe(opened) or identity(opened) != identity(info):
             return ReadResult("bad", reason=f"{prefix}_unsafe")
         if opened.st_size > max_bytes:
             return ReadResult("bad", reason=f"{prefix}_malformed")
@@ -88,12 +92,12 @@ def read(path: Path, *, max_bytes: int, prefix: str) -> ReadResult:
     raw = b"".join(chunks)
     if len(raw) > max_bytes:
         return ReadResult("bad", reason=f"{prefix}_malformed")
-    return ReadResult("ok", raw, identity=(opened.st_dev, opened.st_ino))
+    return ReadResult("ok", raw, identity=identity(opened))
 
 
-def replace(directory: Path, name: str, body: bytes) -> tuple[int, int]:
-    """Replace ``directory / name`` with ``body``, durably; the new ``(st_dev, st_ino)``.
-    The caller checks the current file first (:func:`read`)."""
+def replace(directory: Path, name: str, body: bytes) -> Identity:
+    """Replace ``directory / name`` with ``body``, durably; the new file's identity (taken
+    after the rename). The caller checks the current file first (:func:`read`)."""
     directory = Path(directory)
     tmp = directory / f".{name}.{os.getpid()}.{os.urandom(4).hex()}.tmp"
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
@@ -104,27 +108,27 @@ def replace(directory: Path, name: str, body: bytes) -> tuple[int, int]:
             while view:
                 view = view[os.write(fd, view) :]
             _flush(fd)
-            written = os.fstat(fd)
-        finally:
+        except BaseException:
             os.close(fd)
-        os.replace(tmp, directory / name)
+            raise
+        written = install(fd, tmp, directory / name)
     except BaseException:
         with contextlib.suppress(OSError):
             os.unlink(tmp)
         raise
     fsync_dir(directory, _flush)
-    return (written.st_dev, written.st_ino)
+    return written
 
 
 class Replaced(OSError):
     """The file is not the one the caller saw last (or is unsafe): nothing was written."""
 
 
-def append_line(path: Path, line: bytes, expected: tuple[int, int] | None) -> tuple[int, int]:
+def append_line(path: Path, line: bytes, expected: Identity | None) -> Identity:
     """Append one line (``line`` ends with ``\\n``) and flush it. ``expected`` is the
     identity the caller read or wrote last (``None``: the file must not exist yet and is
     created ``0600``). A different, unsafe or vanished file raises :class:`Replaced`;
-    any I/O failure raises ``OSError``. Returns the identity written to."""
+    any I/O failure raises ``OSError``. Returns the file's identity after the append."""
     path = Path(path)
     base = os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     created = expected is None
@@ -142,14 +146,15 @@ def append_line(path: Path, line: bytes, expected: tuple[int, int] | None) -> tu
         info = os.fstat(fd)
         if _unsafe(info):
             raise Replaced("unsafe")
-        if not created and (info.st_dev, info.st_ino) != expected:
+        if not created and identity(info) != expected:
             raise Replaced("replaced")
         view = memoryview(line)
         while view:
             view = view[os.write(fd, view) :]
         _flush(fd)
+        written = identity(os.fstat(fd))
     finally:
         os.close(fd)
     if created:
         fsync_dir(path.parent, _flush)
-    return (info.st_dev, info.st_ino)
+    return written

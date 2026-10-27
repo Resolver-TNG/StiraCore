@@ -245,7 +245,7 @@ class LifecycleRecorder:
         self._items: list[dict] = []
         self._seen: set[str] = set()
         self._acked: set[str] = set()
-        self._outbox_identity: tuple[int, int] | None = None
+        self._outbox_identity: tuple[int, ...] | None = None
         self._outbox_seen: bytes | None = None
         if self.log.unhealthy_reason is not None:
             self._bad = self.log.unhealthy_reason

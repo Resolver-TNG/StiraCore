@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import binascii
 import json
+import socketserver
 import struct
 import sys
 import threading
@@ -207,7 +208,15 @@ class FakeBedrock:
                 self.end_headers()
                 self.wfile.write(data)
 
-        self.server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+        class Server(ThreadingHTTPServer):
+            def server_bind(self):
+                # No socket.getfqdn() (#662): the reverse lookup for 127.0.0.1 can take
+                # tens of seconds on a CI macOS runner, and this process is started with a
+                # timeout by the callers that wait for the URL line below.
+                socketserver.TCPServer.server_bind(self)
+                self.server_name, self.server_port = self.server_address[:2]
+
+        self.server = Server(("127.0.0.1", port), Handler)
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
         self._thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 

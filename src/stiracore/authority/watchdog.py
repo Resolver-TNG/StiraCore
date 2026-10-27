@@ -148,7 +148,7 @@ class Watchdog:
         self._passes = 0
         self._failures = 0
         self._heartbeat_stale = False
-        self._record_identity: tuple[int, int] | None = None
+        self._record_identity: tuple[int, ...] | None = None
         self._record_seen: bytes | None = None
         self._record_bad: str | None = None
         self._pass_lock = threading.Lock()  # one pass at a time (thread, tests, shutdown)

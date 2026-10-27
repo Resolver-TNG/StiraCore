@@ -34,11 +34,12 @@ import json
 import math
 import os
 import re
+import stat
 import threading
 from pathlib import Path
 from typing import Any
 
-from . import private_file
+from . import epoch_store, private_file
 from .latches import LATCHES
 
 __all__ = [
@@ -494,8 +495,8 @@ class LifecycleLog:
         self._dir = None if data_dir is None else Path(data_dir)
         self._lock = threading.Lock()
         self._bad: str | None = None
-        self._identity: tuple[int, int] | None = None
-        self._old_identity: tuple[int, int] | None = None
+        self._identity: tuple[int, ...] | None = None
+        self._old_identity: tuple[int, ...] | None = None
         self._size = 0
         self._last_hash = _ZERO
         self._last_seq = 0
@@ -575,7 +576,16 @@ class LifecycleLog:
         from stiracore.durable_dir import fsync_dir
 
         fsync_dir(self._dir)
-        self._old_identity = self._identity
+        # A rename sets st_ctime (Linux), so the sealed segment's identity is taken again;
+        # it must still be the file this log appended to last (#661).
+        moved = os.lstat(self._dir / OLD_LOG_FILE)
+        if (
+            self._identity is None
+            or not stat.S_ISREG(moved.st_mode)
+            or (moved.st_dev, moved.st_ino, moved.st_size) != self._identity[:3]
+        ):
+            raise private_file.Replaced("replaced")
+        self._old_identity = epoch_store.identity(moved)
         self._old_digest = self._cur_hash.hexdigest()
         self._old_size = self._size
         self._identity = None

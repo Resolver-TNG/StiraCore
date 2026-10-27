@@ -429,8 +429,19 @@ def test_the_version_check_holds_under_threads(tmp_path):
 
     ex._outcomes = deque(maxlen=4 * writes)  # both grants' rows stay (the real one keeps 5)
 
+    # Every ``pause`` writes, both writers stop at a barrier shared with a prober. The
+    # prober then reads both boards while no write is open: those reads must succeed and
+    # must be of one version. The two racing readers run all along, but on a busy 4-vCPU
+    # runner a write can be open at every one of their reads (all "busy"), so the
+    # version check is asserted on the prober's deterministic reads (#662).
+    pause = 100
+    stopped, go = threading.Barrier(3, timeout=30), threading.Barrier(3, timeout=30)
+
     def writer(gid):
         for n in range(1, writes + 1):
+            if n % pause == 0:
+                stopped.wait()
+                go.wait()
             with ex._board_write():
                 with ex._lock:
                     ex._last[gid] = {"state": "idle", "number": n, "end": "done", "detail": "",
@@ -455,19 +466,40 @@ def test_the_version_check_holds_under_threads(tmp_path):
             else:
                 counts["good"] += 1
 
+    probed = []
+
+    def prober():
+        for _ in range(writes // pause):
+            stopped.wait()
+            try:
+                for gid in gids:
+                    for _attempt in range(100_000):  # busy only while a racing reader
+                        try:  # holds the lock for its snapshot (no write is open)
+                            out = ex.board(gid)
+                            break
+                        except BoardBusy:
+                            continue
+                    last = out["outcomes"][-1]["number"] if out["outcomes"] else 0
+                    probed.append(out["iteration"]["number"] == last)
+            finally:
+                go.wait()
+
     interval = sys.getswitchinterval()
     sys.setswitchinterval(1e-6)
     try:
         threads = [threading.Thread(target=writer, args=(g,)) for g in gids]
         threads += [threading.Thread(target=reader, args=(k,)) for k in range(2)]
+        threads.append(threading.Thread(target=prober))
         for thread in threads:
             thread.start()
         for thread in threads:
             thread.join(60)
     finally:
         sys.setswitchinterval(interval)
+    assert not any(thread.is_alive() for thread in threads)
     assert not mixed, mixed[:3]
-    assert counts["good"] > 0 and counts["good"] + counts["busy"] == 2 * reads
+    assert probed and all(probed) and len(probed) == 2 * (writes // pause)
+    assert counts["good"] + counts["busy"] == 2 * reads
     assert ex.board_seq() % 2 == 0 and ex._board_open == 0
 
 

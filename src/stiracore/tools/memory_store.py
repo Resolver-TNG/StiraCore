@@ -70,6 +70,12 @@ class MemoryStore:
         self.memory_dir = self.base_dir / "agents" / agent_id / "memory"
         self.read_only_paths: set[str] = set(DEFAULT_READ_ONLY_PATHS) | set(read_only_paths or ())
         self._reject_links(self.memory_dir)
+        # Resolved once (#662): ``base_dir`` is already resolved and the walk above proved
+        # that no component from it down to the memory directory is a link, so this is the
+        # memory directory itself. Every later containment check compares against this
+        # value instead of resolving the root again on each read (Windows: each resolve is
+        # a syscall chain per component, and the recall tests do 100k+ of them).
+        self._memory_root = self.memory_dir.resolve()
         for layer in MemoryLayer:
             directory = self.memory_dir / layer.value
             self._reject_links(directory)
@@ -151,7 +157,10 @@ class MemoryStore:
         directory = self.memory_dir / layer.value
         path = directory.joinpath(*parts[:-1], f"{parts[-1]}.md")
         self._reject_links(path)
-        if not path.resolve().is_relative_to(self.memory_dir.resolve()):
+        # The key has no ``..`` or separator (:meth:`_validate_key`) and the walk above
+        # proved that no component from the resolved ``base_dir`` down to the entry is a
+        # link, so ``path.resolve()`` is ``path``: the containment check is lexical (#662).
+        if not path.is_relative_to(self._memory_root):
             raise ValueError("Memory entries must remain inside the memory directory.")
         return path
 
@@ -363,7 +372,7 @@ class MemoryStore:
         self._reject_links(path.parent)
         path.parent.mkdir(parents=True, exist_ok=True)
         self._reject_links(path.parent)
-        if not path.parent.resolve().is_relative_to(self.memory_dir.resolve()):
+        if not path.parent.is_relative_to(self._memory_root):  # link-free: see :meth:`_path`
             raise ValueError("Memory entries must remain inside the memory directory.")
 
         kept_times: tuple[int, int] | None = None
@@ -457,7 +466,10 @@ class MemoryStore:
         for path in sorted(directory.rglob("*.md")):
             if path.is_symlink() or not path.is_file():
                 continue
-            self._reject_links(path)
+            # No walk per entry (#662: six lstat calls each, 1.1M in the recall tests):
+            # ``rglob`` does not descend into a symlinked directory, so no component below
+            # the layer directory can be a link, the layer directory and its ancestors were
+            # checked just above, and every read of the key walks the whole path again.
             yield path.relative_to(directory).with_suffix("").as_posix()
 
     def count_entries(self, layer: MemoryLayer, *, exclude_prefix: str | None = None) -> int:
