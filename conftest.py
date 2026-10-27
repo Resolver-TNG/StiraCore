@@ -153,7 +153,8 @@ def _yolo_clock_gate_measured_off_macos(request, monkeypatch):
 # and holds ``server.lock`` until the process exits. A test process builds hundreds of
 # apps: each kept its SQLite connections (with -wal/-shm) and its lock descriptor open,
 # ~14 descriptors per app, which exhausted the macOS runner's limit of 256 (EMFILE).
-# After each test the ``atexit`` stops it registered run (idempotent) and are removed,
+# After each test the app ``atexit`` stops it registered (``stiracore`` / ``dashboard``
+# functions only) run (idempotent) and are removed,
 # and the data-directory locks it took are released. Higher-scoped fixtures are untouched.
 
 
@@ -168,7 +169,9 @@ def _close_what_the_test_built(monkeypatch):
     real_register, real_acquire = atexit.register, owner_lock.OwnerLockFile.acquire
 
     def register(function, *args, **kwargs):
-        registered.append(function)
+        # Only the app's own stops: pytest's (tmp_path cleanup) and others stay at exit.
+        if getattr(function, "__module__", "").startswith(("stiracore", "dashboard", "stira_server")):
+            registered.append(function)
         return real_register(function, *args, **kwargs)
 
     def acquire(self, *args, **kwargs):
