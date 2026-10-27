@@ -170,7 +170,9 @@ def _close_what_the_test_built(monkeypatch):
 
     def register(function, *args, **kwargs):
         # Only the app's own stops: pytest's (tmp_path cleanup) and others stay at exit.
-        if getattr(function, "__module__", "").startswith(("stiracore", "dashboard", "stira_server")):
+        if getattr(function, "__module__", "").startswith(
+            ("stiracore", "dashboard", "stira_server")
+        ):
             registered.append(function)
         return real_register(function, *args, **kwargs)
 
