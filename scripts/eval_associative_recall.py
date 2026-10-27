@@ -145,7 +145,8 @@ def evaluate() -> dict[str, Any]:
     """Run the fixture; returns rates per (state, ON/OFF) and per query (keys only)."""
     topics = {key: topic for key, topic, _text in EPISODES}
     with tempfile.TemporaryDirectory() as tmp:
-        store = build_store(Path(tmp))
+        # the real path: the memory store refuses a symlink anywhere in its path (macOS /var)
+        store = build_store(Path(os.path.realpath(tmp)))
         out: dict[str, Any] = {"episodes": len(EPISODES), "queries": len(QUERIES)}
         for state_name, values in STATES.items():
             state = _state(values)

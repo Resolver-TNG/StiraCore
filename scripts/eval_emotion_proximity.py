@@ -477,7 +477,8 @@ def _cost(root: Path):
 def evaluate(*, with_cost: bool = False) -> dict:
     """Both fixture versions (prereg §3 and "Changes and deviations"), and the cost."""
     with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp)
+        # the real path: the memory store refuses a symlink anywhere in its path (macOS /var)
+        root = Path(os.path.realpath(tmp))
         result = {
             "v1": _evaluate_store(*build_store(root)),
             "v2_hard": _evaluate_store(*build_store(root, hard=True)),
