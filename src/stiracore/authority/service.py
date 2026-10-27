@@ -105,7 +105,7 @@ class AuthorityService(AuthorityBoundary):
         self._data_dir = None if data_dir is None else Path(data_dir)
         self._io_lock = threading.Lock()
         self._records: tuple[epoch_store.EpochRecord, ...] = ()
-        self._identity: tuple[int, int] | None = None  # the file this service wrote last
+        self._identity: tuple[int, ...] | None = None  # the file this service wrote last
         self._persisted = 0
         self._reasons: deque[tuple[int, str]] = deque(maxlen=_REASONS_KEPT)
         # Settlement (all under the leaf lock). Every narrowing queues one batch

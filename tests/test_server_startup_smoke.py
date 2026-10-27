@@ -198,7 +198,16 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
-HTTPServer(("127.0.0.1", int(os.environ["STIRA_PORT"])), Handler).serve_forever()
+class Server(HTTPServer):
+    def server_bind(self):
+        # HTTPServer.server_bind asks socket.getfqdn(), a reverse DNS lookup that can take
+        # longer than the smoke's whole timeout on a CI macOS runner (#662); not needed here.
+        import socketserver
+
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
+Server(("127.0.0.1", int(os.environ["STIRA_PORT"])), Handler).serve_forever()
 """
 
 
@@ -293,7 +302,14 @@ def test_redirects_are_not_followed(tmp_path, monkeypatch) -> None:
         def log_message(self, *args):
             pass
 
-    target = HTTPServer(("127.0.0.1", 0), Target)
+    class Quick(HTTPServer):
+        def server_bind(self):  # no socket.getfqdn() (slow on a CI macOS runner)
+            import socketserver
+
+            socketserver.TCPServer.server_bind(self)
+            self.server_name, self.server_port = self.server_address[:2]
+
+    target = Quick(("127.0.0.1", 0), Target)
     Thread(target=target.serve_forever, daemon=True).start()
     try:
         smoke, _ = _fake(tmp_path, monkeypatch, "redirect", target.server_address[1])

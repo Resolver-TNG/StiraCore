@@ -548,11 +548,23 @@ def _load_script():
     return mod
 
 
+def _rounded(value):
+    """Floats to 12 decimals: Python 3.12's ``sum()`` of floats is compensated (Neumaier),
+    so a macro average can differ from the committed 3.11 run in the last bit (#662)."""
+    if isinstance(value, float):
+        return round(value, 12)
+    if isinstance(value, dict):
+        return {key: _rounded(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_rounded(item) for item in value]
+    return value
+
+
 def test_committed_results_recompute_from_committed_files():
     mod = _load_script()
     committed = json.loads((OUT / "results.json").read_text("utf-8"))
     again = mod.build_results(DATA, OUT, committed["splits"])
-    assert again == committed
+    assert _rounded(again) == _rounded(committed)
     assert (OUT / "report.md").read_text("utf-8") == mod.render_report(committed)
 
 

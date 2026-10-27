@@ -132,7 +132,7 @@ class GrantStore:
         self._lock = threading.Lock()  # I/O lock: never taken under the service's lock
         self._bad: str | None = None
         self._records: list[dict] = []
-        self._identity: tuple[int, int] | None = None
+        self._identity: tuple[int, ...] | None = None
         self._raw: bytes | None = None
         self._loaded = False
 

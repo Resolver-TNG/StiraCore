@@ -166,3 +166,54 @@ def test_a_path_outside_the_root_is_checked_from_the_filesystem_root(tmp_path, o
         MemoryStore._reject_symlinks(base / "link" / "note.md", root=root)
     with pytest.raises(MemorySymlinkError):  # ".." never shortens the walk
         MemoryStore._reject_symlinks(root / ".." / "link" / "note.md", root=root)
+
+
+# --- the swap race: between the path check and the open (#662) -------------------------
+# A read checks the components, then opens without following a link. These two plant the
+# link in the window between the two steps (the race the checks are there for), one on the
+# entry itself and one on a parent directory. The parent case is why the read walks the
+# components again *after* the open: ``O_NOFOLLOW`` refuses a link only as the last
+# component, and the identity compare cannot see it either (the open and the stat both
+# follow the same swapped parent to the same file).
+
+
+def _swap_when_opened(monkeypatch, path, swap):
+    """Run ``swap`` once, just before the store opens ``path``."""
+    real_open, done = os.open, []
+
+    def opening(target, *args, **kwargs):
+        if not done and os.fspath(target) == os.fspath(path):
+            done.append(swap() or True)
+        return real_open(target, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", opening)
+    return done
+
+
+def test_an_entry_swapped_for_a_link_just_before_the_open_is_refused(
+    tmp_path, outside, monkeypatch
+):
+    store = _built(tmp_path)
+    path = store._path(EPISODIC, "e1")
+    done = _swap_when_opened(monkeypatch, path, lambda: _swap_for_link(path, outside / "note.md"))
+
+    with pytest.raises(MemorySymlinkError):
+        store.read_text(EPISODIC, "e1")
+
+    assert done  # the link really was planted inside the window
+    _untouched(outside)
+
+
+def test_a_parent_swapped_for_a_link_just_before_the_open_is_refused(
+    tmp_path, outside, monkeypatch
+):
+    store = _built(tmp_path)
+    path = store._path(EPISODIC, "e1")
+    (outside / "e1.md").write_text(f"{SECRET}\n", encoding="utf-8")
+    done = _swap_when_opened(monkeypatch, path, lambda: _swap_for_link(path.parent, outside))
+
+    with pytest.raises(MemorySymlinkError):
+        store.read_text(EPISODIC, "e1")
+
+    assert done
+    assert sorted(p.name for p in outside.iterdir()) == ["e1.md", "note.md"]

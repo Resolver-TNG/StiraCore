@@ -265,6 +265,12 @@ Overview, how to try it and the known limits: docs/autonomy.md.
 - **Dependencies** — `strands-agents-tools` is held below 0.8.10 (`>=0.8.0,<0.8.10`): the
   exec bridge refuses a release it was not audited against (0.8.9), so a fresh install
   got 0.8.10 and no exec-class tools. Deliberate until a newer release is audited (#296).
+- **Authority and grant stores** — a delete + recreate of the epoch store, latch store,
+  lifecycle log, outbox, watchdog record or grant store is now detected on Linux too: the
+  file identity is device, inode, size and `st_ctime_ns` (recorded by the writer after its
+  own write and rename), not device and inode alone, which ext4 and tmpfs reuse at once
+  (#661). An outside append to the lifecycle log is now caught at the next append
+  (`lifecycle_log_replaced`), not only at the watchdog's next pass.
 
 - **Schedules** — Resume on `/schedules` with the default browser confirmation channel opens the
   confirmation (checkbox) dialog after the resume dialog instead of answering "Cancelled; nothing

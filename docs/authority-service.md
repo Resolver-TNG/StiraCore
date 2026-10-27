@@ -39,8 +39,14 @@ starts is therefore always `(incarnation, epoch)`, never the epoch alone.
 
 The file is read without following a symlink and without blocking (a FIFO), and the
 opened descriptor is checked again (regular file, this user, mode `0600`, one link, the
-same device and inode as the path). Before every replace the current file is read again
-and must be exactly the one this service wrote last; otherwise nothing is written.
+same device, inode, size and change time as the path). Before every replace the current
+file is read again and must be exactly the one this service wrote last — the same bytes
+and the same device, inode, size and `st_ctime_ns`, recorded after its own write and
+rename — otherwise nothing is written. The change time is part of the identity because
+Linux (ext4, tmpfs) gives a freed inode number to the next new file at once: a delete and
+recreate with the same bytes keeps the inode number but not the change time (#661). The
+same identity is used by the latch store, the lifecycle log, the outbox, the watchdog's
+record and the grant store.
 
 | Reason code | Meaning |
 |---|---|

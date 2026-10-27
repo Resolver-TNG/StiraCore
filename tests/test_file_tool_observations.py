@@ -542,17 +542,34 @@ def test_a_target_swapped_for_a_symlink_reports_the_requested_bytes(
     assert hashlib.sha256(other.read_bytes()).hexdigest() not in _everything(result)
 
 
+_HELD: list = []
+
+
+def _recreate_with_the_same_bytes(target: Path) -> None:
+    """Delete the written file and write the same bytes into a new one. The old file is
+    held open until the test ends, so its inode number stays taken: Linux (ext4, tmpfs)
+    would otherwise give that number to the new file at once, and "another file with the
+    same bytes" would not be another inode (#662)."""
+    _HELD.append(open(target, "rb"))  # noqa: SIM115 - closed by the test
+    target.unlink()
+    target.write_text("mine", encoding="utf-8")
+
+
 @pytest.mark.parametrize(
     ("swap", "reason"),
     [
-        (lambda t: (t.unlink(), t.write_text("mine", encoding="utf-8")), "target_changed"),
+        (_recreate_with_the_same_bytes, "target_changed"),
         (lambda t: t.write_text("changed", encoding="utf-8"), "content_differs"),
         (lambda t: os.link(t, t.with_name("second-link")), "target_changed"),
     ],
 )
 def test_other_swaps_are_not_verified(policy, ws, monkeypatch, swap, reason):
     _swap_then_observe(monkeypatch, swap)
-    result = _run(_tools(policy)["file_write"], {"path": "swap.txt", "content": "mine"})
+    try:
+        result = _run(_tools(policy)["file_write"], {"path": "swap.txt", "content": "mine"})
+    finally:
+        while _HELD:
+            _HELD.pop().close()
     observed = _block(result, OBSERVATION_MARKER)
     assert observed["sha256"] == hashlib.sha256(b"mine").hexdigest()
     assert (observed["verified"], observed["verify_error"]) == (False, reason)

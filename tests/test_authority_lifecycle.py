@@ -781,9 +781,14 @@ def test_an_outbox_replaced_behind_the_recorder_is_not_overwritten(tmp_path):
     recorder.post(event())
     recorder.drain()
     path = tmp_path / OUTBOX_FILE
-    other = LifecycleRecorder(tmp_path)  # a second writer replaces the file
+    # A second writer's outbox replaces the file (only the outbox: since #661 an outside
+    # append to the lifecycle log is caught first, as lifecycle_log_replaced).
+    other_dir = tmp_path / "other"
+    other_dir.mkdir()
+    other = LifecycleRecorder(other_dir)
     other.post(event(epoch=9))
     other.drain()
+    os.replace(other_dir / OUTBOX_FILE, path)
     before = path.read_bytes()
     reported = []
     recorder._on_failure = reported.append
