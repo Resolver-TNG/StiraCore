@@ -85,10 +85,12 @@ async function waitFor(fn, ms = 20000, step = 150) {
 
 async function fakeModel() {
   const p = start(PY, [path.join(ROOT, 'tests/fake_bedrock_endpoint.py'), '0'], { cwd: ROOT });
-  let out = '';
+  let out = '', err = '';
   p.stdout.on('data', (d) => (out += d));
+  p.stderr.on('data', (d) => (err += d));
   const url = await waitFor(async () => (out.match(/on (http:\/\/127\.0\.0\.1:\d+)/) || [])[1]);
-  if (!url) throw new Error('fake model did not start');
+  // The reason, not just the fact (#662: a bind that waited for reverse DNS looked the same).
+  if (!url) throw new Error(`fake model did not start (exit ${p.exitCode}): ${out.slice(-400)}${err.slice(-800)}`);
   return url;
 }
 

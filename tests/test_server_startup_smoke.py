@@ -303,7 +303,7 @@ def test_redirects_are_not_followed(tmp_path, monkeypatch) -> None:
             pass
 
     class Quick(HTTPServer):
-        def server_bind(self):  # no socket.getfqdn() (slow on a CI macOS runner)
+        def server_bind(self):  # no socket.getfqdn(): see conftest.py (#662)
             import socketserver
 
             socketserver.TCPServer.server_bind(self)
