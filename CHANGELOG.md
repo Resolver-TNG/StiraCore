@@ -273,7 +273,7 @@ Overview, how to try it and the known limits: docs/autonomy.md.
   (two new tests) (#662).
 - **CI (Windows)** — the full test suite runs to the end on Windows now, but several hundred
   tests still fail there (path semantics, the scheduler, grants progress, timing). The
-  Windows "Run tests" step is informational (`continue-on-error`) until that has its own
+  Windows pytest steps ("Run tests" and "Provider extras") are informational (`continue-on-error`) until that has its own
   round (#662); Ubuntu (3.11, 3.12) and macOS stay blocking, and the smoke and PowerShell
   control-script tests run on Windows as before. Windows is not a verified platform.
 - **PDF extraction** — a memory limit of zero or less is no longer taken as an enforced

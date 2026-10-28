@@ -55,9 +55,9 @@ yet. Known gaps on current `main`:
   call) or `llm` ([memory maintenance](docs/memory-maintenance.md)).
 - **Platforms.** Developed on macOS (Apple Silicon). The CI workflow runs the offline test suite
   on Ubuntu (Python 3.11 and 3.12) and macOS (3.11) — these are blocking — and a server start-up
-  smoke plus the PowerShell control-script tests on Windows. **On Windows the full test suite also
-  runs, but it is informational only (`continue-on-error`): several hundred tests still fail
-  there** (path semantics, the scheduler, grants progress, timing; tracked in
+  smoke plus the PowerShell control-script tests on Windows. **On Windows the pytest steps (the full suite and the
+  provider extras) also run, but they are informational only (`continue-on-error`): several
+  hundred tests still fail there** (path semantics, the scheduler, grants progress, timing; tracked in
   Issue #662 of this repository), so Windows is **not** a verified
   platform yet. Beyond CI, Linux was checked by hand only in a VM for the
   [EC2 reference setup](docs/deploy-ec2.md) (its AWS parts unverified), and Windows not at all

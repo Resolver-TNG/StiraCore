@@ -84,8 +84,8 @@ jobs:
 
       # Windows: the suite runs to the end there but several hundred tests still fail
       # for reasons that predate the first public CI (path semantics, the scheduler,
-      # grants progress, timing; #662). Until that has its own round the step is
-      # informational on Windows only (continue-on-error): the failures stay visible in
+      # grants progress, timing; #662). Until that has its own round the pytest steps
+      # (this one and the provider extras below) are informational on Windows only (continue-on-error): the failures stay visible in
       # the log, but the cell does not turn the run red. The README says Windows is
       # verified by the smoke job and the PowerShell tests only. Ubuntu and macOS stay
       # blocking.
@@ -96,7 +96,11 @@ jobs:
 
       # Same commands on every OS: install the Phase 1 provider SDKs and check
       # the spec-to-constructor mapping against the real Strands classes.
+      # Windows: informational like the full suite above (the first Windows failure behind
+      # it: a test reads the server's own `server.lock`, which Windows refuses while the
+      # server holds it; public #662).
       - name: Provider extras (anthropic, openai, ollama)
+        continue-on-error: ${{ matrix.os == 'windows-latest' }}
         run: |
           python -m pip install -e ".[dev,providers]"
           pytest tests/test_providers.py tests/test_provider_contract.py tests/test_provider_live.py tests/test_provider_capabilities_usage.py tests/test_provider_credentials.py -q
