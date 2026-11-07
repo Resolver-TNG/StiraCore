@@ -33,6 +33,7 @@ docs/adr/0005-context-management.md for the reasoning and what differs).
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import math
@@ -309,19 +310,31 @@ def _summarizing_manager(settings: ContextManagementSettings, summary_model: Any
 
     from stiracore.agent.prompt_cache import neutralize_runtime_markers
 
+    # strands-agents 1.64 added ``invocation_context`` (where the summary call's usage is
+    # booked) to both the manager method and ``generate_summary``. Older SDKs have neither,
+    # so it is passed on only when the installed helper takes it.
+    context_kwarg = "invocation_context" in inspect.signature(generate_summary).parameters
+
     class _StiraSummarizing(SummarizingConversationManager):
         """The SDK manager; the summary call uses the configured, uncached model.
 
         The summary is derived from user and tool text, so look-alikes of the
         injected ``<system-reminder>`` / ``<recalled-memory>`` tags are defanged.
+
+        This overrides a private SDK method, so its signature has to follow the SDK's
+        (``tests/test_context_management.py`` compares the two).
         """
 
-        def _generate_summary_with_model(self, messages, agent):
+        def _generate_summary_with_model(self, messages, agent, invocation_context=None):
             from strands._async import run_async
 
+            extra = {"invocation_context": invocation_context} if context_kwarg else {}
             message = run_async(
                 lambda: generate_summary(
-                    messages, summary_model or agent.model, self.summarization_system_prompt
+                    messages,
+                    summary_model or agent.model,
+                    self.summarization_system_prompt,
+                    **extra,
                 )
             )
             return {

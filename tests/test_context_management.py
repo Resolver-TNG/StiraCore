@@ -389,6 +389,34 @@ class SummaryAwareFake(FakeModel):
             yield event
 
 
+def test_summarizing_override_accepts_what_the_installed_sdk_passes():
+    """The manager overrides a private SDK method; a new SDK argument must not break it.
+
+    strands-agents 1.64 started passing ``invocation_context`` as a third argument, which a
+    two-argument override turned into a swallowed TypeError ("Proactive summarization
+    failed, continuing") and silently switched summarization off.
+    """
+    import inspect
+
+    from strands.agent.conversation_manager import SummarizingConversationManager
+
+    from stiracore.agent.context_management import _summarizing_manager
+
+    sdk = inspect.signature(SummarizingConversationManager._generate_summary_with_model)
+    ours = inspect.signature(
+        _summarizing_manager(ContextManagementSettings(), None)._generate_summary_with_model
+    )
+    # bound method: ``self`` is already gone on ours, so compare without the SDK's ``self``
+    sdk_params = [name for name in sdk.parameters if name != "self"]
+    assert list(ours.parameters)[: len(sdk_params)] == sdk_params, (
+        sdk_params,
+        list(ours.parameters),
+    )
+    # and every extra SDK argument must be optional on our side
+    for name in sdk_params[2:]:
+        assert ours.parameters[name].default is not inspect.Parameter.empty, name
+
+
 def test_summarizes_at_the_threshold_and_keeps_identity_and_recent_messages(tmp_path):
     soul = "I am Resolver. A test SOUL."
     model = SummaryAwareFake([text_turn(f"answer {i}") for i in range(4)])

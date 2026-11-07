@@ -255,6 +255,7 @@ Overview, how to try it and the known limits: docs/autonomy.md.
 
 ### Fixed
 
+- **Approve / edit of an approval card is no longer refused by a finished sibling of a parallel batch (#668).** The running-tool-call guard (ADR 0012 §8b) counted every call from `BeforeToolCall` to `AfterToolCall`; in a parallel batch a sibling that had already returned stayed counted until the batch ended, and the batch cannot end before the pending card is decided, so Approve answered 409 `tool_call_running` and only Deny worked. Calls of tools that cannot reach the admin API (`file_read`, `file_write`, `editor`, `journal`, `current_time`, `image_reader`) are no longer counted; every other name — `http_request`, `shell`, `batch`, MCP and any tool not listed — still is (fail closed).
 - **Memory store** — a symbolic link *above* the configured memory root (macOS `/tmp` and
   `/var`, a symlinked home or project folder, `STIRA_CHAT_DATA_DIR` or a `--base-dir` under
   them) no longer refuses the store with `MemorySymlinkError`: the ancestors are the

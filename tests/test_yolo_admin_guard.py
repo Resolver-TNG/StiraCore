@@ -13,7 +13,7 @@ import pytest
 from stiracore.observability.config_api import ConfigStore
 from stiracore.tools.tool_config import RECOVER_WORD
 from stiracore.yolo import runtime
-from stiracore.yolo.admin_guard import ToolCallTracker, reserved_keys
+from stiracore.yolo.admin_guard import ADMIN_UNREACHABLE_TOOLS, ToolCallTracker, reserved_keys
 from stiracore.yolo.allowance import YoloSettings
 from stiracore.yolo.routes import SAVE_PATH_PREFIXES
 from tests.yolo_host import confirmed_post
@@ -376,3 +376,59 @@ def test_tracker_drops_leftovers_at_the_end_of_the_invocation():
     assert tracker.running() == 1
     tracker.after_invocation(Mock(agent=agent))
     assert tracker.running() == 0
+
+
+# --- #668: a finished sibling of a parallel batch must not block Approve ----------------
+
+
+def _before(tracker, name, agent=None):
+    event = Mock(
+        tool_use={"name": name, "toolUseId": name}, agent=agent or object(), cancel_tool=False
+    )
+    tracker.before_tool(event)
+    return event
+
+
+@pytest.mark.parametrize("name", sorted(ADMIN_UNREACHABLE_TOOLS))
+def test_tools_that_cannot_reach_the_admin_api_are_not_counted(name):
+    tracker = ToolCallTracker()
+    _before(tracker, name)
+    assert tracker.running() == 0
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "http_request",
+        "shell",
+        "batch",
+        "use_agent",
+        "swarm",
+        "graph",
+        "cron",
+        "mcp_client_tool",
+        "some_new_tool",
+        "",
+    ],
+)
+def test_every_other_tool_is_still_counted_fail_closed(name):
+    tracker = ToolCallTracker()
+    _before(tracker, name)
+    assert tracker.running() == 1
+
+
+def test_unreachable_set_holds_no_network_or_exec_tool():
+    from stiracore.tools.tool_consent import EXEC_TOOLS
+
+    assert not ADMIN_UNREACHABLE_TOOLS & (EXEC_TOOLS | {"http_request", "rss", "speak", "memory"})
+
+
+def test_a_finished_read_sibling_does_not_block_while_a_real_call_still_does():
+    tracker = ToolCallTracker()
+    _before(
+        tracker, "file_read"
+    )  # the sibling that already returned: its After is not delivered yet
+    _before(tracker, "journal")
+    assert tracker.running() == 0  # Approve of the pending card goes through
+    _before(tracker, "http_request")  # a call that could reach the admin API is still executing
+    assert tracker.running() == 1

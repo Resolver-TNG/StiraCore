@@ -14,7 +14,9 @@ authors = [
 ]
 
 dependencies = [
-    "strands-agents>=1.57.1",
+    # Upper bound = the newest minor this repository was last tested against (weekly canary:
+    # .github/workflows/canary.yml, #673). Raise it after the canary passes on the newer one.
+    "strands-agents>=1.57.1,<1.65",
     # Held below 0.8.10: the exec bridge refuses a release it was not audited against
     # (tool_consent.VERIFIED_EXEC_UPSTREAM = 0.8.9). Raise only together with an audit.
     "strands-agents-tools>=0.8.0,<0.8.10",
@@ -39,12 +41,13 @@ dashboard = ["flask>=3.1"]
 # web_fetch reads PDF text (#585); the parser runs in a separate, bounded process.
 pdf = ["pypdf>=5"]
 dev = [
-    "pytest>=8.0",
+    "pytest>=8.0,<10",
     "pytest-cov>=5.0",
     "pytest-asyncio>=0.24",
     # Per-test timeout so one hung subprocess test cannot stall a whole run (#540 §4).
     "pytest-timeout>=2.3",
-    "ruff>=0.8",
+    # Pinned to one minor: a new ruff release adds rules (RUF022 on 2026-11-06) and turns Lint red.
+    "ruff>=0.17.4,<0.18",
     "flask>=3.1",
     "pillow>=12.1.1,<13",
     # The PDF tests of web_fetch (#585) parse real PDFs; the [pdf] extra itself stays optional.
@@ -55,9 +58,9 @@ bedrock = [
 ]
 # Model providers other than Bedrock (#204). Each maps onto the Strands extra;
 # llama.cpp needs none (its client is httpx, a core dependency).
-anthropic = ["strands-agents[anthropic]>=1.57.1"]
-openai = ["strands-agents[openai]>=1.57.1"]
-ollama = ["strands-agents[ollama]>=1.57.1"]
+anthropic = ["strands-agents[anthropic]>=1.57.1,<1.65"]
+openai = ["strands-agents[openai]>=1.57.1,<1.65"]
+ollama = ["strands-agents[ollama]>=1.57.1,<1.65"]
 gemini = ["strands-agents[gemini]>=1.57.1"]
 litellm = ["strands-agents[litellm]>=1.57.1"]
 mistral = ["strands-agents[mistral]>=1.57.1"]

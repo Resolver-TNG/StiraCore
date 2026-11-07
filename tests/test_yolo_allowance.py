@@ -143,6 +143,7 @@ def test_settings_are_read_once(monkeypatch):
 def _fake_time(implementation="mach_absolute_time()", monotonic_clock=True):
     return SimpleNamespace(
         CLOCK_MONOTONIC=6,
+        CLOCK_BOOTTIME=7,
         clock_gettime=lambda _id: 123.0,
         get_clock_info=lambda _name: SimpleNamespace(
             implementation=implementation, monotonic=monotonic_clock
@@ -159,7 +160,38 @@ def test_measured_platform_with_both_clocks_is_supported():
     assert (reading.wall, reading.boot, reading.mono) == (1000.0, 123.0, 100.0)
 
 
-@pytest.mark.parametrize("platform", ["linux", "win32", "cygwin", "freebsd14"])
+LINUX_IMPLEMENTATION = "clock_gettime(CLOCK_MONOTONIC)"
+
+
+def test_linux_with_boottime_and_monotonic_is_supported():
+    """Measured 2026-11-07 (ADR 0012 §7 addendum): B = CLOCK_BOOTTIME, U = CLOCK_MONOTONIC."""
+    support = clock_support("linux", _fake_time(LINUX_IMPLEMENTATION))
+    assert support.supported and support.reason is None and support.platform == "linux"
+    reading = read_clocks("linux", _fake_time(LINUX_IMPLEMENTATION))
+    assert (reading.wall, reading.boot, reading.mono) == (1000.0, 123.0, 100.0)
+
+
+def test_linux_is_not_offered_without_boottime_or_with_another_monotonic():
+    no_boottime = _fake_time(LINUX_IMPLEMENTATION)
+    del no_boottime.CLOCK_BOOTTIME
+    assert clock_support("linux", no_boottime).reason == "clock_unavailable"
+    # the macOS implementation string is not what Linux reports: not the measured host
+    assert clock_support("linux", _fake_time("mach_absolute_time()")).reason == "clock_unexpected"
+    # a monotonic that is not a monotonic clock
+    assert clock_support(
+        "linux", _fake_time(LINUX_IMPLEMENTATION, monotonic_clock=False)
+    ).reason == ("clock_unexpected")
+
+
+@pytest.mark.parametrize("platform", ["linux", "darwin"])
+def test_a_sleep_including_clock_behind_the_other_is_not_offered(platform):
+    implementation = LINUX_IMPLEMENTATION if platform == "linux" else "mach_absolute_time()"
+    behind = _fake_time(implementation)
+    behind.clock_gettime = lambda _id: 50.0  # B (50) behind U (100): not as measured
+    assert clock_support(platform, behind).reason == "clock_unexpected"
+
+
+@pytest.mark.parametrize("platform", ["win32", "cygwin", "freebsd14"])
 def test_unmeasured_platforms_are_not_offered(platform):
     support = clock_support(platform, _fake_time())
     assert not support.supported and support.reason == "clock_not_measured"
@@ -183,6 +215,17 @@ def test_missing_or_unexpected_clock_is_not_offered():
     )
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="measured on Linux (ADR 0012 §7 addendum)")
+def test_this_linux_matches_the_measurement():
+    import time
+
+    assert clock_support().supported
+    reading = read_clocks()
+    # CLOCK_BOOTTIME is CLOCK_MONOTONIC plus the time spent suspended: B is never behind U.
+    assert reading.boot >= reading.mono - 1
+    assert time.get_clock_info("monotonic").implementation == LINUX_IMPLEMENTATION
+
+
 @pytest.mark.skipif(sys.platform != "darwin", reason="measured on macOS only (ADR 0012 §7)")
 def test_this_mac_matches_the_measurement():
     import time
@@ -199,7 +242,7 @@ def test_status_reports_clock_support_and_offers_nothing(monkeypatch):
     try:
         from stiracore.yolo import allowance
 
-        monkeypatch.setattr(runtime, "clock_support", lambda: allowance.clock_support("linux"))
+        monkeypatch.setattr(runtime, "clock_support", lambda: allowance.clock_support("win32"))
         body = runtime.status()
         assert body["allowance"] == "internal"
         assert body["offered"] is False

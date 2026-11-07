@@ -4,8 +4,7 @@
 **Status:** **Accepted** (revision 8, operator decision of 2026-10-19 12:28: exec is
 chosen at the press — §9 **option C**; the breaker pauses and resumes after 10 min of NORMAL
 — Open (1) **P**, as implemented; the destination only as a keyed hash — Open (10) **(b)**;
-tier external needs a second checkbox — Open (13) **(a)**; **v1 is macOS only** (Linux:
-a separate issue, §7); the v1 promise is "**no six-hour wait on approval cards**" — leaving
+tier external needs a second checkbox — Open (13) **(a)**; **v1 is macOS only; Linux added 2026-11-07, §7 addendum**; the v1 promise is "**no six-hour wait on approval cards**" — leaving
 Stira fully unattended belongs to #299 / phase 8. **Implemented: phases 0–7** (7a: exec in
 the backend, "As implemented (phase 7a)" in §9; 7b: the exec choice in the UI, §12; 7c: the
 values also from `gateway-config.json` and the settings page, §1). History of
@@ -518,6 +517,24 @@ Contract:
 * A request's 2-minute expiry uses the same clocks; a confirmation after it is refused.
 * Rollback cannot replay a window: nothing is read back, and every token carries the
   incarnation.
+
+**Addendum 2026-11-07 — Linux** (#678; Open (14) revised: "measured before it is offered").
+The same contract with `B` = `CLOCK_BOOTTIME` (counts the time spent suspended) and `U` = `time.monotonic`
+= `clock_gettime(CLOCK_MONOTONIC)` (does not). Measured, like the macOS row, **without triggering a sleep**:
+
+| Host | Kernel / Python | `time.get_clock_info("monotonic").implementation` | `CLOCK_BOOTTIME` | `BOOTTIME − MONOTONIC` |
+|---|---|---|---|---|
+| DGX Spark (Ubuntu 24.04.4, aarch64) | 6.17.0-1029-nvidia / 3.12.3 | `clock_gettime(CLOCK_MONOTONIC)` | present | 0.0 s after ~86 days up (never suspended) |
+| Ubuntu 24.04 container on aarch64 (colima) | host VM kernel / 3.11 | `clock_gettime(CLOCK_MONOTONIC)` | present | — |
+| Ubuntu 24.04 container on x86_64 (NAS CI image) | host kernel / 3.11, 3.12 | `clock_gettime(CLOCK_MONOTONIC)` | present | — |
+
+`clock_support()` offers a platform only if the named clock exists, `time.monotonic` reports the measured
+implementation, and `B` is not behind `U` (a host where it is does not behave as measured: `clock_unexpected`).
+Not measured, so not offered: Windows, and WSL / virtual machines whose guest clock can stop while the host
+sleeps (the `W` against `B` anomaly check still ends such a window, but the platform is not claimed).
+**Not exercised:** an actual suspend / resume on Linux (the DGX Spark runs training and is not put to sleep);
+the contract rests on the documented kernel semantics of the two clocks. To see what a host reports:
+`python -c "from stiracore.yolo.allowance import clock_support; print(clock_support())"`.
 
 ### 8. The agent cannot open, extend or widen it — through Stira
 

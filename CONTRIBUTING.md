@@ -18,6 +18,23 @@ Thank you for your interest. StiraCore is pre-alpha; interfaces still change.
 Python 3.11 or later ([install](docs/install.md) covers Linux, macOS and Windows). In a venv:
 `python -m pip install -e '.[dashboard,dev]'`.
 
+Linux without GitHub minutes: `ci/linux/` runs the Linux half of CI in containers on a Docker host (about 8 minutes on a
+small NAS, see [ci/linux/README.md](ci/linux/README.md)) — use it before opening a pull request when the hosted CI
+quota is short (#677).
+
+Keep the venv in step with CI. CI installs what `pyproject.toml` allows, a venv that was set up weeks ago does not
+follow it, and a check that passes only on an old venv hides what CI will report (the strands-agents 1.64 case, #672).
+Before you trust a local result, and after any change to `pyproject.toml`:
+
+```bash
+python -m pip install -U -e '.[dashboard,dev]'
+python -m pip list | grep -iE '^(strands-agents|strands-agents-tools|ruff|pytest) '
+```
+
+The upper bounds on `strands-agents`, `ruff` and `pytest` are the newest versions the repository was last tested
+with. A weekly workflow (`.github/workflows/canary.yml`) lifts them and runs the Linux suite; raise a bound after
+that run passes on the newer version.
+
 Checks to run before a pull request (the same gates as CI):
 
 ```bash

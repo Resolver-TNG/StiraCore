@@ -86,8 +86,8 @@ compatible wheels; do not install every optional dependency to silence warnings.
 ## 4. Windows (PowerShell)
 
 > **Not verified on Windows** for the `dashboard` extra and the start-up smoke
-> (`scripts/smoke_server.py`). The steps below are unchanged; the CI's
-> `windows-latest` cell runs the same smoke when CI runs.
+> (`scripts/smoke_server.py`). The steps below are unchanged; Windows is best effort and
+> outside CI and the guarantee (#662, #677), so nothing runs the smoke there; the maintainer checks it by hand when a Windows machine is at hand.
 
 Install Python 3.11+ with the Python launcher (`py`) and Git for Windows. Reopen
 PowerShell after installation. These examples select Python 3.11 explicitly.
@@ -372,7 +372,7 @@ and temp directory are one temporary directory, removed afterwards; the checkout
 an allow-list of environment variables (no credentials, `AWS_*` or proxy settings
 from your shell); requests go to 127.0.0.1 only, without proxies or redirects.
 
-CI runs the same command in its `smoke` job on ubuntu, macOS and Windows: a
+CI runs the same command in its `smoke` job on ubuntu (and on macOS for pushes to main): a
 read-only token (`permissions: contents: read`), `persist-credentials: false`, no
 secrets, triggered by `push`/`pull_request` (not `pull_request_target`).
 Remaining: the actions are pinned by tag, like the test job; pin them by commit SHA

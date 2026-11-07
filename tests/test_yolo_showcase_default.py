@@ -34,7 +34,10 @@ YOLO_ENV = (
     "STIRA_YOLO_HOST_CONFIRM",
     "STIRA_ENABLE_EXEC_TOOLS",
 )
-MAC = sys.platform == "darwin"  # the only platform whose clocks were measured (§7)
+CLOCKS_MEASURED = sys.platform in (
+    "darwin",
+    "linux",
+)  # the platforms whose clocks were measured (§7)
 
 
 @pytest.fixture(autouse=True)
@@ -132,7 +135,7 @@ def test_the_default_shows_the_button_and_status_says_where_it_came_from(make_ap
     assert body["allowance"] == "external"
     assert body["sources"]["allow"] == "default"
     assert body["exec_offered"] is False
-    assert body["offered"] is MAC, body["unavailable"]
+    assert body["offered"] is CLOCKS_MEASURED, body["unavailable"]
     # Nothing is approved before a press: no request, no window, nothing latched.
     assert body["request"] is None and body["window"] is None and body["latched"] is False
 

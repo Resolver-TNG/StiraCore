@@ -54,15 +54,15 @@ yet. Known gaps on current `main`:
 - **`distiller_mode: "jev"` is a stub**: every episode fails. Use `rule` (the default, no model
   call) or `llm` ([memory maintenance](docs/memory-maintenance.md)).
 - **Platforms.** Developed on macOS (Apple Silicon). The CI workflow runs the offline test suite
-  on Ubuntu (Python 3.11 and 3.12) and macOS (3.11) — these are blocking — and a server start-up
-  smoke plus the PowerShell control-script tests on Windows. **On Windows the pytest steps (the full suite and the
-  provider extras) also run, but they are informational only (`continue-on-error`): several
-  hundred tests still fail there** (path semantics, the scheduler, grants progress, timing; tracked in
-  Issue #662 of this repository), so Windows is **not** a verified
-  platform yet. Beyond CI, Linux was checked by hand only in a VM for the
+  on Ubuntu (Python 3.11 and 3.12) for every pull request and on macOS (3.11) for pushes to main and manual runs
+  — both blocking. **Windows is best effort, outside CI and outside the guarantee:** the code
+  is written to run there and fixes are welcome, but nothing tests it automatically (its pytest steps were informational
+  only, several hundred tests still failed: path semantics, the scheduler, grants progress, timing; Issue #662) and it is
+  checked by hand only when the maintainer has a Windows machine at hand. Treat Windows as **not** a verified
+  platform. Beyond CI, Linux was checked by hand only in a VM for the
   [EC2 reference setup](docs/deploy-ec2.md) (its AWS parts unverified), and Windows not at all
   (`stira_ctl.ps1`, the chat server; no `shell` or `cron` tool there). The YOLO window is
-  offered on macOS only (the one platform whose clocks were measured), and the per-OS tool table
+  offered on macOS and Linux (the platforms whose clocks were measured, ADR 0012 §7; Windows and virtual machines that pause are not), and the per-OS tool table
   is from source inspection, not an OS test run ([install §4, §6, §11](docs/install.md)).
 - **Model providers.** Amazon Bedrock (the default) is the provider of every real-model run
   documented here. The other Strands providers (Ollama, llama.cpp, OpenAI, Anthropic, Gemini, …)
@@ -87,8 +87,7 @@ Amazon Bedrock); the Stage art in them is CC BY 4.0 ([License](#license)).
 ## Status
 
 🚧 **Early development (`0.1.0.dev0`)** — APIs and integration points may still change.
-The CI matrix needs no cloud account: Ubuntu (Python 3.11 / 3.12), macOS and Windows
-(Python 3.11). Built on:
+The CI matrix needs no cloud account: Ubuntu (Python 3.11 / 3.12) and macOS (Python 3.11). Built on:
 
 - [Strands SDK](https://github.com/strands-agents/sdk-python) (agent/tool/model abstraction)
 - Stira (collapse detection + circuit breaker), an earlier OpenClaw adapter and a decision

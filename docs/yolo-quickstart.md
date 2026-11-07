@@ -52,8 +52,8 @@ window without a restart.
 Pick any free port (`STIRA_PORT`). Add `STIRA_STAGE=1` for the Stage page. `external`
 instead of `internal` also offers "External allowed" in the dialog. The start-up log says
 `YOLO allowance: internal (...)` (with the default: one line `YOLO: the Start YOLO button is
-offered (default; ...)`). YOLO needs a platform whose clocks were measured (macOS
-today); elsewhere the badge says why it is unavailable.
+offered (default; ...)`). YOLO needs a platform whose clocks were measured (macOS and
+Linux, ADR 0012 §7); elsewhere the badge says why it is unavailable.
 
 To try it without any model call: `STIRA_YOLO_ALLOW=internal STIRA_STAGE=1 STIRA_PORT=5612
 .venv/bin/python tests/stira_yolo_harness.py /tmp/yolo-try` — every message makes a

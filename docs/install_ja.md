@@ -86,8 +86,8 @@ pip がネイティブのソースビルドへ切り替わる場合は、Xcode C
 ## 4. Windows（PowerShell）
 
 > `dashboard` extra と起動スモーク（`scripts/smoke_server.py`）は **Windows では
-> 未検証**です。以下の手順は変えていません。CI が動けば `windows-latest` のセルで
-> 同じスモークを実行します。
+> 未検証**です。以下の手順は変えていません。Windows はベストエフォートで CI と保証の対象外のため（#662、#677）、
+> このスモークはどこでも自動では動きません。メンテナーが Windows 機を使えるときに手作業で確認します。
 
 Python ランチャー（`py`）付きの Python 3.11 以上と Git for Windows を導入し、
 PowerShell を開き直します。以下は Python 3.11 を明示的に選ぶ例です。

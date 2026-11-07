@@ -303,8 +303,15 @@ def parse_settings(
 
 # Platforms whose clocks were measured (ADR 0012 §7): the sleep-including monotonic clock
 # by name, and the implementation ``time.monotonic`` must report (sleep-excluding).
-# Linux (CLOCK_BOOTTIME), Windows, containers and VMs are not measured yet: not offered.
-_MEASURED = {"darwin": ("CLOCK_MONOTONIC", "mach_absolute_time()")}
+#  * macOS: CLOCK_MONOTONIC counts sleep, time.monotonic (mach_absolute_time) does not (2026-10-18).
+#  * Linux: CLOCK_BOOTTIME counts suspend, time.monotonic is clock_gettime(CLOCK_MONOTONIC), which
+#    does not (measured 2026-11-07 on Ubuntu 24.04: DGX Spark aarch64 / Python 3.12.3, and an
+#    Ubuntu 24.04 container on aarch64 and x86_64 / Python 3.11; ADR 0012 §7 addendum). No sleep was
+#    triggered in either measurement; Windows, WSL and VMs that pause are not measured: not offered.
+_MEASURED = {
+    "darwin": ("CLOCK_MONOTONIC", "mach_absolute_time()"),
+    "linux": ("CLOCK_BOOTTIME", "clock_gettime(CLOCK_MONOTONIC)"),
+}
 
 
 @dataclass(frozen=True)
@@ -325,12 +332,17 @@ def clock_support(platform: str | None = None, time_module: Any = _time) -> Cloc
     if clock_id is None:
         return ClockSupport(False, "clock_unavailable", platform)
     try:
-        time_module.clock_gettime(clock_id)
+        boot = time_module.clock_gettime(clock_id)
         info = time_module.get_clock_info("monotonic")
+        mono = time_module.monotonic()
     except (OSError, ValueError, AttributeError):
         return ClockSupport(False, "clock_unavailable", platform)
     if getattr(info, "implementation", None) != implementation or not info.monotonic:
         # time.monotonic is not the sleep-excluding clock that was measured.
+        return ClockSupport(False, "clock_unexpected", platform)
+    if boot < mono - 1.0:
+        # The sleep-including clock is never behind the sleep-excluding one (it is that clock plus
+        # the time spent asleep); a host where it is does not behave as measured.
         return ClockSupport(False, "clock_unexpected", platform)
     return ClockSupport(True, None, platform)
 

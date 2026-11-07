@@ -12,7 +12,8 @@ call is running is refused (409 ``tool_call_running``). It holds the plain case:
 of the agent (``http_request`` with the CSRF token, an MCP client) calling the admin API
 during its own call. It is **not** a proof that a person sent the request: a request
 delivered after the call ended (a delayed send, a process the call left behind) passes.
-The human channel is the host confirmation of phase 2. Narrowing operations (reject,
+Calls of tools that cannot reach the admin API (:data:`ADMIN_UNREACHABLE_TOOLS`, #668)
+are not counted. The human channel is the host confirmation of phase 2. Narrowing operations (reject,
 pause, cancel, a tightening save, stop) are never refused.
 """
 
@@ -31,6 +32,7 @@ from strands.hooks import (
 )
 
 __all__ = [
+    "ADMIN_UNREACHABLE_TOOLS",
     "RESERVED_PREFIX",
     "RESERVED_REFUSAL_CODE",
     "TOOL_CALL_REFUSAL_CODE",
@@ -42,6 +44,17 @@ RESERVED_PREFIX = "yolo"
 RESERVED_REFUSAL_CODE = "yolo_not_settable"
 TOOL_CALL_REFUSAL_CODE = "tool_call_running"
 _MAX_DEPTH = 12
+
+# Tools whose own call cannot reach the admin API (#668): local file / time tools with no network
+# client, no process spawn and no admin client. They are not counted by the running-call guard,
+# because a sibling of a parallel batch stays "running" until the batch ends and the batch cannot
+# end before a pending approval card is decided, so counting them made Approve unreachable.
+# The criterion is the guard's own: a tool that could call ``/api/*`` during its call
+# (``http_request``, ``shell``, ``batch``, MCP, ``use_agent`` ...) must stay counted. A name that
+# is not in this set is counted (fail closed): add a name only after reading what the tool does.
+ADMIN_UNREACHABLE_TOOLS = frozenset(
+    {"file_read", "file_write", "editor", "journal", "current_time", "image_reader"}
+)
 
 
 def _reserved(name: Any) -> bool:
@@ -79,6 +92,10 @@ class ToolCallTracker(HookProvider):
     AfterToolCall — or, if the SDK skipped that (an interrupt), at the end of the agent
     invocation. Counting a call another hook cancels later is fail-closed: the admin
     operation is refused for that moment, and the person retries.
+
+    A call of a tool in :data:`ADMIN_UNREACHABLE_TOOLS` is not counted at all (#668): it
+    cannot call the admin API, and in a parallel batch its AfterToolCall is delivered only
+    when the batch ends, which waits for the very approval card the person is deciding.
     """
 
     def __init__(self) -> None:
@@ -92,6 +109,9 @@ class ToolCallTracker(HookProvider):
 
     def before_tool(self, event: BeforeToolCallEvent) -> None:
         if event.cancel_tool:
+            return
+        name = event.tool_use.get("name") if isinstance(event.tool_use, Mapping) else None
+        if name in ADMIN_UNREACHABLE_TOOLS:
             return
         with self._lock:
             self._calls[id(event.tool_use)] = (event.tool_use, event.agent)
