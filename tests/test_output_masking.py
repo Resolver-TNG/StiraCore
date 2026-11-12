@@ -19,6 +19,7 @@ import asyncio
 import io
 import json
 import logging
+import os
 import sqlite3
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -76,6 +77,7 @@ def _dump(path) -> str:
 def run(tmp_path_factory):
     """One server, two turns: a tool turn with a secret reply, then a failing turn."""
     from dashboard import stira_server
+    from stiracore.yolo import runtime as yolo_runtime
 
     monkeypatch = pytest.MonkeyPatch()
     root = tmp_path_factory.mktemp("masking")
@@ -89,6 +91,13 @@ def run(tmp_path_factory):
     )
     monkeypatch.setattr(stira_server, "DATA_DIR", data)
     monkeypatch.setattr(stira_server, "model_kwargs", lambda *a, **k: {"model": model})
+    # A module fixture is set up before the per-test fixtures of the root conftest, so
+    # ``STIRA_YOLO_ALLOW=off`` is not there yet, and the YOLO settings are parsed once per
+    # process: this server is built without the allowance, like every other test's, and
+    # what it parsed is dropped again below (#737).
+    if "STIRA_YOLO_ALLOW" not in os.environ:
+        monkeypatch.setenv("STIRA_YOLO_ALLOW", "off")
+    yolo_runtime._reset_for_tests()
     log = io.StringIO()
     factory = logging.getLogRecordFactory()
     # The server's own log wiring (main() does this before the app exists).
@@ -129,6 +138,7 @@ def run(tmp_path_factory):
         }:
             for masking in [f for f in handler.filters if isinstance(f, MaskingFilter)]:
                 handler.removeFilter(masking)
+        yolo_runtime._reset_for_tests()
         monkeypatch.undo()
     yield SimpleNamespace(
         model=model,
@@ -148,6 +158,15 @@ def test_the_scenario_really_carried_every_secret(run):
     assert TOOL_SECRET in tool_results
     assert "NXPAgent chat failed" in run.log
     assert ("delta", {"text": f"your token is {REPLY_SECRET}"}) in _sse(run.first)
+
+
+def test_the_module_server_leaves_no_process_wide_yolo_state(run):
+    """#737: the fixture builds its app before the per-test ``STIRA_YOLO_ALLOW=off`` exists,
+    and the YOLO settings are parsed once per process: left behind, every later app in the
+    same process (another test file) answered 428 ``host_confirmation_required``."""
+    from stiracore.yolo import runtime
+
+    assert runtime.current() is None and runtime.desk() is None
 
 
 def test_server_log_masks_the_exception_and_its_traceback(run):

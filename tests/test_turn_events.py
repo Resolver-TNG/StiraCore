@@ -1,4 +1,6 @@
 import json
+import random
+import sqlite3
 import threading
 import time
 from types import SimpleNamespace
@@ -9,12 +11,15 @@ from flask import Flask
 from stiracore.core import HITLAction, HITLDecision
 from stiracore.observability.chat_api import HITLApprovalBroker, create_chat_blueprint
 from stiracore.observability.hooks import ObservabilityEvent
+from stiracore.observability.masking import mask_secrets
 from stiracore.observability.turn_events import (
     PREVIEW_LIMIT,
     SCHEMA_VERSION,
     TurnEventRecorder,
     TurnEventStore,
     UIEventSink,
+    make_preview,
+    sanitize_data,
     validate_event,
 )
 
@@ -152,6 +157,163 @@ def test_ui_event_sink_carries_a_tool_failure_code(tmp_path):
     assert "result_code" not in second
 
 
+# --- #702: 保存時に data の文字列値をすべてマスクする(ID 欄だけ除外) ---------------
+
+# (secret-looking text, the part that must not survive)
+_SECRETS_702 = [
+    ("AKIAABCDEFGHIJKLMNOP", "ABCDEFGHIJKLMNOP"),
+    ("Bearer abc.def-ghi_123", "abc.def-ghi_123"),
+    ("sk-a1B2c3D4e5F6g7H8", "a1B2c3D4e5F6g7H8"),
+]
+_SECRET_IDS_702 = ["aws", "bearer", "sk"]
+# An identifier that mask_secrets rewrites (long, mixed case and digits).
+_REACTIVE_ID = "tooluse_k9ZJ4lvQ7mR2J6eA1yJE5GI8l7QxW3"
+_DATA_ID_KEYS = ["tool_use_id", "request_id", "supersedes", "report_id", "call_id"]
+_FIELDS_702 = ("name", "exception_type", "result_code", "reason", "model", "new_field")
+
+
+def _stored_rows(path) -> str:
+    """The ``payload`` column as it is on disk (a second connection, not the store)."""
+    conn = sqlite3.connect(path)
+    try:
+        rows = conn.execute("SELECT payload FROM ui_events ORDER BY id").fetchall()
+    finally:
+        conn.close()
+    return "\n".join(row[0] for row in rows)
+
+
+def _shape(value):
+    """``value`` with every string replaced by a marker: what masking must not change."""
+    if isinstance(value, dict):
+        return {key: _shape(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_shape(item) for item in value]
+    return "<str>" if isinstance(value, str) else value
+
+
+def _random_data(rng, secret, depth=0):
+    roll = rng.random()
+    if depth < 3 and (depth == 0 or roll < 0.25):
+        return {rng.choice(_FIELDS_702): _random_data(rng, secret, depth + 1) for _ in range(3)}
+    if depth < 3 and roll < 0.45:
+        return [_random_data(rng, secret, depth + 1) for _ in range(rng.randint(1, 3))]
+    if roll < 0.8:
+        return rng.choice(["", "plain text", secret, f"x {secret} y", f"{secret}\nnext line"])
+    return rng.choice([0, 7, 1.5, True, False, None])
+
+
+@pytest.mark.parametrize(("secret", "needle"), _SECRETS_702, ids=_SECRET_IDS_702)
+def test_the_secret_samples_are_forms_mask_secrets_detects(secret, needle):
+    assert needle not in mask_secrets(secret)
+    assert mask_secrets(_REACTIVE_ID) != _REACTIVE_ID
+
+
+@pytest.mark.parametrize(("secret", "needle"), _SECRETS_702, ids=_SECRET_IDS_702)
+def test_ui_event_sink_masks_the_fields_beside_the_previews(tmp_path, secret, needle):
+    """#702: name / exception_type / result_code は呼び出し側しだいだった。"""
+    path = tmp_path / "t.db"
+    recorder = TurnEventRecorder(TurnEventStore(path))
+    seen = []
+    recorder.subscribe(seen.append)  # what the SSE stream gets
+    recorder.active.set("t1")
+    sink = UIEventSink(recorder)
+    sink.emit(
+        ObservabilityEvent(event_type="tool.started", tool_name=f"tool {secret}", tool_use_id="u1")
+    )
+    sink.emit(
+        ObservabilityEvent(
+            event_type="tool.completed",
+            tool_name=f"tool {secret}",
+            tool_use_id="u1",
+            status="error",
+            attributes={
+                "result_status": "error",
+                "exception_type": f"Boom({secret})",
+                "result_code": f"code {secret}",
+            },
+        )
+    )
+    assert [e["type"] for e in seen] == ["tool_call.created", "tool_call.updated"]
+    store = recorder.store
+    returned = json.dumps([seen, store.events("t1"), store.tail(5), store.events_after(0)])
+    assert needle not in returned
+    assert needle not in _stored_rows(path)
+    assert [e["data"]["tool_use_id"] for e in store.events("t1")] == ["u1", "u1"]
+    assert store.events("t1")[1]["data"]["status"] == "error"
+
+
+@pytest.mark.parametrize("seed", range(40))
+@pytest.mark.parametrize(("secret", "needle"), _SECRETS_702, ids=_SECRET_IDS_702)
+def test_any_string_value_of_the_data_is_masked_when_saved(tmp_path, secret, needle, seed):
+    """性質テスト(#702): ID 以外のどの欄・どの深さの文字列にも秘密は残らない。"""
+    rng = random.Random(702 * 1000 + seed)
+    data = _random_data(rng, secret)
+    data["deep"] = {"list": [{"text": secret}, [f"nested {secret}"]]}
+    path = tmp_path / "t.db"
+    store = TurnEventStore(path)
+    event = store.append("t1", "turn.started", data)
+    assert needle not in json.dumps(event)
+    assert needle not in json.dumps(store.events("t1"))
+    assert needle not in _stored_rows(path)
+    # Numbers, booleans, None and the structure are untouched; strings stay strings.
+    assert _shape(event["data"]) == _shape(data)
+    # Masking again (the Langfuse exporter does) changes nothing.
+    assert mask_secrets(event["data"]) == event["data"]
+    assert sanitize_data(event["data"]) == event["data"]
+
+
+@pytest.mark.parametrize("key", _DATA_ID_KEYS)
+def test_id_fields_of_the_data_are_kept_as_they_are(tmp_path, key):
+    store = TurnEventStore(tmp_path / "t.db")
+    data = {key: _REACTIVE_ID, "note": _REACTIVE_ID, "inner": {key: _REACTIVE_ID}}
+    saved = store.append("t1", "turn.started", data)["data"]
+    assert saved[key] == _REACTIVE_ID
+    # Not an id field, or not at the top of the data: masked like any other string.
+    assert saved["note"] == saved["inner"][key] == mask_secrets(_REACTIVE_ID)
+    assert store.events("t1")[0]["data"] == saved
+
+
+@pytest.mark.parametrize("key", _DATA_ID_KEYS)
+def test_an_id_field_that_is_not_one_token_is_masked(key):
+    """The exemption is for identifiers only: text with spaces, or a non-string, is not one."""
+    secret, needle = _SECRETS_702[1]
+    for value in (secret, f"id {secret}", {"x": secret}, [secret], "a\nb " + secret):
+        assert needle not in json.dumps(sanitize_data({key: value}))
+
+
+def test_secret_named_fields_are_masked_whole_and_numbers_are_kept():
+    data = {
+        "password": "hunter2",
+        "token_count": 5,
+        "note": None,
+        "ok": True,
+        "limits": {"api_key": ["plain", 1, {"x": "y"}], "ratio": 0.5},
+    }
+    assert sanitize_data(data) == {
+        "password": "***",
+        "token_count": 5,
+        "note": None,
+        "ok": True,
+        "limits": {"api_key": ["***", 1, {"x": "***"}], "ratio": 0.5},
+    }
+
+
+def test_preview_masking_is_unchanged_by_the_data_mask():
+    preview = {"api_key": "zzz", "q": "Bearer abc.def " + "x" * 3000}
+    data = sanitize_data(
+        {"input_preview": preview, "output_preview": "AKIAABCDEFGHIJKLMNOP", "name": "n"}
+    )
+    assert data["input_preview"] == make_preview(preview)[0]
+    assert len(data["input_preview"]) == PREVIEW_LIMIT
+    assert data["output_preview"] == make_preview("AKIAABCDEFGHIJKLMNOP")[0] == "AKIA****"
+    assert data["truncated"] is True
+    assert data["name"] == "n"
+    assert sanitize_data({"input_preview": None, "output_preview": "short"}) == {
+        "input_preview": None,
+        "output_preview": "short",
+    }
+
+
 def test_hitl_broker_approval_events():
     seen = []
     broker = HITLApprovalBroker(on_event=lambda t, d: seen.append((t, d)))
@@ -224,6 +386,29 @@ def test_chat_emits_ui_events(tmp_path):
     types = [e["type"] for e in replay["events"]]
     assert types == ["turn.summary", "breaker.transition", "turn.completed"]
     assert client.get("/api/turns?limit=x").status_code == 400
+
+
+def test_chat_turn_summary_text_is_masked_in_sse_and_the_turn_api(tmp_path):
+    """#702: turn.summary の自由文も、SSE の ui_event・/api/turns・保存行に秘密を残さない。"""
+    secret, needle = _SECRETS_702[2]
+    path = tmp_path / "t.db"
+    recorder = TurnEventRecorder(TurnEventStore(path))
+    summary = {
+        "category": f"praise {secret}",
+        "emotion_transcription": f"said {secret}",
+        "breaker": "normal",
+    }
+    client = _client(recorder, summary=summary)
+    body = client.post("/api/chat", json={"message": "hi"}).get_data(True)
+    ui = [d for n, d in _parse(body) if n == "ui_event"]
+    assert "turn.summary" in [e["type"] for e in ui]
+    assert needle not in json.dumps(ui)
+    turns = client.get("/api/turns?limit=5").get_json()["turns"]
+    assert needle not in json.dumps(turns)
+    replay = client.get(f"/api/turns/{turns[0]['turn_id']}/events").get_json()
+    assert [e["type"] for e in replay["events"]] == [e["type"] for e in ui]
+    assert needle not in json.dumps(replay)
+    assert needle not in _stored_rows(path)
 
 
 def test_chat_failure_still_completes(tmp_path):

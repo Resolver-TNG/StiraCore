@@ -901,7 +901,14 @@ frames per pose at 60 fps); the player (`js/motion.js`) interprets data only.
 
 **Free hands are paused (2026-10-18, the commander: 「マグが無い方の手は無理に描写しない」).**
 - The only hand she shows is the one that holds the mug: `mug`, `mug_up` / `mug_lift` /
-  `mug_sip` / `mug_low` / `mug_down`, so lifting, drinking and lowering stay.
+  `mug_sip` / `mug_low` / `mug_down`, so lifting, drinking and lowering stay. The lift has
+  in-betweens (#739): `mug_rise` (rest → `mug_up`), `mug_up2` (`mug_up` → `mug_lift`),
+  `mug_lift2` (`mug_lift` → `mug_sip`) — the same hand moved half the step; `sip` and
+  `await_mug` pass through them. The moved mug hand comes out of a loose knit cuff
+  (`char_arms.LOOSE_*`, #739: wider than the heel of the hand, set at the heel in every
+  pose), so no bare wrist shows; the coat's sleeve opens behind it, below the frame's edge.
+  While the mug is on its way to her mouth or at it the eyes stay open (soft, down on the
+  mug) and no blink falls there (`motion.js` `DRINKING`).
 - No motion uses a free arm frame (`motion_catalog.PAUSED_ARMS`):
   - right: `type1`, `type2`, `cross`, `ponder_cross`;
   - left: `point`, `wave1`, `wave2`, `raise`, `chin`, `chin_in`, `pen`, `cross`,
@@ -942,9 +949,9 @@ frames per pose at 60 fps); the player (`js/motion.js`) interprets data only.
 | `await_mug` | rule 3 | loop 6.0 s (intro 2.00 s), exit 0.30 s | Waiting for the commander's answer (an approval is pending): asks with a tilt of the head, then rests with the mug lowered in her hands (reference 08: 解析待ち・休息) — soft eyes on us, a glance at the mug, now and then a small sip. |
 | `peer` | rule 7 | loop 3.6 s (intro 0.30 s), exit 0.20 s | The web is searched or fetched (the magnifier at the window): turns toward it and leans in to read, eyes narrowed, the mouth a little open; now and then she squints closer and pulls back (reference 07 / 08). |
 | `head_tilt` | props (`$gadget`); agent (selectable) | loop 2.6 s (intro 0.30 s), exit 0.20 s | Tilts the head (asking, or curious about something outside); ears uneven. |
-| `sip` | rule 15; agent (selectable) | 2.7 s | Brings the mug to the mouth, tilts it and drinks with closed eyes, lowers it, breathes out. |
+| `sip` | rule 15; agent (selectable) | 2.7 s | Brings the mug to the mouth, tilts it and drinks with soft eyes down on the mug (never closed), lowers it, breathes out. |
 | `alert` | rule 2; after `surprised` | loop 3.6 s (intro 0.60 s), exit 0.30 s | Straightens up, eyes sharp, ears up; scans left and right while the breaker is up. |
-| `relief` | rule 4; props (`$gadget`) | 2.6 s | Breathes in, then the shoulders drop and relax; eyes close and open soft; a small smile. |
+| `relief` | rule 4; props (`$gadget`) | 2.6 s | Breathes in, then the shoulders drop and relax; the eyes lower and soften (never closed), then look up again; a small smile. |
 | `slump` | rule 16; props (`$gadget`) | 3.4 s | Disappointed: the head drops, shoulders fall, eyes downcast, the ears flattened (`droop`) and the tail low; recovers slowly. |
 | `surprised` | rule 1 | 1.4 s → alert | Startled: jumps up a little, eyes wide with small pupils, the ears flick (`twitch1` → `twitch2`) and stand straight up, the tail up, a shock mark. |
 | `smug` | rule 12 | 2.6 s, then `sip` | Tests passed and the turn is done: chest out and chin up (`straight`, `up1`) with closed eyes and a small smile, then a side glance under half-closed lids, ears perked, the tail up, the mug in hand (ドヤ顔, reference 05; the crossed arms are paused). |

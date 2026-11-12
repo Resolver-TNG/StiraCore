@@ -42,7 +42,9 @@ The Discord/Slack runtime (`integrations/runtime.py`) does not use it.
 
 1. **Terms.** The message is cut into terms by script: runs of katakana, runs of kanji,
    Latin words (3+ characters), numbers (3+ digits). A short stop-word list and the
-   speaker labels (`マスター`, `リゾルバ`) are skipped. No morphological analyser.
+   speaker labels (`マスター`, `リゾルバ`, and the labels set in `episode_labels`) are
+   skipped; a label is cut the same way, so each term of `My Master` is skipped. No
+   morphological analyser.
 2. **Seed.** Of the terms that appear in at least one episode, the one in the fewest
    episodes (the most specific shared term); ties: longer, then earlier. A term in more
    than half of the window (labels, names, front-matter words) is only a seed if nothing

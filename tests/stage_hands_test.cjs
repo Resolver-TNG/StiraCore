@@ -16,7 +16,7 @@ const json = (n) => JSON.parse(fs.readFileSync(path.join(CHAR, n), 'utf8'));
 const png = (n) => decodePng(fs.readFileSync(path.join(CHAR, n)));
 const CALM = { trust: 0.5, curiosity: 0.5, vigilance: 0.1, attachment: 0.5, stability: 0.7, satisfaction: 0.5 };
 // the mug comes up to her mouth in these (drinking): that hand may be in front of the face
-const DRINKING = new Set(['mug_up', 'mug_lift', 'mug_sip']);
+const DRINKING = new Set(['mug_up', 'mug_up2', 'mug_lift', 'mug_lift2', 'mug_sip']);
 
 async function frames() {
   const { buildMotions, MOTIONS, PAUSED_MOTIONS } = await load('motion_catalog.js');
@@ -98,4 +98,33 @@ test('drawn, the frames have no free arm pixels and no hand in front of her face
     if (!DRINKING.has(f.armR)) assert.equal(face, 0, `${id} at ${t.toFixed(2)} s: a hand in front of her face (${f.armR})`);
   }
   assert.ok(checked > 100, `${checked} front frames drawn`);
+});
+
+// (#739, the commander 2026-11-12) the eyes stay open while she drinks: no motion closes or
+// half-closes them with the mug on its way to her mouth or at it, and no blink falls there.
+test('the eyes stay open while the mug is at her mouth (no closed / half eyes in the data, no blink)', async () => {
+  const { buildMotions, MOTIONS } = await load('motion_catalog.js');
+  const { MotionPlayer } = await load('motion.js');
+  const { partIds } = await load('char_rig.js');
+  let drinking = 0;
+  for (const { id, t, f } of await frames()) {
+    if (!DRINKING.has(f.armR)) continue;
+    drinking += 1;
+    assert.ok(f.eyes !== 'closed' && f.eyes !== 'half', `${id} at ${t.toFixed(2)} s: eyes ${f.eyes} with ${f.armR}`);
+  }
+  assert.ok(drinking > 30, `${drinking} drinking frames`);
+  const { map } = buildMotions(MOTIONS, partIds(json('parts.json')));
+  const pose = { emotion: 'calm', eyes: 'open', mouth: 'neutral', headY: 0, ears: 0, blush: 0, sweat: 0 };
+  let blinks = 0;
+  for (let seed = 1; seed <= 40; seed += 1) {
+    const p = new MotionPlayer(map, seed);
+    for (let t = 0; t < 6; t += 1 / 60) p.tick(t, pose); // the blink's clock runs before the sip
+    p.select('sip', 'x');
+    for (let t = 6; t < 9; t += 1 / 60) {
+      const f = p.tick(t, pose).frame;
+      if (DRINKING.has(f.armR)) assert.ok(f.eyes !== 'closed' && f.eyes !== 'half', `seed ${seed} at ${t.toFixed(2)} s: eyes ${f.eyes} with ${f.armR}`);
+      else if (f.eyes === 'closed') blinks += 1;
+    }
+  }
+  assert.ok(blinks > 0, 'she still blinks before and after the sip');
 });

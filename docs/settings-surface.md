@@ -232,6 +232,7 @@ disables it while a variable pins it and says which one.
 | `harvest_job_max_episodes` | A | no | on_run | — | #473 |
 | `memory_retention` | A | no | on_run | — | #474 Values and the dry run only; --apply stays on the command line. |
 | `episodic_emotion_snapshot` | A | no | immediate | `STIRA_EPISODIC_EMOTION` | #473 |
+| `episode_labels` | A | no | restart | — | #653 Speaker labels of newly written episodes (user / agent); stored episodes are not rewritten. |
 | `associative_recall` | A | no | restart | `STIRA_ASSOCIATIVE_RECALL`, `STIRA_RECALL_EMOTION_PROXIMITY` | #473 |
 | `memory_autonomy` | A | no | restart | `STIRA_MEMORY_AUTONOMY` | #251 ADR 0018 phase 0 (observe only); the settings card is a later issue. |
 | `containment` | A | no | restart | `STIRA_CONTAINMENT_OBSERVE` | #460 ADR 0023 phase 0 (observe only); the settings page shows the observation read only. |

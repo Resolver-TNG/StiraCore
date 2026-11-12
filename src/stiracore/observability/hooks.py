@@ -58,6 +58,73 @@ logger = logging.getLogger(__name__)
 # ``cancel: "declared"`` so the board shows a checkpoint, not a refused call.
 PROGRESS_DECLARED_KEY = "stira.progress.declared"
 _RESULT_CODE = re.compile(r"[a-z][a-z_]{0,31}")
+# #696: why a tool call did not succeed, as one fixed code (never the message):
+#   refused       a hook cancelled the call before it ran (a gate, a rule, a checkpoint)
+#   unknown_tool  the model named a tool that is not registered (the SDK selected none)
+#   invalid_input the SDK refused the arguments against the tool's schema
+#   exception     the tool raised
+#   tool_failed   the tool returned an error result (this includes a failed outside API)
+TOOL_ERROR_CLASSES = frozenset(
+    {"unknown_tool", "invalid_input", "refused", "tool_failed", "exception"}
+)
+# #696: which refusal, for a ``refused`` call. ``declared`` is a checkpoint the agent
+# declared itself (#545, not a refusal by a gate); ``other`` is every text without a code.
+TOOL_DENY_CODES = frozenset({"rule_never", "declared", "other"})
+# The first sentence of ``checkpoint_hooks.NEVER_REFUSAL`` with its full stop (kept
+# stable, #508). Not imported: that module imports this one.
+_NEVER_SENTENCE = "Tool policy is Never for this tool; not executed."
+# Where the SDK refuses a tool's arguments (module, function of the raising frame).
+_SDK_INPUT_VALIDATION = ("strands.tools.decorator", "validate_input")
+_MISSING = object()
+
+
+def _deny_code(cancel_text: Any, declared: bool) -> str:
+    """``rule_never`` only for the gate's fixed sentence, whole or followed by a space
+    (so ``...this toolchain`` or ``...not executed.x`` is ``other``)."""
+    if declared:
+        return "declared"
+    if isinstance(cancel_text, str) and (
+        cancel_text == _NEVER_SENTENCE or cancel_text.startswith(_NEVER_SENTENCE + " ")
+    ):
+        return "rule_never"
+    return "other"
+
+
+def _invalid_input(exception: Any) -> bool:
+    """The SDK's schema refusal: a ``ValueError`` raised from pydantic's ``ValidationError``
+    by ``strands.tools.decorator``'s ``validate_input``.
+
+    A tool that checks an outside answer with pydantic and re-raises ``ValueError`` has the
+    same types, so the frame that raised decides (module and function name; the message is
+    never read). With no traceback, or after the SDK moves or renames that function, the
+    two cannot be told apart and the call is the safe side: ``exception``."""
+    cause = type(getattr(exception, "__cause__", None))
+    if not (
+        isinstance(exception, ValueError)
+        and cause.__name__ == "ValidationError"
+        and cause.__module__.startswith("pydantic")
+    ):
+        return False
+    tb = exception.__traceback__
+    if tb is None:
+        return False
+    while tb.tb_next is not None:
+        tb = tb.tb_next
+    frame = tb.tb_frame
+    return (frame.f_globals.get("__name__"), frame.f_code.co_name) == _SDK_INPUT_VALIDATION
+
+
+def _error_class(event: Any, status: str, exception: Any) -> str | None:
+    """One of ``TOOL_ERROR_CLASSES`` for a finished tool call, else ``None``."""
+    if status == "cancelled":
+        return "refused"
+    if status != "error":
+        return None
+    if _field(event, "selected_tool", _MISSING) is None:
+        return "unknown_tool"
+    if exception is not None:
+        return "invalid_input" if _invalid_input(exception) else "exception"
+    return "tool_failed"
 
 
 @dataclass(kw_only=True)
@@ -507,8 +574,17 @@ class DashboardHookProvider(HookProvider):
         attributes.update(_exception_metadata(exception))
         state = _field(event, "invocation_state")
         declared = state.get(PROGRESS_DECLARED_KEY) if isinstance(state, Mapping) else None
-        if cancelled and isinstance(declared, set) and use_id in declared:
+        is_declared = cancelled and isinstance(declared, set) and use_id in declared
+        if is_declared:
             attributes["cancel"] = "declared"
+        status = _status(
+            retry=retry, exception=exception, cancelled=cancelled, result_status=result_status
+        )
+        error_class = _error_class(event, status, exception)
+        if error_class is not None:
+            attributes["error_class"] = error_class
+        if error_class == "refused":
+            attributes["deny_code"] = _deny_code(_field(event, "cancel_message"), is_declared)
         attributes.update(self._captured("output", result, _string(_field(tool_use, "name"))))
         self._emit(
             ObservabilityEvent(
@@ -518,12 +594,7 @@ class DashboardHookProvider(HookProvider):
                 model_id=_model_id(event.agent),
                 tool_name=_string(_field(tool_use, "name")) or (start.name if start else None),
                 tool_use_id=use_id,
-                status=_status(
-                    retry=retry,
-                    exception=exception,
-                    cancelled=cancelled,
-                    result_status=result_status,
-                ),
+                status=status,
                 message="Tool call completed",
                 attributes=attributes,
             )

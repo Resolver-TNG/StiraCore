@@ -583,6 +583,25 @@ def _turn_cost(usage: Mapping, pricing: Any) -> float | None:
     )
 
 
+# ``app.extensions`` key: the price table the chat blueprint was given (model id ->
+# ``Pricing``), so that /observability prices a turn from the same table (#651).
+TOKEN_PRICES_EXTENSION = "stira_token_prices"
+
+
+def turn_cost(data: Any, prices: Any) -> float | None:
+    """The cost of one ``turn.completed`` (``data``) with the price of the model named in
+    it, or None when it cannot be priced (see ``totals_from``). The one sum behind the
+    board's totals, the chat page's estimate and /observability's Cost Tracker (#651)."""
+    if not isinstance(data, Mapping) or not isinstance(prices, Mapping):
+        return None
+    usage = data.get("usage")
+    name = data.get("model")
+    return _turn_cost(
+        usage if isinstance(usage, Mapping) else {},
+        prices.get(name) if type(name) is str else None,
+    )
+
+
 def totals_from(
     completed: Iterable[Mapping], rates: Any = None, *, model: Any = None
 ) -> dict[str, Any]:
@@ -651,8 +670,7 @@ def _priced_totals(totals, completed, prices: Mapping, model: Any) -> dict[str, 
         ]
         if not any(tokens):
             continue  # nothing billed (or nothing reported) for this turn
-        name = data.get("model")
-        turn = _turn_cost(usage, prices.get(name) if type(name) is str else None)
+        turn = turn_cost(data, prices)
         if turn is None:
             unpriced += 1
         else:

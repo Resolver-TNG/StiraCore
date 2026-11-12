@@ -352,7 +352,9 @@ answered **only by a person's card** through the server's approval broker (no YO
 allowance); the card names the session `grant:<id>`, belongs to no chat turn, is live
 only (a restart cancels it, `grant_stopped`) and is withdrawn when the iteration stops.
 An unanswered card ends the iteration and blocks the goal: `blocked(approval_timeout)` —
-nothing retries it. The durable approval record and the history of a grant card keep
+nothing retries it. The same end applies when the iteration's wall time arrives while the
+card still waits (not `timeout`: the cause is the unanswered card), and when no approver is
+connected (the Ask is refused, the iteration ends at once; a retry spends nothing more) (#704). The durable approval record and the history of a grant card keep
 **codes only**, built from fixed fields (the tool, whether the path is inside the subtree,
 digest prefixes of the path and of the arguments, their size, the grant id) — no
 model-chosen string: not the path, not a `cwd`, not the content. **The live card** (the
@@ -433,7 +435,8 @@ procedure approval) signals before the turn lock is tried; the iteration yields 
 boundary (`yielded(user_turn)`: the running effect is not
 interrupted, a waiting card is withdrawn). `/new` revokes (`revoked(session_reset)`) and so
 stops it. `autonomy.iteration_wall_sec` (default 600) ends it as
-`blocked(iteration_timeout)` (checked at every boundary and in the watchdog's pass). The
+`blocked(iteration_timeout)` (checked at every boundary and in the watchdog's pass; with a
+card still waiting it is `blocked(approval_timeout)` instead, #704). The
 shutdown step (`grant_executor`, before the approvals close) stops and joins it within its
 budget (`pending`: a thread still in a provider call).
 

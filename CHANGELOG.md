@@ -38,6 +38,33 @@ Overview, how to try it and the known limits: docs/autonomy.md.
 
 ### Added
 
+- **Observability — failure digest** (#695): `python -m stiracore.control.failure_digest_cli
+  --data-dir DIR [--days 7] [--format md|json]` summarises the last days of tool failures as
+  counts and representative event ids — codes only, no model call, no bodies, previews or
+  secrets (the output is an allow-list). It opens `turns.db` read-only and writes nothing
+  (docs/failure-digest.md).
+- **Observability — error classes on tool events** (#696): `tool.completed` / `tool_call.updated`
+  carry `error_class` (`unknown_tool`, `invalid_input`, `refused`, `tool_failed`, `exception`)
+  and, for a refusal, `deny_code` (`rule_never`, `declared`, `other`). Classified from the
+  exception type and the SDK's selection only — never from message text; a value outside the
+  fixed sets is dropped.
+- **Observability — dropped events are counted** (#705): `TurnEventRecorder.drop_counts()` returns
+  in-process counts by reason (`no_active_turn`, `invalid_event`, `record_failed`,
+  `no_call_id`). Logging and behaviour are unchanged.
+- **Memory — `episode_labels`** (#653): optional `agent-config.json` setting
+  `episode_labels: {user, agent}` for the speaker labels written into episodic memory. Unset
+  keeps the previous labels and leaves existing episodes alone; an invalid value is ignored
+  with a warning that names only the key and code `E_EPISODE_LABEL_IGNORED`. Associative
+  recall ignores both the previous and the configured labels.
+- **Evaluation — A/B run guards** (#729): `stiracore.eval.ab_guards` — a run fingerprint, a
+  check that the declared change is the only difference between two runs, a plan check
+  (counts, duplicates) and a leak check for held-out material (fail-closed). Pure functions;
+  no existing runner calls them yet (docs/eval/ab-run-guards.md).
+- **Docs** — harness-change A/B pre-registration (held-out handling, adoption criteria; #698,
+  docs/eval/harness-ab-prereg.md, no A/B has been run); the regression set
+  (`tests/regression/`, docs/regression-set.md, #697); which parts a self-improvement proposer
+  may never edit (*Proposed*, docs/proposer-edit-boundary.md, #731).
+
 - **Core engine** — six-dimension Neural State with lazy decay, behavioural-consistency
   score (bcScore), circuit breaker (NORMAL / WARNING / CRITICAL / COHERENCE) with
   transition reasons, SOUL read-only structure, checkpoint persistence.
@@ -254,6 +281,31 @@ Overview, how to try it and the known limits: docs/autonomy.md.
   scripts, AI-agent setup guide.
 
 ### Fixed
+
+- **Cost Tracker showed `$0.00` for every turn (#651).** The Observability page only read its
+  own empty price table. Turn-end events now carry `estimated_cost_usd`, priced from the same
+  `token_prices` as the chat page, from one shared `turn_cost()`; both pages agree. No price
+  is exposed, only the number.
+- **Secrets in turn-event data (#702).** Only `input_preview` / `output_preview` were
+  re-masked; a secret placed in `name`, `exception_type`, `result_code`, a summary
+  `category` or `emotion_transcription` reached SSE subscribers, `events()` / `tail()`,
+  `/api/turns` and the `turns.db` payload. Every string in `data` is now masked when
+  stored — except identifier fields (`tool_use_id`, `request_id`, `supersedes`, `report_id`,
+  `call_id`) at the top level and only when the value is one plain token (anything else is
+  masked: fail-closed).
+- **Goal-grant end codes while a card waits (#704).** A wall-time stop with an approval card
+  pending ends `approval_timeout` (was `timeout`); no approver connected ends
+  `approval_timeout` at the first ask (was `no_action`, and the goal did not stop); a provider
+  raising `CancelledError` ends `failed` / `child_error` (was an uncaught thread exit and
+  `no_action`). Only the codes change; nothing refused or blocked is loosened.
+- **Stage — mug arm and wrists (#739).** Three in-between sprites make the mug arm's
+  lift / sip / put-down smooth; the sleeve cuffs are longer and the bare wrist shorter; the
+  character keeps its eyes open through a sip, a pending approval and relief. Known: a dark
+  dot beside the nose while sipping, and the closed eyes of three other expressions, remain.
+- **Test stability** (no product change): a YOLO settings cache that leaked between tests
+  (#714, #737), a race with the stop-button route (#715), a 0.3 s drain-window race on slow
+  hosts (#724), and a linearity measurement of the Stage board that is now best-of-7 after a
+  warm-up (#741). A duplicate-route test pins that no route is registered twice (#703).
 
 - **Approve / edit of an approval card is no longer refused by a finished sibling of a parallel batch (#668).** The running-tool-call guard (ADR 0012 §8b) counted every call from `BeforeToolCall` to `AfterToolCall`; in a parallel batch a sibling that had already returned stayed counted until the batch ended, and the batch cannot end before the pending card is decided, so Approve answered 409 `tool_call_running` and only Deny worked. Calls of tools that cannot reach the admin API (`file_read`, `file_write`, `editor`, `journal`, `current_time`, `image_reader`) are no longer counted; every other name — `http_request`, `shell`, `batch`, MCP and any tool not listed — still is (fail closed).
 - **Memory store** — a symbolic link *above* the configured memory root (macOS `/tmp` and

@@ -321,7 +321,10 @@ macOS では自己テストの後に生成した `sandbox-exec` の設定の中�
 上の数値は形を示すだけです。単価はプロバイダーの価格表から取ってください。ボードの累計（サーバー起動から）は
 **各ターンを、その `turn.completed` に記録されたモデルの単価で**計算します。計算できないターン（項目のない別の
 モデル、キャッシュの単価なし）があるときは、計算できたターンの合計を出し、残りを除いたことを書きます。チャット画面の
-1 つの数値は、すべてのターンを計算できたときだけ出します。
+1 つの数値は、すべてのターンを計算できたときだけ出します。Observability 画面の推定費用も、同じ単価表と同じ
+ターンごとの計算を使います（#651）: 画面が読む各ターンの終了イベントに、そのターンの費用（数値 1 つ。単価は
+含めません）が付きます。計算できないターンには付かず、料金未設定（`*`）として数えます。合計は `turns.db` に
+残っているターンが対象なので、再起動のあとは再起動前のターンを含むことがあります。
 
 ## 4. `agent-config.json`（`AgentConfig`） — *検査対象*
 
@@ -352,6 +355,7 @@ macOS では自己テストの後に生成した `sandbox-exec` の設定の中�
 | `memory_retention` | `{}` | ストアごとの保持上限。`stira memory retention` だけが読む（#294）。空 = 上限なし（`memory_plans` を除く。下記）。`--apply` なしでは何も消えず、`--apply` で消したものは退避される（取り消し: `stira memory restore <id>`）。キー: `episodic`（`max_age_days`、`max_entries`、`keep_unharvested` = `true`、`honour_expires_at` = `false`）、`turns` / `tool_payloads` / `checkpoints`（`max_age_days`。checkpoints は `max_per_thread` も）、`memory_plans`（`max_age_days`、既定 `90`: 記憶ジョブの計画ファイル。既定で上限があるのはこれだけ）、`staging`（`warn_after_days`）、`scheduler_log` / `archive`（`warn_bytes`）— 最後の 3 つは報告のみ。整数 1〜1000000（`*_bytes` は 10^15 まで）。[memory-maintenance_ja.md](memory-maintenance_ja.md#保持期限削除要求出所タグ294) 参照。 |
 | `harvest_job_max_episodes` | `100` | スケジュールされた `memory_harvest` の 1 回で採点するエピソード数（1〜100000）。新しい順で、残りは次回へ（#251）。rule 蒸留器のみ（`"llm"`/`"jev"` ではジョブを作成も実行もできない。`distillation_cli` を使う）。出力は `harvest_stage_auto` に関係なく常に staging。 |
 | `episodic_emotion_snapshot` | `true` | 新しいエピソードごとに保存時の感情スナップショット（6次元・カテゴリ・強度・ブレーカー・ターン）を `memory/…/emotion/` に記録する。床の中で、エージェントは読めず、prompt にも記憶ツールにも入らない（#364、[episodic-emotion_ja.md](episodic-emotion_ja.md)）。`false` でオプトアウト: 新しいエピソードは `episodic-summary/v1` のまま。既存の記録は削除するまで残る（`emotion_cli orphans --apply` が消すのは孤児だけ）。`STIRA_EPISODIC_EMOTION` が優先。 |
+| `episode_labels` | `{}` | チャットサーバーが書くエピソードの話者ラベル（#653）: `{"user": "User", "agent": "Resolver"}` で `User: … → Resolver: …` と保存する。空、またはキーが無い側 = 従来のラベル（`マスター` / `リゾルバ`）。既定は UI やペルソナの言語に追従しない: 英語ラベルにするには `episode_labels` を設定する。ラベルには文字か数字が 1 つ以上必要。相手側のラベルと同じ（片側だけ設定して相手側の既定と同じ場合も含む）なら両方とも既定に戻す。ラベルは 1〜24 文字の文字・数字・空白・`_ - . ・` だけ。それ以外（コロン、矢印、改行、制御文字、括弧、2 つが同じ）は無視して既定のラベルを使う（警告にはキー名だけを出し、値は出さない）。変わるのは新しく書くエピソードだけで、保存済みのエピソードは書き換えない。連想想起は旧ラベルと現行ラベルの両方を除く。起動時に読む。 |
 | `associative_recall` | `{}` | オプトインの連想想起（#170）: `{"enabled": true}` で、発話に合う過去のエピソードを最大 `max_items`（3、1〜5）件・`max_chars`（600、100〜2000）文字以内で差し出す。新しい `window`（200、1〜1000）行の索引から Neural State で重み付けして選ぶ（読み取りのみ）。モデル呼び出しなし。`memory.injected` を記録する。空 = OFF。チャットサーバーは起動時に読む。`STIRA_ASSOCIATIVE_RECALL` が `enabled` より優先。`"emotion_proximity": true`（既定 `false`）で感情近接シグナルを足す（#364、ADR 0017。`STIRA_RECALL_EMOTION_PROXIMITY` が優先）。[associative-recall_ja.md](associative-recall_ja.md) |
 | `memory_autonomy` | `{}` | ADR 0018 の**フェーズ 0（観測のみ）**。`{}` / 無し = OFF（`memory_rate` ツールなし、記憶ジョブの種類なし、何も束縛しない）。`{"phase": 0}` で ON: `in_turn_rating`（既定 `true`）で `memory_rate` を出す（エージェントがそのターンのエピソードを採点。保存するだけで、まだ何にも使わない）。`jobs`（`memory_rate_backfill` / `memory_consolidate` / `memory_tidy`、各既定 `false`）で、人がそのスケジューラのジョブを作れるようになる（書くのは計画ファイルだけ。モデルを呼ぶ種類はハートビートが正常なときだけ開始、ADR 0021 §8）。`daily_token_budget`（100000、0〜100000）は記憶ジョブ全体の上限。`undo_window_days`（30、フェーズ 2 用に保存のみ）。受け付けるのはフェーズ `0` だけ。起動時に読む。`STIRA_MEMORY_AUTONOMY=0` で強制 OFF。[memory-autonomy_ja.md](memory-autonomy_ja.md) |
 | `containment` | `{}` | ADR 0023 の**フェーズ 0（観測のみ）**。`{}` / 無し = OFF。`{"phase": 0}` で、隔離のシグナル（ゲートがすでに出している拒否と保留: 秘密パスの読み取り、床への書込み、自分のダッシュボードへの呼び出し、外部送信の保留、連続実行、範囲外への読み書き。文面の手がかりは重み 0）を時間窓で数え、そのセッションが**仮に入るはずの**段階（`open` / `restricted` / `closed` / `quarantine`）を記録する。何も強制しない（ツールを外さない、カードを足さない、水準を動かさない）。`window_seconds`（600、60〜3600）。受け付けるのはフェーズ `0` だけ。起動時に読む。`STIRA_CONTAINMENT_OBSERVE=0` で強制 OFF。[containment_ja.md](containment_ja.md) |

@@ -190,6 +190,7 @@
     {"id": "agent.harvest_job_max_episodes", "class": "A", "ui": "no", "applies": "on_run", "issue": "#473"},
     {"id": "agent.memory_retention", "class": "A", "ui": "no", "applies": "on_run", "issue": "#474", "note": "Values and the dry run only; --apply stays on the command line."},
     {"id": "agent.episodic_emotion_snapshot", "class": "A", "ui": "no", "applies": "immediate", "issue": "#473"},
+    {"id": "agent.episode_labels", "class": "A", "ui": "no", "applies": "restart", "issue": "#653", "note": "Speaker labels of newly written episodes (user / agent); stored episodes are not rewritten."},
     {"id": "agent.associative_recall", "class": "A", "ui": "no", "applies": "restart", "issue": "#473"},
     {"id": "agent.memory_autonomy", "class": "A", "ui": "no", "applies": "restart", "issue": "#251", "note": "ADR 0018 phase 0 (observe only); the settings card is a later issue."},
     {"id": "agent.containment", "class": "A", "ui": "no", "applies": "restart", "issue": "#460", "note": "ADR 0023 phase 0 (observe only); the settings page shows the observation read only."},

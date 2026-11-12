@@ -1693,6 +1693,11 @@ def create_chat_blueprint(
     """
     bp = Blueprint("chat_api", __name__)
 
+    @bp.record_once
+    def share_token_prices(setup):
+        # #651: /observability (turns_view) prices its turn events from this same table.
+        setup.app.extensions[activity.TOKEN_PRICES_EXTENSION] = token_prices or {}
+
     @bp.before_request
     def chat_body_limit():
         if request.endpoint == "chat_api.chat":

@@ -33,7 +33,8 @@ python -m pip list | grep -iE '^(strands-agents|strands-agents-tools|ruff|pytest
 
 The upper bounds on `strands-agents`, `ruff` and `pytest` are the newest versions the repository was last tested
 with. A weekly workflow (`.github/workflows/canary.yml`) lifts them and runs the Linux suite; raise a bound after
-that run passes on the newer version.
+that run passes on the newer version. Dependabot (`.github/dependabot.yml`) opens a weekly, grouped pull request
+for newer Python dependencies and GitHub Actions; run the Linux gate on it before merging.
 
 Checks to run before a pull request (the same gates as CI):
 

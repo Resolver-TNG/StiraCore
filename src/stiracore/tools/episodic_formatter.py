@@ -31,6 +31,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+import unicodedata
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -48,6 +49,10 @@ FORMAT_VERSION = "episodic-summary/v1"
 # ``episodic_emotion``). v1 episodes stay readable; their snapshot reads as None.
 FORMAT_VERSION_V2 = "episodic-summary/v2"
 ELLIPSIS = "…"
+# ``episode_labels`` in agent-config.json (#653): see ``clean_episode_labels``.
+EPISODE_LABEL_KEYS = ("user", "agent")
+EPISODE_LABEL_MAX_CHARS = 24
+_EPISODE_LABEL_JOINERS = frozenset(" _-.・")
 
 # --------------------------------------------------------------------------
 # Sanitization patterns
@@ -522,6 +527,49 @@ class EpisodicFormatter:
         )
 
 
+def _valid_episode_label(value: Any) -> bool:
+    if not isinstance(value, str) or not 1 <= len(value) <= EPISODE_LABEL_MAX_CHARS:
+        return False
+    if value != value.strip():
+        return False
+    # Allow-list: letters, marks, digits and a few joiners. No colon or arrow (the line's
+    # own separators), no control / format / line characters, no brackets or tags. At least
+    # one letter or digit: marks or joiners alone are invisible or name nobody.
+    if not any(unicodedata.category(ch)[0] in "LN" for ch in value):
+        return False
+    return all(ch in _EPISODE_LABEL_JOINERS or unicodedata.category(ch)[0] in "LMN" for ch in value)
+
+
+def clean_episode_labels(options: Any) -> dict[str, str]:
+    """The usable part of ``episode_labels`` in agent-config.json (#653).
+
+    Keys ``user`` / ``agent``: the speaker labels of newly written episodes (stored
+    episodes are never rewritten). A label is 1 to ``EPISODE_LABEL_MAX_CHARS`` letters,
+    digits, spaces or ``_ - . ・`` with at least one letter or digit. Anything else is
+    ignored, so the caller's default label stays in use; the warning names the key only,
+    never the value. The caller checks the pair again after filling in its defaults.
+    """
+    if options is None:
+        return {}
+    if not isinstance(options, Mapping):
+        logger.warning("episode_labels ignored: not an object (E_EPISODE_LABEL_IGNORED)")
+        return {}
+    cleaned: dict[str, str] = {}
+    for key in EPISODE_LABEL_KEYS:
+        if key not in options:
+            continue
+        if _valid_episode_label(options[key]):
+            cleaned[key] = options[key]
+        else:
+            logger.warning("episode_labels.%s ignored: not allowed (E_EPISODE_LABEL_IGNORED)", key)
+    if any(key not in EPISODE_LABEL_KEYS for key in options):
+        logger.warning("episode_labels: unknown key ignored (E_EPISODE_LABEL_IGNORED)")
+    if len(cleaned) == 2 and cleaned["user"].casefold() == cleaned["agent"].casefold():
+        logger.warning("episode_labels ignored: both labels are equal (E_EPISODE_LABEL_IGNORED)")
+        return {}
+    return cleaned
+
+
 def _compose(user_label: str, user_text: str, agent_label: str, agent_text: str) -> str:
     return f"{user_label}: {user_text or '(空)'} → {agent_label}: {agent_text or '(空)'}"
 
@@ -710,9 +758,12 @@ def _write_emotion(store: Any, entry: MemoryEntry, emotion: EmotionSnapshot) -> 
 
 
 __all__ = [
+    "EPISODE_LABEL_KEYS",
+    "EPISODE_LABEL_MAX_CHARS",
     "EpisodeSummary",
     "EpisodicFormatter",
     "SpeakerSummary",
+    "clean_episode_labels",
     "fallback_format",
     "record_episode",
     "redact_secrets",

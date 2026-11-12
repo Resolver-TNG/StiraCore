@@ -425,21 +425,27 @@ def sleeve(cv, wrist, elbow, w_wrist, w_elbow, mat, cuff=True, base=0.55, round_
 # --- the mug hand, moved rigidly from the icon ---------------------------------------------------
 
 
-def coat_sleeve(cv, wrist, elbow, w_elbow=32.0):
+def coat_sleeve(
+    cv, wrist, elbow, w_elbow=32.0, knit=(15.0, 13.0), coat_w=27.0, back=9.0, droop=0.0
+):
     """The mug arm's sleeve as in the icon: the navy turtleneck cuff at the wrist (knit), then
-    the lab coat's sleeve down to the elbow (matches the drawn body below the circle)."""
+    the lab coat's sleeve down to the elbow (matches the drawn body below the circle).
+    knit: the knit cuff's (width, length); coat_w: the coat sleeve's width at its opening, which
+    is `back` px behind the wrist and hangs `droop` px down (a loose sleeve)."""
     w = np.array(wrist, np.float32)
     e = np.array(elbow, np.float32)
     u = (e - w) / (np.hypot(*(e - w)) or 1)
-    cuff_end = w + u * 9
+    cuff_end = w + u * back + np.array([0.0, droop], np.float32)
     # (art fix, #341) the opening is the tube's own rounded end, under the knit cuff: art unify
     # 5 rounded it with a disc on the end, whose ring drew an arc across the sleeve and read as
     # a ball at the wrist (`mug_up` ... `mug_sip`); the coat's turned-back cuff band drew a line
     # across it too. Rounded corners (no flat end sticking out beside the cuff), no line.
-    sleeve(cv, tuple(cuff_end), tuple(e), 27.0, w_elbow, COAT, cuff=False, base=0.8, round_end=4.0)
+    sleeve(
+        cv, tuple(cuff_end), tuple(e), coat_w, w_elbow, COAT, cuff=False, base=0.8, round_end=4.0
+    )
     # the knit reaches 2 px further under the hand (the hand is drawn over it): with the icon's
     # cuff kept only on the drawn one, the raised hand (`mug_sip`) stood 1-2 px off the cuff
-    knit_cuff(cv, tuple(w - u * 3), tuple(-u), 15.0, 13.0, base=0.46)
+    knit_cuff(cv, tuple(w - u * 3), tuple(-u), knit[0], knit[1], base=0.46)
 
 
 def hand_and_mug_only(img, mat_lo, wrist=None):
@@ -471,6 +477,21 @@ def hand_and_mug_only(img, mat_lo, wrist=None):
     return out
 
 
+WRIST_AXIS = np.array([-12.0, 27.0]) / np.hypot(12.0, 27.0)  # the icon's hand -> its wrist
+# (#739, the commander 2026-11-12: a loose sleeve hides the wrist) the mug arm's cuff sits at
+# the heel of the hand in every pose and is wider than the hand's heel; the coat's sleeve
+# behind it is wider too and hangs a little (it lies below the Stage frame's lower edge: the
+# knit cuff is what shows). No bare wrist, and the same join in every step of the lift.
+# Tuned against tests/stage_body_test.cjs: a wider coat opening put its contour under the hair
+# strands (single dark pixels), a higher cuff changed the rows of the head in `mug_sip`.
+WRIST_TUCK = 12.0  # px the cuff comes up the icon's bare wrist (the icon's cut has ~20 px)
+LOOSE_KNIT = (31.0, 18.0)  # the knit cuff: width (the wrist is ~12 px, the heel ~20), length
+LOOSE_SHIFT = 1.5  # the cuff's middle, px toward the mug (the heel of the hand lies that way)
+LOOSE_COAT = 33.0  # the coat sleeve's width at its opening
+LOOSE_BACK = 11.0  # the coat's opening, px behind the cuff's rim
+LOOSE_DROOP = 2.5  # the opening hangs this far down
+
+
 def mug_hand(parts, rot_deg, shift, elbow, w_elbow=32.0):
     """The icon's hand + mug rotated about the mug centre and shifted; the cuff and the coat
     sleeve from the new wrist to `elbow`. Returns (rgba, mug top anchor)."""
@@ -489,8 +510,24 @@ def mug_hand(parts, rot_deg, shift, elbow, w_elbow=32.0):
     wrist_src = np.array([91.0, 230.0]) - (cx, cy)
     wrist = rot(wrist_src, rot_deg) + (cx, cy) + shift
     img = hand_and_mug_only(img, mat_lo, wrist)
+    # (#739) the cuff comes up the wrist: the icon's hand is cut with ~20 px of bare wrist,
+    # which the frame's lower edge hides at rest; raised (`mug_sip`) it stood in full view as a
+    # long thin forearm, with the cuff a fragment at the lower edge. The loose cuff sits at the
+    # heel of the hand in every pose (the same hand in every step of the lift) and the skin
+    # past the cuff's rim is cut.
+    wrist = rot(wrist_src - WRIST_AXIS * WRIST_TUCK, rot_deg) + (cx, cy) + shift
+    w = wrist + rot((0, 2), rot_deg)
+    u = np.array(elbow, np.float32) - w
+    u = u / (np.hypot(*u) or 1)
+    w = w + np.array([u[1], -u[0]]) * LOOSE_SHIFT  # toward the mug
+    along = (px.xx - w[0]) * u[0] + (px.yy - w[1]) * u[1]
+    # the back of the wrist stands wider than the cuff where the hand is turned to the
+    # arm: bevelled into the cuff's corner
+    beside = -(px.xx - w[0]) * u[1] + (px.yy - w[1]) * u[0] - LOOSE_KNIT[0] / 2
+    img[(along + np.clip(beside, 0, None) > -3.0) & (mat_lo != 4)] = 0  # -3: the cuff's rim
     cv = Canvas(px)
-    coat_sleeve(cv, wrist + rot((0, 2), rot_deg), elbow, w_elbow)
+    coat_sleeve(cv, w, elbow, w_elbow, knit=LOOSE_KNIT, coat_w=LOOSE_COAT, back=LOOSE_BACK,
+                droop=LOOSE_DROOP)  # fmt: skip
     out = cv.render(soft=True, behind=parts.union)
     # (art fix, #341) the icon's own cuff joins the drawn one only where the drawn cuff / sleeve
     # is, and without its outline: beside it, its edge stood alone off the wrist (a dark hook
@@ -610,6 +647,12 @@ def build(parts):
     out.append(("r", "mug_sip", *mug_hand(parts, 28, (-15, -55), (38.0, 276.0))))
     out.append(("r", "mug_low", *mug_hand(parts, -4, (-2, 12), (22.0, 306.0))))
     out.append(("r", "mug_down", *mug_hand(parts, -6, (-4, 44), (22.0, 322.0))))
+    # (#739) in-betweens of the lift, halfway between the rest hand and `mug_up`, `mug_up` and
+    # `mug_lift`, `mug_lift` and `mug_sip`: the same hand moved half the step (18-24 px a step
+    # read as a jump). Appended after the others, so the sprites above keep their pixels.
+    out.append(("r", "mug_rise", *mug_hand(parts, 4.5, (1.5, -12), (28.0, 301.0))))
+    out.append(("r", "mug_up2", *mug_hand(parts, 13.5, (-1.5, -33), (32.0, 291.0))))
+    out.append(("r", "mug_lift2", *mug_hand(parts, 23, (-10.5, -48.5), (36.0, 281.0))))
     # typing: the mug is set down on the desk edge, the hand on the keys at the lower left
     for name in ("type1", "type2"):
         cv = Canvas(parts.px)

@@ -71,7 +71,8 @@ of the common foundation (§13 item 2) exists and is **shared**, see
   the trailing context block (#254); every turn-lock holder pre-empts at the next boundary
   (`yielded(user_turn)`; W6b: one `TurnLock` raises the signal before the lock for the chat
   turn, the webhook, the automatic continue, a restored card's resume, `/new` and a
-  procedure approval); a wall time per iteration → `blocked(iteration_timeout)`.
+  procedure approval); a wall time per iteration → `blocked(iteration_timeout)` (#704: while
+  a card waits, or with no approver connected, the end is `blocked(approval_timeout)`).
   Deviations: the trigger is a person's press, or (W6d, opt-in twice) the scheduler's
   model-free `grant_tick` through the same `step` — at most one iteration per wake; the
   iteration runs in a dedicated session, not the user's (operator decision 2026-10-24);

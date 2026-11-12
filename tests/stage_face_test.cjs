@@ -206,6 +206,39 @@ test('around the left eye the face has no fill artefacts: no iris-blue outside t
   assert.deepEqual(problems, []);
 });
 
+// #739: the face part kept the icon's own eyes under the eye sprites. A sprite with the lid down
+// (closed: a blink, the sip, relief) covers only its lash line, so the icon's lash and iris
+// showed above it (in a head pose 1-3 px off the sprite): dots and short lines at the eyes.
+test('the face and cheek parts are skin at the eyes: no iris of the icon under the eye sprites, on any front sheet', async () => {
+  const { meta, atlas } = await rig();
+  const eyeBlue = ['#1b2645', '#34507f', '#5a86bb', '#a9cbe9'].map(hexrgb);
+  const near = (c, q) => Math.abs(c[0] - q[0]) + Math.abs(c[1] - q[1]) + Math.abs(c[2] - q[2]) < 4;
+  const problems = [];
+  let seen = 0;
+  for (const layer of ['face', 'cheek']) {
+    for (const [sheet, part] of Object.entries(meta.parts[layer])) {
+      if ((meta.sheets[sheet] || {}).view !== 'front') continue;
+      const A = meta.sheets[sheet].anchors;
+      let blue = 0;
+      for (let y = 0; y < part.h; y += 1) {
+        for (let x = 0; x < part.w; x += 1) {
+          const q = ((part.ay + y) * atlas.width + part.ax + x) * 4;
+          if (atlas.data[q + 3] < 128) continue;
+          const sx = part.ox + x;
+          const sy = part.oy + y;
+          if (![A.eye_l, A.eye_r].some(([ex, ey]) => Math.abs(sx - ex) <= 16 && Math.abs(sy - ey) <= 10)) continue;
+          seen += 1;
+          const c = [atlas.data[q], atlas.data[q + 1], atlas.data[q + 2]];
+          if (eyeBlue.some((b) => near(c, b))) blue += 1;
+        }
+      }
+      if (blue) problems.push(`${layer}.${sheet}: ${blue} iris px`);
+    }
+  }
+  assert.ok(seen > 5000, `${seen} px looked at`);
+  assert.deepEqual(problems, []);
+});
+
 // The face sprites: #359's drawings, the eyes redrawn by art unify 4 (#341: the iris toward
 // sheets 03 / 05 — a dark ring, a light bottom, a 2 x 2 pupil, a two-pixel highlight, the lid's
 // shadow — for every shape alike, the old and the new); the other passes leave every sprite as

@@ -141,7 +141,19 @@ def _isolate_default_checkpoints(tmp_path_factory, monkeypatch):
 def _yolo_off_unless_asked(monkeypatch):
     if "STIRA_YOLO_ALLOW" not in os.environ:
         monkeypatch.setenv("STIRA_YOLO_ALLOW", "off")
+    # The YOLO settings are read once per process and then kept. Whatever an earlier test
+    # (or a module-scoped fixture) read stays for every later test of the shard, so a real
+    # server built later saw ``external`` and called ``agent.checkpoint_hooks`` on a fake
+    # agent (#737, NAS shard 0). Start each test from "not read yet", and leave it so.
+    try:
+        from stiracore.yolo import runtime as _yolo_runtime
+    except ImportError:  # pragma: no cover
+        _yolo_runtime = None
+    if _yolo_runtime is not None:
+        _yolo_runtime._reset_for_tests()
     yield
+    if _yolo_runtime is not None:
+        _yolo_runtime._reset_for_tests()
 
 
 # --- YOLO clocks off macOS: the runtime gate sees a measured clock (#296) ---------------

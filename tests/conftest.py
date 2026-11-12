@@ -85,6 +85,8 @@ _AUTHORITY_MODULES = {
     # W5: the executor's iteration thread (``grants-iteration-*``) never outlives a test.
     "test_grants_executor",
     "test_grants_executor_server",
+    # #697: the operation-failure regression set runs the executor too.
+    "test_r001_reject_then_same_claim",
 }
 _TRANSIENT_GRACE_SEC = 10.0
 

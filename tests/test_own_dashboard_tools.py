@@ -291,11 +291,19 @@ def test_the_connect_hook_alone_refuses_the_dashboard(armed, monkeypatch):
 @pytest.fixture
 def entry_point(monkeypatch):
     from dashboard import stira_server
+    from stiracore.yolo import runtime
 
     seen = []
 
     def serve(application, host, port):
         seen.append((host, port, own_dashboard.armed()))
+
+    # #714: the allowance is parsed once per process (``runtime.settings``), so main() would
+    # use what an earlier start left — a loopback start leaves the default, external, which
+    # refuses the wildcard listener. Every start here parses its own; monkeypatch puts back
+    # what was there before, so no other test sees a different state than it did (resetting
+    # to None at teardown made later tests parse the default and fail on a fake agent).
+    monkeypatch.setattr(runtime, "_SETTINGS", None)
 
     monkeypatch.setattr(stira_server, "serve", serve)
     monkeypatch.setattr(stira_server, "_install_log_masking", lambda *a, **k: [])

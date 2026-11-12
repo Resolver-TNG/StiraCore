@@ -13,7 +13,6 @@ paused request is an ordinary approval at NORMAL, as in the #285 report.
 
 from __future__ import annotations
 
-import json
 import sys
 import threading
 import time
@@ -29,6 +28,7 @@ from strands.models import Model
 from dashboard import stira_server
 from stiracore.observability.config_api import ConfigStore
 from stiracore.tools.tool_config import ToolConfig
+from tests.provider_fakes import turn_events
 
 
 class ScriptedModel(Model):
@@ -46,22 +46,8 @@ class ScriptedModel(Model):
 
     async def stream(self, messages, tool_specs=None, system_prompt=None, **kwargs):
         response = self.responses.pop(0) if self.responses else [{"text": "(no script)"}]
-        yield {"messageStart": {"role": "assistant"}}
-        reason = "end_turn"
-        for block in response:
-            if "toolUse" in block:
-                reason = "tool_use"
-                use = block["toolUse"]
-                start = {"toolUse": {"name": use["name"], "toolUseId": use["toolUseId"]}}
-                yield {"contentBlockStart": {"start": start}}
-                delta = {"toolUse": {"input": json.dumps(use["input"])}}
-                yield {"contentBlockDelta": {"delta": delta}}
-                yield {"contentBlockStop": {}}
-            else:
-                yield {"contentBlockStart": {"start": {}}}
-                yield {"contentBlockDelta": {"delta": block}}
-                yield {"contentBlockStop": {}}
-        yield {"messageStop": {"stopReason": reason}}
+        for event in turn_events(response):
+            yield event
 
 
 def factory(data_dir: Path, responses):

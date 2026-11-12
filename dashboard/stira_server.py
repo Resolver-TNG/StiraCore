@@ -1421,6 +1421,32 @@ def _agent_job_executor(settings, parent, tool_provider, approval_waits=None):
     )
 
 
+def _episode_labels(config_store):
+    """The (user, agent) speaker labels of newly written episodes (#653). Never fails.
+
+    ``episode_labels`` in ``agent-config.json`` (read at start-up) replaces either label;
+    unset, unsafe or unreadable = the labels used so far. The same holds when the pair, after
+    the defaults are filled in, is equal. Stored episodes are not rewritten.
+    """
+    try:
+        _gateway, agent_config = config_store.load()
+        labels = agent_config.episode_labels
+    except Exception as error:  # noqa: BLE001 - optional; keep the default labels
+        logging.getLogger(__name__).warning(
+            "episode_labels not read; default labels in use (%s)", type(error).__name__
+        )
+        labels = {}
+    user = labels.get("user", USER_LABEL)
+    agent = labels.get("agent", AGENT_LABEL)
+    if user.casefold() == agent.casefold():
+        # One configured label equals the other speaker's default: keep them distinguishable.
+        logging.getLogger(__name__).warning(
+            "episode_labels ignored: both labels are equal (E_EPISODE_LABEL_IGNORED)"
+        )
+        return USER_LABEL, AGENT_LABEL
+    return user, agent
+
+
 def _associative_recall(config_store, store, engine, ignore_terms=()):
     """The opt-in associative recall (#170), or None when off. Read at start-up; never fails.
 
@@ -2295,9 +2321,15 @@ def _build_app(
         )
         run_checks_tool.set_turn_provider(turn_recorder.active.current)
 
+    # Speaker labels of new episodes (#653). Earlier episodes keep the labels they were
+    # written with, so recall skips the old labels and the current ones.
+    user_label, agent_label = _episode_labels(config_store)
     # Opt-in associative recall (#170); None (the default) leaves the prompt unchanged.
     associative_recall = _associative_recall(
-        config_store, store, agent.engine, ignore_terms=(USER_LABEL, AGENT_LABEL)
+        config_store,
+        store,
+        agent.engine,
+        ignore_terms=tuple(dict.fromkeys((USER_LABEL, AGENT_LABEL, user_label, agent_label))),
     )
     if associative_recall is not None:
         print(
@@ -2482,7 +2514,7 @@ def _build_app(
         payload["heartbeat"] = heartbeat_status()
         return payload
 
-    episodic_formatter = EpisodicFormatter(user_label=USER_LABEL, agent_label=AGENT_LABEL)
+    episodic_formatter = EpisodicFormatter(user_label=user_label, agent_label=agent_label)
 
     def sync_model_selection():
         """Apply the model saved from /settings before this turn (#208)."""

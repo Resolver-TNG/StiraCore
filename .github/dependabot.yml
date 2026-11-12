@@ -1,0 +1,44 @@
+# Dependabot version updates — weekly, grouped, few open PRs at a time.
+#
+# Why: the 2026-11 strands-agents 1.64 break (#672) went unnoticed because
+# nothing told us a new SDK was out. Each update arrives as a PR so CI judges
+# it before the dev machines and CI drift apart (#673). The weekly canary
+# (.github/workflows/canary.yml) still answers "does the newest release break
+# us?"; Dependabot turns the answer into a reviewable change.
+#
+# Security updates are separate (Settings > Code security) and ignore the
+# limits below.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 3
+    labels: ["dependencies"]
+    groups:
+      python-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 2
+    labels: ["dependencies"]
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: "docker"
+    directory: "/ci/linux"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    labels: ["dependencies"]

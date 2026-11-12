@@ -557,23 +557,41 @@ const PATHOLOGICAL = {
   nested: (n) => '- a\n  - b\n'.repeat(n / 10),
 };
 
-test('parse and inline are linear on pathological inputs (measured: 4× the input, < 8× the time)', async () => {
+// The timing rule (#741). The input grows 4× (15k -> 60k), so linear work takes about 4× the
+// time and quadratic work about 16×: the line is drawn in between, at 8×. The 30 ms on top
+// covers inputs so fast that the timer and a stray GC pause outweigh the work; it does not hide
+// a quadratic path, which needs far more than 30 ms / 8 for 15k already.
+// One measurement swings with JIT tiers, GC and the load of the machine (a 20× was seen on a
+// busy CI host with unchanged code), and all of that only ever adds time. So each size is run
+// once unmeasured (warm-up, both sizes: the big input can trigger its own tier-up) and then
+// TIMING_RUNS times, small and big in turn so a burst of load hits both, keeping the minimum.
+const TIMING_RUNS = 7;
+const looksLinear = (ts, tb) => tb < ts * 8 + 30;
+
+test('parse and inline are linear on pathological inputs (4× the input, < 8× the time, best of 7)', async () => {
   const r = await inWorker(`async (m) => {
     const gens = { ${Object.entries(PATHOLOGICAL).map(([k, f]) => `${k}: ${f.toString()}`).join(',\n')} };
-    const time = (s) => { const t0 = process.hrtime.bigint(); m.classify(s); m.parse(s); return Number(process.hrtime.bigint() - t0) / 1e6; };
-    const out = {};
-    for (const [name, g] of Object.entries(gens)) {
+    const time = (run, s) => { const t0 = process.hrtime.bigint(); run(s); return Number(process.hrtime.bigint() - t0) / 1e6; };
+    const measure = (run, g) => {
       const small = g(15000);
       const big = g(60000);
-      time(small); // warm up
-      const ts = Math.min(time(small), time(small));
-      const tb = Math.min(time(big), time(big));
-      out[name] = [ts, tb];
-    }
+      time(run, small); // warm up: not measured
+      time(run, big);
+      let ts = Infinity;
+      let tb = Infinity;
+      for (let k = 0; k < ${TIMING_RUNS}; k += 1) {
+        ts = Math.min(ts, time(run, small));
+        tb = Math.min(tb, time(run, big));
+      }
+      return [ts, tb];
+    };
+    const parser = (s) => { m.classify(s); m.parse(s); };
+    const out = {};
+    for (const [name, g] of Object.entries(gens)) out[name] = measure(parser, g);
     return out;
-  }`, 60000);
+  }`, 90000);
   for (const [name, [ts, tb]] of Object.entries(r)) {
-    assert.ok(tb < ts * 8 + 30, `${name}: 15k ${ts.toFixed(1)} ms, 60k ${tb.toFixed(1)} ms`);
+    assert.ok(looksLinear(ts, tb), `${name}: 15k ${ts.toFixed(1)} ms, 60k ${tb.toFixed(1)} ms`);
     assert.ok(tb < 1000, `${name}: ${tb.toFixed(1)} ms`);
   }
 });

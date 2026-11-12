@@ -13,6 +13,8 @@ import { EMOTION_POSE, ENUM_TRACKS, EYE_MAP, FACE_TRACKS, tailFor, trackAt } fro
 
 const AGENT_COOLDOWN = 2;
 const OPEN_EYES = new Set(['open', 'wide', 'sharp', 'soft', 'half', 'surprised', 'puzzled', 'teary', 'jito', 'shy', 'panic']);
+// the mug arm's frames on the way to her mouth and at it (a sip)
+const DRINKING = new Set(['mug_up', 'mug_up2', 'mug_lift', 'mug_lift2', 'mug_sip']);
 const HEAD_SHEET = { '-1': 'up1', 0: 'base', 1: 'down1' };
 
 export class MotionPlayer {
@@ -215,7 +217,9 @@ export class MotionPlayer {
       let v = null;
       for (const [kt, kv] of seq) if (t >= kt) v = kv;
       if (t >= seq[seq.length - 1][0]) this.blink = null;
-      if (v && OPEN_EYES.has(f.eyes)) f.eyes = f.eyes === 'half' || v === 'closed' ? 'closed' : 'half';
+      // (#739, the commander 2026-11-12) no blink while the mug is at her mouth: the eyes stay
+      // open through a sip. The blink's timing (and the random sequence) runs on unchanged.
+      if (v && OPEN_EYES.has(f.eyes) && !DRINKING.has(f.armR)) f.eyes = f.eyes === 'half' || v === 'closed' ? 'closed' : 'half';
     }
     const quiet = info.id === 'none' || info.phase === 'done';
     if (this.nextGlance === null) this.nextGlance = now + 5 + R() * 6;

@@ -638,7 +638,14 @@ class AssociativeRecall:
         self.state_provider = state_provider
         self.settings = settings or RecallSettings(enabled=True)
         self.affect_of = affect_of
-        self.ignore_terms = frozenset(term.casefold() for term in ignore_terms if term)
+        # A label such as ``My Master`` (#653) never appears whole among the cut terms:
+        # skip the terms it is cut into as well, by the same ``_terms``.
+        self.ignore_terms = frozenset(
+            folded
+            for term in ignore_terms
+            if term
+            for folded in (str(term).casefold(), *_terms(str(term)))
+        )
         self.anchor_terms = (
             frozenset(term for anchor in identity_anchors for term in _terms(str(anchor)))
             - self.ignore_terms

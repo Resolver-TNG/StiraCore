@@ -608,6 +608,14 @@ class _Iteration:
         self.withdraw_card()
         return first
 
+    def stop_wall(self) -> bool:
+        """The wall time arrived (the iteration thread or the watchdog). #704: with a card
+        still waiting it is the same cause as the card's own expiry — nobody answered — so
+        the end is ``approval_timeout``; otherwise ``timeout``. Both block the goal."""
+        with self.lock:
+            waiting = self.card is not None
+        return self.stop("approval_timeout" if waiting else "timeout")
+
     def on_cancel(self, _reason: Any = None) -> None:
         self.stop("stopped", "in_flight_cancelled")
 
@@ -1922,6 +1930,9 @@ class GoalIterationExecutor:
                 it.stop("approval_timeout")
                 return HITLDecision(HITLAction.REJECT, reason="the grant iteration stopped")
             if self._broker is None:
+                # #704: nobody can answer — the same end as the heartbeat start above, so a
+                # retrying model spends nothing more and the end code names the cause.
+                it.stop("approval_timeout")
                 return HITLDecision(HITLAction.REJECT, reason="no approver is connected")
             try:
                 permit = self._authorize(it, "wait")
@@ -2059,7 +2070,7 @@ class GoalIterationExecutor:
             while not it.call_done.is_set():
                 remaining = it.deadline - self._mono()
                 if remaining <= 0:
-                    it.stop("timeout")
+                    it.stop_wall()
                 it.wake.wait(timeout=max(0.01, remaining))
                 it.wake.clear()
                 if it.stop_code is not None and not it.call_done.is_set():
@@ -2110,7 +2121,9 @@ class GoalIterationExecutor:
             child.agent(ITERATION_PROMPT, cancel_signal=it.cancel_event)
         except IterationStop:
             pass
-        except Exception as error:  # noqa: BLE001 - codes only, never the message
+        except BaseException as error:  # noqa: BLE001 - codes only, never the message
+            # #704: also a ``CancelledError`` out of the child's event loop (not an
+            # ``Exception``) — the thread ends here, so the iteration must carry a stop code.
             if it.stop("failed", "child_error"):
                 logger.warning("grants: an iteration failed (%s)", type(error).__name__)
         finally:
@@ -2504,15 +2517,16 @@ class GoalIterationExecutor:
         }
 
     def poll(self) -> None:
-        """The watchdog's pass: an iteration past its wall time ends (``timeout``); one
-        whose grant is no longer live is stopped. Never raises."""
+        """The watchdog's pass: an iteration past its wall time ends (``timeout``, or
+        ``approval_timeout`` while its card waits); one whose grant is no longer live is
+        stopped. Never raises."""
         try:
             with self._lock:
                 it = self._current
             if it is None:
                 return
             if self._mono() >= it.deadline:
-                it.stop("timeout")
+                it.stop_wall()
                 return
             _grant, _record, _now, code = self._look(it)
             if code is not None:

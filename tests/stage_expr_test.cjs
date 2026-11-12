@@ -167,9 +167,14 @@ test('the player puts the state\'s face over the motion\'s (closed eyes stay), a
   q.tick(0, pose, undefined, faceOf(row('smug')));
   const fs2 = [];
   for (let t = 0; t < 2.7; t += 1 / 30) fs2.push(q.tick(t, pose, undefined, faceOf(row('smug'), t)).frame);
-  assert.ok(fs2.some((x) => x.eyes === 'closed'), 'the sip still closes the eyes');
+  assert.ok(fs2.every((x) => x.eyes !== 'closed' && x.eyes !== 'half'), 'the sip keeps the eyes open (#739)');
   assert.ok(fs2.some((x) => x.eyes === 'arc'));
   assert.ok(fs2.every((x) => x.mouth === 'smirk'));
+  // closed eyes of a motion stay under the state's face (a stretch)
+  const s = new MotionPlayer(map, 3);
+  s.select('stretch', 'x');
+  s.tick(0, pose, undefined, faceOf(row('smug')));
+  assert.equal(s.tick(0.5, pose, undefined, faceOf(row('smug'), 0.5)).frame.eyes, 'closed', 'the stretch still closes the eyes');
   const n = new MotionPlayer(map, 3).tick(0, { ...pose, sweat: 1 }, undefined, faceOf(row('panic'))).frame;
   assert.deepEqual([n.eyes, n.mouth, n.sweat], ['panic', 'gasp', 0]);
 });

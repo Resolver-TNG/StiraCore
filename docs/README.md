@@ -26,6 +26,7 @@ English and Japanese are listed side by side where both exist. / 英語と日本
 | Architecture and diagrams / アーキテクチャと図 | [architecture.md](architecture.md), [diagrams/](diagrams/README.md), [design-philosophy.md](design-philosophy.md) |
 | Harness components (sessions, subagents, delegation) / ハーネス部品 | [harness-components.md](harness-components.md) |
 | Strands source audit / Strands ソース監査 | [strands-source-audit.md](strands-source-audit.md) |
+| Proposer edit boundary (proposed; what self-improvement may propose to change and what it must never edit) / 提案器の編集境界（提案中。自己改善が提案してよい部品と、編集してはいけない部品） | [proposer-edit-boundary.md](proposer-edit-boundary.md) |
 
 ## Safety / 安全
 
@@ -42,6 +43,7 @@ English and Japanese are listed side by side where both exist. / 英語と日本
 | SOUL protection / SOUL の保護 | [soul-read-only.md](soul-read-only.md), [soul-compaction.md](soul-compaction.md) |
 | Web API permissions / Web API の権限 | [admin-api-permissions.md](admin-api-permissions.md) |
 | Breaker reachability / Breaker の到達性 | [breaker-reachability.md](breaker-reachability.md) |
+| Regression sets: attacks, failures found in operation / 回帰セット（攻撃・運用で見つかった失敗） | [attack-regression.md](attack-regression.md), [regression-set.md](regression-set.md) |
 | Coherence score (`bc_score`) definition / 一貫性スコアの定義 | [coherence.md](coherence.md) / [coherence_ja.md](coherence_ja.md) |
 | Neural State saturation and recovery (operator guide) / Neural State の飽和と回復（運用者ガイド） | [neural-saturation.md](neural-saturation.md) / [neural-saturation_ja.md](neural-saturation_ja.md) |
 
@@ -70,6 +72,7 @@ button, static SVG on the Stage board) is shown by default ([ADR 0012 addendum
 | **Guide: automatic memory organisation** (recommended profiles, review, safety, weekly routine) / **ガイド: 記憶の自動整理**（推奨のプロファイル・レビュー・安全・週次の手順） | [guide-memory-routines.md](guide-memory-routines.md) / [guide-memory-routines_ja.md](guide-memory-routines_ja.md) |
 | Containment phase 0 (observe only, off by default: signals counted, `would_be` stage, weekly summary) / 隔離の段階フェーズ 0（観測のみ・既定 OFF） | [containment.md](containment.md) / [containment_ja.md](containment_ja.md) |
 | Taint phase 0 (observe only, off by default: context labels, would-hold counts, weekly summary) / 信頼ラベルフェーズ 0（観測のみ・既定 OFF） | [taint.md](taint.md) / [taint_ja.md](taint_ja.md) |
+| Failure digest (an operator command: failures counted by code with representative event ids; no model, writes nothing) / 失敗ダイジェスト（運用者のコマンド: 失敗をコード別に数え、代表イベントの ID を付ける。モデルを呼ばず、何も書かない） | [failure-digest.md](failure-digest.md) / [failure-digest_ja.md](failure-digest_ja.md) |
 | Autonomous memory recording and periodic maintenance (accepted; phase 0 scheduled) / 記憶の自律記録と定期整理（承認済み、フェーズ 0 を実装予定） | [ADR 0018](adr/0018-autonomous-memory.md) |
 | Episodic emotion snapshots (on the floor) and opt-in emotion-proximity recall / エピソードの感情スナップショット（床の中）とオプトインの感情近傍想起 | [episodic-emotion.md](episodic-emotion.md) / [episodic-emotion_ja.md](episodic-emotion_ja.md) |
 | Associative recall (opt-in, read-side Amygdala Pass) / 連想想起（オプトイン、読み出し側 Amygdala Pass） | [associative-recall.md](associative-recall.md) / [associative-recall_ja.md](associative-recall_ja.md) |
@@ -89,7 +92,9 @@ button, static SVG on the Stage board) is shown by default ([ADR 0012 addendum
 | Topic / 内容 | Document |
 |---|---|
 | Emotion-ablation pre-registration / アブレーション事前登録 | [eval/emotion-ablation-prereg.md](eval/emotion-ablation-prereg.md) |
+| Harness-change A/B procedure, pre-registration (dev + hidden held-out; procedure only, not yet run) / ハーネス変更の A/B 手順の事前登録（dev と隠した held-out。手順のみ・未実行） | [eval/harness-ab-prereg.md](eval/harness-ab-prereg.md) |
 | JP stimulus mini-set and ja-hybrid evaluation (dev/test) / 日本語刺激ミニデータと ja-hybrid の評価 | [eval/jp-stimulus/README.md](eval/jp-stimulus/README.md), [eval/jp-stimulus/ja-hybrid/report.md](eval/jp-stimulus/ja-hybrid/report.md) |
+| A/B run guards (deterministic parts: run fingerprint, plan check, leak check; no runner) / A/B 実行のガード（決定的な部品: 指紋・計画照合・漏洩検査。実行器は含まない） | [eval/ab-run-guards.md](eval/ab-run-guards.md) |
 | Dated research notes, probes and measurements (development repository only; not in the public release) / 日付付きの調査・プローブ・計測(開発リポジトリのみ・公開版には含まれない) | research/README.md |
 
 ## Architecture decision records / 設計判断記録（ADR）

@@ -147,7 +147,10 @@ class _CancelSpy(ScriptedProvider):
 
 @pytest.mark.parametrize("stall", [False, True])
 def test_the_provider_request_is_cancelled_only_when_the_call_is_given_up(tmp_path, stall):
-    env = make_env(tmp_path, stop_drain_sec=0.3)
+    # Only the stalled call needs a short drain window (it must run out). The answered call
+    # must not race it: on a slow host the 0.3 s ran out before the answer and the provider's
+    # cancel was set (NAS Linux CI, 2026-11-11).
+    env = make_env(tmp_path, stop_drain_sec=0.3 if stall else 5.0)
     env.provider = _CancelSpy()
     release = _held_call(env)
     try:

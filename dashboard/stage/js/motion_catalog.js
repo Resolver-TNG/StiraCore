@@ -428,11 +428,13 @@ export const MOTIONS = [
     duration: 6.0,
     tracks: {
       sheet: [[0, 'tilt_r1'], [0.14, 'tilt_r2'], [1.6, 'tilt_r1'], [1.8, 'relax'], [4.8, 'sip'], [5.4, 'relax']],
-      eyes: [[0, 'open'], [0.14, 'wide'], [1.5, 'open'], [2.0, 'soft'], [3.6, 'half'], [4.0, 'soft'], [4.8, 'closed'], [5.4, 'soft']],
-      gaze: [[0, 'c'], [0.14, 'ur'], [1.2, 'c'], [3.0, 'dl'], [4.4, 'c']],
+      eyes: [[0, 'open'], [0.14, 'wide'], [1.5, 'open'], [2.0, 'soft'], [3.6, 'half'], [4.0, 'soft']],
+      // (#739) the small sip with open eyes, down on the mug (they were closed from 4.8 s to 5.4 s)
+      gaze: [[0, 'c'], [0.14, 'ur'], [1.2, 'c'], [3.0, 'dl'], [4.4, 'c'], [4.8, 'd'], [5.4, 'c']],
       brows: [[0, 'up'], [2.0, 'soft']],
       mouth: [[0, 'neutral'], [0.14, 'small_o'], [0.9, 'neutral'], [5.4, 'exhale'], [5.7, 'neutral']],
-      armR: [[0, 'mug'], [1.8, 'mug_low'], [4.6, 'mug_lift'], [4.8, 'mug_sip'], [5.4, 'mug_lift'], [5.6, 'mug_low']],
+      // (#739) to the sip and back through the in-betweens (mug_rise, mug_up2, mug_lift2)
+      armR: [[0, 'mug'], [1.8, 'mug_low'], [4.44, 'mug_rise'], [4.52, 'mug_up2'], [4.6, 'mug_lift'], [4.72, 'mug_lift2'], [4.8, 'mug_sip'], [5.32, 'mug_lift2'], [5.4, 'mug_lift'], [5.48, 'mug_up2'], [5.56, 'mug_rise'], [5.64, 'mug_low']],
       earL: [[0, -6]],
       earR: [[0, 6]],
     },
@@ -475,13 +477,18 @@ export const MOTIONS = [
   },
   {
     id: 'sip',
-    description: 'Brings the mug to the mouth, tilts it and drinks with closed eyes, lowers it, breathes out.',
+    description: 'Brings the mug to the mouth, tilts it and drinks with soft eyes down on the mug (never closed), lowers it, breathes out.',
     duration: 2.7,
     selectable: true,
     tracks: {
-      armR: [[0, 'mug_up'], [0.16, 'mug_lift'], [0.32, 'mug_sip'], [1.5, 'mug_lift'], [1.68, 'mug_up'], [1.86, 'mug']],
+      // (#739) the mug comes up and goes down through in-betweens (mug_rise, mug_up2): each step
+      // is half of what it was. From 0.3 s to 1.55 s (the `sip` sheet) the keys are as before.
+      armR: [[0, 'mug_rise'], [0.08, 'mug_up'], [0.16, 'mug_up2'], [0.24, 'mug_lift'], [0.32, 'mug_sip'], [1.5, 'mug_lift'], [1.6, 'mug_up2'], [1.68, 'mug_up'], [1.76, 'mug_rise'], [1.84, 'mug']],
       sheet: [[0, 'base'], [0.3, 'sip'], [1.55, 'base']],
-      eyes: [[0, 'open'], [0.26, 'half'], [0.4, 'closed'], [1.44, 'half'], [1.62, 'soft'], [2.3, 'open']],
+      // (#739, the commander 2026-11-12) the eyes stay open through the sip: soft lids, the
+      // gaze down on the mug (they were half, then closed from 0.4 s to 1.44 s)
+      eyes: [[0, 'open'], [0.26, 'soft'], [2.3, 'open']],
+      gaze: [[0, 'c'], [0.26, 'd'], [1.62, 'c']],
       mouth: [[0, 'neutral'], [1.7, 'exhale'], [2.2, 'neutral']],
       brows: [[0, 'neutral'], [0.4, 'soft'], [2.3, 'neutral']],
       earL: [[0, 0], [0.4, 6], [1.8, 0]],
@@ -507,11 +514,14 @@ export const MOTIONS = [
   },
   {
     id: 'relief',
-    description: 'Breathes in, then the shoulders drop and relax; eyes close and open soft; a small smile.',
+    description: 'Breathes in, then the shoulders drop and relax; the eyes lower and soften (never closed), then look up again; a small smile.',
     duration: 2.6,
     tracks: {
       sheet: [[0, 'lift'], [0.3, 'relax'], [2.0, 'base']],
-      eyes: [[0, 'open'], [0.3, 'closed'], [1.1, 'soft'], [2.2, 'open']],
+      // (#739, the commander 2026-11-12) the eyes stay open: soft and down with the breath out
+      // (they were closed from 0.3 s to 1.1 s)
+      eyes: [[0, 'open'], [0.3, 'soft'], [2.2, 'open']],
+      gaze: [[0, 'c'], [0.3, 'd'], [1.1, 'c']],
       mouth: [[0, 'neutral'], [0.3, 'exhale'], [1.1, 'smile'], [2.3, 'neutral']],
       brows: [[0, 'up'], [0.3, 'soft'], [2.2, 'neutral']],
       earL: [[0, -8], [0.3, 10], [1.6, 4], [2.3, 0]],

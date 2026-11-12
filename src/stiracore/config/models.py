@@ -788,6 +788,10 @@ class AgentConfig:
     # floor, never in the prompt). False = episodes stay episodic-summary/v1.
     # STIRA_EPISODIC_EMOTION (non-empty) overrides it.
     episodic_emotion_snapshot: bool = True
+    # Speaker labels of newly written episodes (#653): {"user": ..., "agent": ...}. {} =
+    # the chat server's labels so far. An unsafe label is ignored (the default stays);
+    # stored episodes are never rewritten. Read at start-up.
+    episode_labels: dict[str, str] = field(default_factory=dict)
     # Opt-in associative recall (#170): {} = off. Keys enabled / max_items / max_chars /
     # window; the chat server reads it at start-up. No model call when on.
     associative_recall: dict[str, Any] = field(default_factory=dict)
@@ -902,6 +906,9 @@ class AgentConfig:
         from stiracore.agent.associative_recall import clean_options
 
         self.associative_recall = clean_options(self.associative_recall)
+        from stiracore.tools.episodic_formatter import clean_episode_labels
+
+        self.episode_labels = clean_episode_labels(self.episode_labels)
         from stiracore.memory_autonomy import clean_options as clean_memory_autonomy
 
         self.memory_autonomy = clean_memory_autonomy(self.memory_autonomy)
@@ -988,6 +995,7 @@ class AgentConfig:
             "harvest_job_max_episodes",
             "memory_retention",
             "episodic_emotion_snapshot",
+            "episode_labels",
             "associative_recall",
             "memory_autonomy",
             "containment",
@@ -1063,6 +1071,7 @@ class AgentConfig:
                 "harvest_job_max_episodes": self.harvest_job_max_episodes,
                 "memory_retention": copy.deepcopy(self.memory_retention),
                 "episodic_emotion_snapshot": self.episodic_emotion_snapshot,
+                "episode_labels": dict(self.episode_labels),
                 "associative_recall": copy.deepcopy(self.associative_recall),
                 "memory_autonomy": copy.deepcopy(self.memory_autonomy),
                 "containment": copy.deepcopy(self.containment),

@@ -4,12 +4,17 @@ Events never store prompt/response bodies; tool previews are masked and capped.
 Unknown event types are rejected; reserved types (memory.injected) validate; the chat
 server emits memory.injected only when the opt-in associative recall is on (#170), and its
 data must match the allow-list in ``memory_injected``.
+
+Design (#696): ``validate_event`` refuses a ``tool_call.*`` event whose ``error_class`` /
+``deny_code`` is outside its fixed set (the contract validates and rejects, as for every
+field); ``UIEventSink`` drops such a value first, so its own events lose the field, not the row.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 import threading
 import time
@@ -18,7 +23,8 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from .hooks import ObservabilityEvent
+from .hooks import TOOL_DENY_CODES, TOOL_ERROR_CLASSES, ObservabilityEvent
+from .masking import MASK
 from .memory_injected import validate_memory_injected
 from .model_progress import ModelCallProgress, call_id, completed_data, model_id
 from .security import mask_secrets
@@ -72,7 +78,18 @@ EVENT_TYPES = frozenset(
     }
 )
 RESERVED_TYPES = frozenset({"memory.injected"})
+# What UIEventSink writes (#705): ``running`` / ``denied`` in tool_call.created and
+# ``done`` / ``error`` / ``denied`` / ``running`` in tool_call.updated. It never writes
+# ``pending`` or ``timeout`` (the contract accepts them), and a tool call that ends as
+# ``retry`` stays ``running``. A reader therefore takes "the last status is ``running``"
+# as not finished, not as a failure.
 TOOL_STATUSES = frozenset({"pending", "running", "done", "error", "denied", "timeout"})
+# Why an event was dropped instead of written (#705): ``TurnEventRecorder.drop_counts``.
+DROP_NO_ACTIVE_TURN = "no_active_turn"  # emit() while no turn is active
+DROP_INVALID_EVENT = "invalid_event"  # the contract refused it (a ValueError)
+DROP_RECORD_FAILED = "record_failed"  # the store failed for any other reason
+DROP_NO_CALL_ID = "no_call_id"  # UIEventSink: a model event without a usable call id
+DROP_REASONS = (DROP_NO_ACTIVE_TURN, DROP_INVALID_EVENT, DROP_RECORD_FAILED, DROP_NO_CALL_ID)
 PREVIEW_LIMIT = 2000
 PREVIEW_LINES = 200
 # Tool payload detail (#188): retained masked text, served in pages of <= 200 lines / 100 KiB.
@@ -97,6 +114,13 @@ _DATA_REQUIRED = {
     "task_model.call": ("task", "status"),
 }
 _PREVIEW_KEYS = ("input_preview", "output_preview")
+# #702: every string value of ``data`` is masked when it is saved, except these fields:
+# identifiers the page joins on (tool call, approval request, report, model call). A real
+# id can look like a secret to ``mask_secrets`` (a provider's tool_use_id is long and
+# random), and a rewritten one no longer names its row. Top level of ``data`` only, and
+# only a value that is one token (``_ID_TOKEN``); any field not listed here is masked.
+_ID_KEYS = frozenset({"tool_use_id", "request_id", "supersedes", "report_id", "call_id"})
+_ID_TOKEN = re.compile(r"[A-Za-z0-9._:-]{1,128}")
 # turn.summary fields listed by recent_turns so the chat ribbon can restore after reload (#187).
 _SUMMARY_KEYS = (
     "category",
@@ -202,6 +226,27 @@ def _preview_fields(kind: str, captured: Any) -> dict[str, Any]:
     }
 
 
+def _secret_named(key: str) -> bool:
+    return mask_secrets({key: ""})[key] != ""
+
+
+def _mask_strings(value: Any, secret: bool = False) -> Any:
+    """#702: mask every string in ``value`` (JSON data), at any depth.
+
+    A string under a secret-named key (``password``, ``api_key``) becomes ``***`` whole,
+    as in ``mask_secrets``; any other string is scanned. Numbers, booleans and None are
+    left as they are."""
+    if isinstance(value, dict):
+        return {
+            key: _mask_strings(item, secret or _secret_named(key)) for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_mask_strings(item, secret) for item in value]
+    if isinstance(value, str):
+        return MASK if secret else mask_secrets(value)
+    return value
+
+
 def sanitize_data(data: Any) -> dict[str, Any]:
     if not isinstance(data, Mapping):
         raise ValueError("data must be a mapping")  # noqa: TRY004 - contract: ValueError
@@ -214,6 +259,12 @@ def sanitize_data(data: Any) -> dict[str, Any]:
         if key in out:
             out[key], cut = make_preview(out[key])
             truncated = truncated or cut
+    for key, value in out.items():  # #702: everything else, but an identifier (_ID_KEYS)
+        if key in _PREVIEW_KEYS:
+            continue
+        if key in _ID_KEYS and isinstance(value, str) and _ID_TOKEN.fullmatch(value):
+            continue
+        out[key] = _mask_strings(value, _secret_named(key))
     if truncated:
         out["truncated"] = True
     return out
@@ -247,6 +298,12 @@ def validate_event(event: Any) -> Mapping:
             raise ValueError(f"{kind} requires data.{key}")
     if kind.startswith("tool_call.") and data["status"] not in TOOL_STATUSES:
         raise ValueError("invalid tool_call status")
+    if kind.startswith("tool_call."):
+        # #696: codes from a fixed set only (never a message). The contract refuses any
+        # other value; UIEventSink drops such a value before it gets here.
+        for key, allowed in _TOOL_CODE_SETS.items():
+            if key in data and not (isinstance(data[key], str) and data[key] in allowed):
+                raise ValueError(f"invalid tool_call {key}")
     if kind == "memory.injected":
         validate_memory_injected(data)
     for key in _PREVIEW_KEYS:
@@ -558,6 +615,16 @@ class ActiveTurn:
 
 
 class TurnEventRecorder:
+    """Writes the active turn's events to the store and hands them to the subscribers.
+
+    An event that cannot be written is dropped (``emit`` returns None, a warning at most)
+    and counted by reason (#705, ``drop_counts``): plain integers of this process, zero
+    again after a restart. ``no_active_turn`` also counts events that arrive outside any
+    chat turn, which are never written. Not counted: a failing subscriber (the event is
+    in the store) and a tool payload that was not stored (its event then has no
+    ``input_stored`` / ``output_stored``).
+    """
+
     def __init__(
         self,
         store: TurnEventStore,
@@ -567,6 +634,7 @@ class TurnEventRecorder:
         self.store = store
         self.active = active or ActiveTurn()
         self._lock = threading.Lock()
+        self._drops = dict.fromkeys(DROP_REASONS, 0)
         self._subscribers: list[Callable[[dict], Any]] = [subscriber] if subscriber else []
 
     def subscribe(self, callback: Callable[[dict], Any]) -> Callable[[], None]:
@@ -592,13 +660,26 @@ class TurnEventRecorder:
             return False
         return True
 
+    def _count_drop(self, reason: str) -> None:
+        with self._lock:
+            self._drops[reason] += 1
+
+    def drop_counts(self) -> dict[str, int]:
+        """How many events this recorder dropped since it was made, per ``DROP_REASONS``."""
+        with self._lock:
+            return dict(self._drops)
+
     def emit(self, event_type: str, data: Mapping | None = None) -> dict | None:
         turn_id = self.active.current()
         if turn_id is None:
+            self._count_drop(DROP_NO_ACTIVE_TURN)
             return None
         try:
             event = self.store.append(turn_id, event_type, data or {})
-        except Exception:  # noqa: BLE001 - never break a turn on telemetry
+        except Exception as error:  # noqa: BLE001 - never break a turn on telemetry
+            # ValueError is the contract's refusal (sanitize_data / validate_event).
+            refused = isinstance(error, ValueError)
+            self._count_drop(DROP_INVALID_EVENT if refused else DROP_RECORD_FAILED)
             logger.warning("UI turn event dropped: %s", event_type)
             return None
         with self._lock:
@@ -617,6 +698,19 @@ _COMPLETED_STATUS = {
     "cancelled": "denied",
     "retry": "running",
 }
+# #696: fixed-set fields of a tool call (``hooks.TOOL_ERROR_CLASSES`` / ``TOOL_DENY_CODES``).
+_TOOL_CODE_SETS = {"error_class": TOOL_ERROR_CLASSES, "deny_code": TOOL_DENY_CODES}
+
+
+def _tool_codes(attributes: Mapping) -> dict[str, str]:
+    """``error_class`` / ``deny_code`` of a finished tool call; a value outside its set
+    (free text, another type) is dropped here, so the rest of the event is still written."""
+    codes = {}
+    for key, allowed in _TOOL_CODE_SETS.items():
+        value = attributes.get(key)
+        if isinstance(value, str) and value in allowed:
+            codes[key] = value
+    return codes
 
 
 class UIEventSink:
@@ -637,6 +731,7 @@ class UIEventSink:
         if event.event_type == "model.started":
             ident = call_id(attributes.get("call_id"))
             if ident is None:
+                self.recorder._count_drop(DROP_NO_CALL_ID)
                 return
             data: dict[str, Any] = {"call_id": ident, "started_at": event.timestamp.timestamp()}
             model = model_id(event.model_id)
@@ -647,7 +742,8 @@ class UIEventSink:
                 self.progress.started(ident, model)
             return
         data = completed_data(event)
-        if data is None:
+        if data is None:  # no usable call id
+            self.recorder._count_drop(DROP_NO_CALL_ID)
             return
         if self.progress is not None:
             self.progress.finished(data["call_id"])
@@ -700,6 +796,7 @@ class UIEventSink:
                         else {}
                     ),
                     **({"cancel": "declared"} if attributes.get("cancel") == "declared" else {}),
+                    **_tool_codes(attributes),
                     **self._payload(event, "output"),
                 },
             )

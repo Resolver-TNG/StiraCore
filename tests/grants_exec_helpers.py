@@ -14,12 +14,15 @@ from strands.models.model import Model
 from strands.tools.tools import AgentTool
 from strands.types._events import ToolResultEvent
 
+from tests.provider_fakes import turn_events
+
 MARKER = "goalmarker-9f3c2a7e5b1d4c60aa"
 
 
 class ScriptedProvider(Model):
     """Each call pops one script entry: a list of blocks (``{"text"}`` / ``{"toolUse"}``)
-    or a callable ``(messages) -> blocks``. Records the final input of every call."""
+    or a callable ``(messages) -> blocks``. Records the final input of every call. The
+    stream events come from ``provider_fakes.turn_events`` (the one emitter, #697)."""
 
     # Its stream is its one request (the executor accepts only such declared models).
     stira_grant_terminal = True
@@ -62,36 +65,15 @@ class ScriptedProvider(Model):
             self.on_call(self.calls)
         entry = self.script.pop(0) if self.script else [{"text": "nothing to do"}]
         blocks = entry(messages) if callable(entry) else entry
-        yield {"messageStart": {"role": "assistant"}}
-        reason = "end_turn"
-        for block in blocks:
-            if "toolUse" in block:
-                reason = "tool_use"
-                use = block["toolUse"]
-                yield {
-                    "contentBlockStart": {
-                        "start": {"toolUse": {"name": use["name"], "toolUseId": use["toolUseId"]}}
-                    }
-                }
-                yield {
-                    "contentBlockDelta": {"delta": {"toolUse": {"input": json.dumps(use["input"])}}}
-                }
-                yield {"contentBlockStop": {}}
-            else:
-                yield {"contentBlockDelta": {"delta": {"text": block["text"]}}}
-                yield {"contentBlockStop": {}}
-        yield {"messageStop": {"stopReason": reason}}
+        usage = None
         if self.usage is not None:
-            yield {
-                "metadata": {
-                    "usage": {
-                        "inputTokens": self.usage,
-                        "outputTokens": 3,
-                        "totalTokens": self.usage + 3,
-                    },
-                    "metrics": {"latencyMs": 1},
-                }
+            usage = {
+                "inputTokens": self.usage,
+                "outputTokens": 3,
+                "totalTokens": self.usage + 3,
             }
+        for event in turn_events(blocks, usage=usage, latency_ms=1):
+            yield event
 
 
 def use(name: str, tool_input: dict, n: int = 1) -> dict:

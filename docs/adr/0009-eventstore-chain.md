@@ -261,7 +261,10 @@ model id). That check cannot tell a secret from a code when the secret has the s
 (for example `MY_PRIVATE_TOKEN_123`): the contract is that **the recorder writes only code
 values into those fields and never user or model text** (previews and prose stay in
 `/api/turns/<id>/events` and the tool-payload pages, which are masked there, #185). Free text
-with spaces or punctuation is dropped. The two endpoints are read-only, have no
+with spaces or punctuation is dropped. A turn end may also carry `estimated_cost_usd` (#651):
+one finite, non-negative number computed from `token_prices` by `activity.turn_cost` (the
+board's sum); the rates themselves are not forwarded, and a turn that cannot be priced
+carries no cost. The two endpoints are read-only, have no
 authentication of their own (the server has none, see `docs/admin-api-permissions.md`; the
 loopback bind with the Host and same-origin guards is the boundary and is tested), and the
 snapshot takes its counts, tail and turn list under the store's write lock so they agree.

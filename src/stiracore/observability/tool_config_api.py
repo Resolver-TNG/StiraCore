@@ -13,7 +13,13 @@ def _hub_tools_url(query_string: bytes) -> str:
 
 
 def create_tool_config_blueprint(config: ToolConfig, get_breaker_level=lambda: None):
-    """Share config with the agent; get_breaker_level must read live state without pre_turn."""
+    """Share config with the agent; get_breaker_level must read live state without pre_turn.
+
+    No app in this repository registers it (#703): ``config_api`` serves ``/tools`` and
+    ``/api/tools/*`` on both servers. Never register both on one app: Flask raises nothing,
+    the blueprint registered first answers, and the POST here saves directly, not through
+    ``config_api``'s ``save_tool_config`` (``confirm`` / ``recover``).
+    """
     bp = Blueprint("tool_config", __name__)
 
     @bp.get("/tools")

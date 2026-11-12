@@ -95,6 +95,7 @@ WRIST = (86.0, 230.0)
 ELBOW = (22.0, 302.0)
 FORE_HALF = 16.0
 EYE_CORE = [(120.0, 98.5, 9.0, 5.2), (156.0, 97.5, 11.0, 4.8)]
+EYE_HOLE_GROW = 2  # px around EYE_CORE the icon's lashes reach (the face part is skin there)
 MOUTH_BOX = (127, 118, 146, 127)
 
 
@@ -258,8 +259,14 @@ def masks(parts, ears_poly, split):
     # They are hair lines: the face part draws them in the hair's line colour.
     x0, y0, x1, y1 = LEFT_EYE_STRANDS
     strands = (xx >= x0) & (xx <= x1) & (yy >= y0) & (yy <= y1)
+    # the icon's own eyes (lashes, iris, white) inside the face (#739): the eye sprites are
+    # drawn over them, and a sprite with the lid down (closed, half, a blink, the sip) left the
+    # icon's lash and iris showing above its own lash line - in a head pose 1-3 px off the
+    # sprite. The face is skin there (complete_sources), as its layer note says.
+    eye_hole = ndi.binary_dilation(core, iterations=EYE_HOLE_GROW) & full["face"]
     return {
         "strands": strands,
+        "eye_hole": eye_hole,
         "vis": vis,
         "full": full,
         "sil0": sil0,
@@ -281,6 +288,8 @@ def complete_sources(parts, mk):
     for k in ("turtleneck", "coat", "face", "crown", "forearm_r", "hand_r"):
         full, vis = mk["full"][k], mk["vis"][k]
         hidden = full & ~vis
+        if k == "face":
+            hidden |= mk["eye_hole"]
         sm = px.smooth
         ink = px.ink
         mat = px.mat.copy()

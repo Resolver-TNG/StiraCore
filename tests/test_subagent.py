@@ -1,7 +1,6 @@
 """Real SDK delegation/Swarm tests with deterministic offline model streams."""
 
 import asyncio
-import json
 from unittest.mock import Mock
 
 import pytest
@@ -15,6 +14,7 @@ from stiracore.agent.delegation import (
 from stiracore.agent.nxp_agent import NXPAgent
 from stiracore.agent.subagent import create_nxp_subagent
 from stiracore.core import BreakLevel, NeuralState
+from tests.provider_fakes import turn_events
 
 
 class ScriptedModel(Model):
@@ -33,37 +33,8 @@ class ScriptedModel(Model):
 
     async def stream(self, messages, tool_specs=None, system_prompt=None, **kwargs):
         self.calls.append(tool_specs or [])
-        response = self.responses.pop(0)
-        yield {"messageStart": {"role": "assistant"}}
-        reason = "end_turn"
-        for block in response:
-            if "toolUse" in block:
-                reason = "tool_use"
-                use = block["toolUse"]
-                yield {
-                    "contentBlockStart": {
-                        "start": {
-                            "toolUse": {
-                                "name": use["name"],
-                                "toolUseId": use["toolUseId"],
-                            }
-                        }
-                    }
-                }
-                yield {
-                    "contentBlockDelta": {
-                        "delta": {
-                            "toolUse": {
-                                "input": json.dumps(use["input"]),
-                            }
-                        }
-                    }
-                }
-            else:
-                yield {"contentBlockStart": {"start": {}}}
-                yield {"contentBlockDelta": {"delta": block}}
-            yield {"contentBlockStop": {}}
-        yield {"messageStop": {"stopReason": reason}}
+        for event in turn_events(self.responses.pop(0)):
+            yield event
 
 
 @pytest.fixture

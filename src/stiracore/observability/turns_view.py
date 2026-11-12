@@ -32,11 +32,12 @@ import time
 from collections.abc import Iterator, Mapping
 from typing import Any
 
-from flask import Blueprint, Response, jsonify, request, stream_with_context
+from flask import Blueprint, Response, current_app, jsonify, request, stream_with_context
 
 from ..core import breaker_reasons, hitl_reasons
 from ..core.engine import BreakLevel, HITLAction
 from ..providers.failure import REASONS as _FAILURE_REASONS
+from .activity import TOKEN_PRICES_EXTENSION, turn_cost
 from .turn_events import (
     EVENT_TYPES,
     INTERRUPT_REASONS,
@@ -68,6 +69,7 @@ _MAX_CURSOR = 2**63 - 1  # a SQLite integer; also at most 19 digits
 _MAX_COUNT = 2**53  # a token count / duration the page can add without losing digits
 _MAX_SECONDS = 1e11  # the page reads a number below this as epoch seconds
 _MAX_SEQ = 2**31
+_MAX_COST = 1e12  # USD for one turn; anything above is not a cost the page should add
 
 # Values the recorder writes from constants in the code. A value outside its set is shown as
 # a fixed word, never as stored.
@@ -166,12 +168,17 @@ def _usage(data: Mapping) -> dict[str, Any] | None:
     return result if len(result) > 1 else None
 
 
-def page_event(row_id: int, event: Mapping) -> dict[str, Any]:
+def page_event(row_id: int, event: Mapping, prices: Any = None) -> dict[str, Any]:
     """One ``ui_events`` row as an event of the observability page's contract.
 
     Every value is validated on the way out (see the module docstring): numbers must be
     finite and in range, ``type`` one of the contract's, enumerated codes one of the
     recorder's constants, the rest code-like.
+
+    ``prices`` (#651): model id -> ``Pricing`` (``gateway-config.json`` ``token_prices``).
+    With it a ``turn.completed`` that can be priced carries ``estimated_cost_usd`` (one
+    number, the same sum as the board's totals: ``activity.turn_cost``); one that cannot
+    carries none, so the page counts it as unpriced, never as free. The rates stay inside.
     """
     raw = event.get("data")
     data: Mapping = raw if isinstance(raw, Mapping) else {}
@@ -217,6 +224,9 @@ def page_event(row_id: int, event: Mapping) -> dict[str, Any]:
         if usage is not None:
             out["usage"] = usage
             out["usage_id"] = f"{turn_id}:turn"
+            cost = _number(turn_cost(data, prices), _MAX_COST)
+            if cost is not None:
+                out["estimated_cost_usd"] = cost
         usage_reason = _usage_reason(data.get("usage_reason"))
         if usage_reason is not None:
             out["usage_reason"] = usage_reason
@@ -370,6 +380,10 @@ def create_turns_observability_blueprint(turn_store: TurnEventStore) -> Blueprin
         value = int(raw)
         return value if value <= _MAX_CURSOR else None
 
+    def token_prices() -> Any:
+        """The chat blueprint's price table (#651), or None: no cost on the events."""
+        return current_app.extensions.get(TOKEN_PRICES_EXTENSION)
+
     @blueprint.get("/api/observability/events")
     def stream_events() -> Response | tuple[Response, int]:
         raw = request.headers.get("Last-Event-ID")
@@ -378,6 +392,7 @@ def create_turns_observability_blueprint(turn_store: TurnEventStore) -> Blueprin
         cursor = parse_cursor(raw)
         if cursor is None:
             return jsonify(error="Invalid event cursor."), 400
+        prices = token_prices()
 
         @stream_with_context
         def generate() -> Iterator[str]:
@@ -389,7 +404,7 @@ def create_turns_observability_blueprint(turn_store: TurnEventStore) -> Blueprin
                 rows = turn_store.events_after(position, _BATCH_SIZE)
                 for row_id, event in rows:
                     data = json.dumps(
-                        page_event(row_id, event),
+                        page_event(row_id, event, prices),
                         ensure_ascii=False,
                         allow_nan=False,
                         separators=(",", ":"),
@@ -417,13 +432,14 @@ def create_turns_observability_blueprint(turn_store: TurnEventStore) -> Blueprin
         taken = turn_store.snapshot(_SNAPSHOT_EVENTS, _SNAPSHOT_TURNS)
         counts = taken["counts"]
         latest = counts["latest_id"]
+        prices = token_prices()
         response = jsonify(
             {
                 "source": "turns.db",
                 "event_count": counts["event_count"],
                 "turn_count": counts["turn_count"],
                 "latest_event_id": str(latest) if latest else None,
-                "events": [page_event(row_id, event) for row_id, event in taken["tail"]],
+                "events": [page_event(row_id, event, prices) for row_id, event in taken["tail"]],
                 "turns": [_turn_item(item) for item in taken["turns"]],
             }
         )

@@ -19,6 +19,7 @@ from strands.types.tools import ToolSpec
 from stiracore.agent.session_manager import NXPSessionManager
 from stiracore.agent.state_persistence import StatePersistence
 from stiracore.core import NeuralState
+from tests.provider_fakes import turn_events
 
 
 class _FakeModel:
@@ -60,11 +61,8 @@ class _FakeModel:
     ) -> AsyncGenerator[dict[str, Any], None]:
         text = self._replies[self.index]
         self.index += 1
-        yield {"messageStart": {"role": "assistant"}}
-        yield {"contentBlockStart": {"start": {}}}
-        yield {"contentBlockDelta": {"delta": {"text": text}}}
-        yield {"contentBlockStop": {}}
-        yield {"messageStop": {"stopReason": "end_turn"}}
+        for event in turn_events([{"text": text}]):
+            yield event
 
 
 def _texts(agent: Agent) -> list[str]:

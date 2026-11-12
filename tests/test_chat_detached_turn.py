@@ -21,6 +21,7 @@ import socket
 import struct
 import threading
 import time
+from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -39,14 +40,27 @@ from tests.test_new_session import make_stira
 WAIT = 10.0
 
 
-def _until(predicate, timeout=WAIT, step=0.02):
-    deadline = time.monotonic() + timeout
+def _until(predicate, timeout=WAIT, step=0.02, what="condition", state=None):
+    """Poll ``predicate`` until it is truthy (at most ``timeout`` s) and return its value.
+
+    When the time runs out the failure names what was waited for (``what``), how long and
+    how often, and ``state()`` — what the test saw last (#715). ``state`` returns what the
+    predicate kept from its last look; it does not look again after the time-out.
+    """
+    started = time.monotonic()
+    deadline = started + timeout
+    polls = 0
     while time.monotonic() < deadline:
+        polls += 1
         value = predicate()
         if value:
             return value
         time.sleep(step)
-    raise AssertionError("condition not reached in time")
+    waited = time.monotonic() - started
+    message = f"{what} not reached in time ({waited:.1f} s, {polls} polls)"
+    if state is not None:
+        message += f"; last seen: {state()!r}"
+    raise AssertionError(message)
 
 
 def _frames(chunks):
@@ -505,27 +519,143 @@ def test_real_app_an_unanswered_approval_still_expires_as_a_rejection(stira):
     assert not (stira["data"] / "workspace" / "notes" / "never.txt").exists()
 
 
-def test_real_app_the_stop_button_route_cancels_the_running_turn(stira):
+@contextmanager
+def _worker_held_after_its_record(monkeypatch, wait=WAIT):
+    """Hold the turn's worker between writing ``turn.completed`` and giving up the run slot.
+
+    The worker sends its last frame (``turn`` / ``error``) after the record is written and
+    before it ends; that frame waits here for ``let_go`` (#715). Yields the hold:
+    ``recorded`` is set once the worker is in that window, ``timed_out`` if the hold ran
+    out (``wait`` s) before ``let_go`` — then the window was not kept.
+
+    On every way out (a failed assert, an exception, a time-out) the worker is let go,
+    ``_sse`` is put back and the chat workers started inside are waited for (at most
+    ``WAIT`` s; the fixture's teardown does not wait for them). ``ended``: their names.
+    """
+    hold = SimpleNamespace(
+        recorded=threading.Event(), let_go=threading.Event(), timed_out=threading.Event(), ended=[]
+    )
+    sse = chat_api._sse
+    before = set(threading.enumerate())
+
+    def held(event, data):
+        if event in ("turn", "error"):
+            hold.recorded.set()
+            if not hold.let_go.wait(wait):
+                hold.timed_out.set()
+        return sse(event, data)
+
+    monkeypatch.setattr(chat_api, "_sse", held)
+    try:
+        yield hold
+    finally:
+        hold.let_go.set()
+        monkeypatch.setattr(chat_api, "_sse", sse)
+        workers = [
+            thread
+            for thread in threading.enumerate()
+            if thread not in before and thread.name.startswith("chat-turn-")
+        ]
+        deadline = time.monotonic() + WAIT
+        for worker in workers:
+            worker.join(max(0.0, deadline - time.monotonic()))
+        hold.ended[:] = [worker.name for worker in workers if not worker.is_alive()]
+        left = [worker.name for worker in workers if worker.is_alive()]
+        assert not left, f"chat workers still running after the hold was let go: {left}"
+
+
+def test_the_held_worker_is_let_go_and_waited_for_when_the_test_fails_early(recorder, monkeypatch):
+    sse = chat_api._sse
+    runner = Gate()
+    app, _ = _app(runner, recorder=recorder)
+    with (
+        pytest.raises(RuntimeError, match="early"),
+        _worker_held_after_its_record(monkeypatch) as hold,
+    ):
+        response, _, _ = _open_stream(app.test_client())
+        try:
+            runner.release.set()
+            assert hold.recorded.wait(WAIT), "the worker did not reach its last frame"
+            raise RuntimeError("early")  # the worker is still held here
+        finally:
+            response.close()
+    assert hold.let_go.is_set() and not hold.timed_out.is_set()
+    assert chat_api._sse is sse
+    assert len(hold.ended) == 1 and hold.ended[0].startswith("chat-turn-")
+    assert _completed(recorder)["stop"] == "completed"
+
+
+def test_a_hold_that_runs_out_is_seen_by_the_test(monkeypatch):
+    with _worker_held_after_its_record(monkeypatch, wait=0.01) as hold:
+        assert chat_api._sse("ui_event", {}) and not hold.recorded.is_set()  # not held
+        assert chat_api._sse("turn", {})  # nobody lets go: the hold opens by itself
+        assert hold.recorded.is_set() and hold.timed_out.is_set()
+
+
+def _look(client, seen):
+    """The newest turn of /api/turns (None: no turn). ``seen["last"]`` keeps what this
+    look saw (fixed fields only), for the message of a wait that ran out."""
+    turns = client.get("/api/turns?limit=1").get_json()["turns"]
+    turn = turns[0] if turns else None
+    seen["last"] = (
+        "no turn"
+        if turn is None
+        else {key: turn.get(key) for key in ("completed", "stop", "error", "stoppable")}
+    )
+    return turn
+
+
+def test_real_app_the_stop_button_route_cancels_the_running_turn(stira, monkeypatch):
     client, model = stira["client"], stira["model"]
     inside, release = threading.Event(), threading.Event()
+    seen = {"last": "not looked yet"}
 
     def during():
         inside.set()
         assert release.wait(WAIT)
 
-    model.during = during
-    response = _post_chat(stira, "long", "k4")
-    next(iter(response.response))
-    assert inside.wait(WAIT)
-    # /api/turns names the one turn ■ Stop can stop (the chat page offers it only for that)
-    assert client.get("/api/turns?limit=1").get_json()["turns"][0]["stoppable"] is True
-    stopped = client.post("/api/chat/cancel", headers={"X-CSRF-Token": stira["token"]})
-    assert stopped.status_code == 202
-    release.set()
-    done = _until(lambda: _latest(client))
-    model.during = None
-    response.close()
-    assert done["stop"] == "cancelled" and done["stoppable"] is False
+    def recorded():
+        turn = _look(client, seen)
+        return turn if turn and turn["completed"] else None
+
+    def ended():
+        turn = recorded()
+        return turn if turn and turn["stoppable"] is False else None
+
+    with _worker_held_after_its_record(monkeypatch) as hold:
+        response = None
+        model.during = during
+        try:
+            response = _post_chat(stira, "long", "k4")
+            next(iter(response.response))
+            assert inside.wait(WAIT), "the model call was not reached"
+            # /api/turns names the one turn ■ Stop can stop (the chat page offers it only
+            # for that)
+            assert _look(client, seen)["stoppable"] is True
+            stopped = client.post("/api/chat/cancel", headers={"X-CSRF-Token": stira["token"]})
+            assert stopped.status_code == 202
+            release.set()
+            # The record is written before the worker ends. In between, the turn is
+            # completed in turns.db while the run slot is still held: nothing about the
+            # slot is asserted there (#715: the old test read ``stoppable`` in that window).
+            assert hold.recorded.wait(WAIT), (
+                f"the worker did not reach its last frame; last seen: {seen['last']!r}"
+            )
+            done = _until(recorded, what="turn.completed", state=lambda: seen["last"])
+            assert done["stop"] == "cancelled"
+            assert not hold.timed_out.is_set(), "the hold ran out: the window was not kept"
+            hold.let_go.set()
+            done = _until(
+                ended, what="the worker's end (run slot free)", state=lambda: seen["last"]
+            )
+            assert done["stop"] == "cancelled" and done["stoppable"] is False
+        finally:
+            # every way out: the model call and the reader are released before the hold's
+            # own exit waits for the worker
+            release.set()
+            model.during = None
+            if response is not None:
+                response.close()
     assert client.get("/api/chat/history").get_json()["turns"][-1]["stop"] == "cancelled"
     # without the CSRF token nothing is stopped (same protection as every POST)
     assert client.post("/api/chat/cancel", headers={"X-Test-No-Csrf": "1"}).status_code == 403
