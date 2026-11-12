@@ -37,7 +37,7 @@ Observability:
     ObservabilityEvent    — Normalized event dataclass
 """
 
-__version__ = "0.1.0-dev"
+__version__ = "0.1.0a1"
 
 # Core
 from stiracore.agent.context_assembler import ContextAssembler

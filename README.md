@@ -17,7 +17,7 @@ An original agent runtime that extends Strands with identity persistence, memory
 StiraCore is an **alpha**. It runs, but parts of it are unfinished and some things do not work
 yet. Known gaps on current `main`:
 
-- **No stability promise.** This is `0.1.0.dev0`: the Python API, configuration keys, event and
+- **No stability promise.** This is `0.1.0a1`: the Python API, configuration keys, event and
   file formats and the data directory layout (`.local/stira/`) can change between commits,
   without migration code ([CHANGELOG](CHANGELOG.md)).
 - **Local, single-user servers.** The web apps have no login. They listen on loopback and
@@ -86,7 +86,7 @@ Amazon Bedrock); the Stage art in them is CC BY 4.0 ([License](#license)).
 
 ## Status
 
-🚧 **Early development (`0.1.0.dev0`)** — APIs and integration points may still change.
+🚧 **Early development (`0.1.0a1`)** — APIs and integration points may still change.
 The CI matrix needs no cloud account: Ubuntu (Python 3.11 / 3.12) and macOS (Python 3.11). Built on:
 
 - [Strands SDK](https://github.com/strands-agents/sdk-python) (agent/tool/model abstraction)

@@ -2,9 +2,11 @@
 
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
-[Semantic Versioning](https://semver.org/) once it leaves `0.1.0.dev0`.
+[Semantic Versioning](https://semver.org/) once it leaves the `0.1.0a` series.
 
 ## [Unreleased]
+
+## [0.1.0a1] - 2026-11-12
 
 First public snapshot. Nothing below is a stable API yet. Features marked *opt-in* are off
 by default.
