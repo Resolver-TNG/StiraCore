@@ -49,7 +49,7 @@ dev = [
     # Pinned to one minor: a new ruff release adds rules (RUF022 on 2026-11-06) and turns Lint red.
     "ruff>=0.17.4,<0.18",
     "flask>=3.1",
-    "pillow>=12.1.1,<13",
+    "pillow>=12.1.1,<14",
     # The PDF tests of web_fetch (#585) parse real PDFs; the [pdf] extra itself stays optional.
     "pypdf>=5",
 ]
