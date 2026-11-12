@@ -1,7 +1,7 @@
 # Linux CI image for Stira-Strands, on the same OS as GitHub's ubuntu-latest (24.04):
 # git, Node 22, PowerShell and Python (3.11 or 3.12 via uv, like actions/setup-python).
 # Build: docker build --build-arg PY=3.11 -t stira-ci:py3.11 .
-FROM ubuntu:24.04
+FROM ubuntu:25.10
 ARG PY=3.11
 ENV DEBIAN_FRONTEND=noninteractive PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONUNBUFFERED=1 \
     UV_PYTHON_INSTALL_DIR=/opt/uv-python UV_LINK_MODE=copy PATH=/opt/uvbin:$PATH
