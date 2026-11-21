@@ -23,12 +23,13 @@
 | `kind` | 常に `goal` — YOLO の窓（`kind="yolo"`）との判別子。目標グラントが窓として扱われることも、その逆もない |
 | `session_ref` | `grant:<id>` — W5 の反復が動く専用セッション |
 | `goal` | 自由記述。**グラントストアにだけ**保存（`grants.json`、`0600`）。`mask_secrets` で変わる目標は拒否。それ以外（ログ・ライフサイクルイベント・アウトボックス・一覧・エラー・監査）では `grant_id` だけで参照する |
-| `scope.tools` | `file_read`・`editor`・`run_checks`・`memory_read`・`memory_search`・`memory_list`・`current_time` の空でない部分集合 |
-| `scope.workspace_subtree` | エージェントの書込みルート内に実在するディレクトリ。解決済み（シンボリックリンクで外へ出ない）で、書込みの床の内側 |
+| `scope.tools` | `file_read`・`editor`・`run_checks`・`memory_read`・`memory_search`・`memory_list`・`current_time`・`page_look`・`view_image` の空でない部分集合（`view_image` は `page_look` と一緒のときだけ。[ページツール](#グラントのページツールadr-0015-rev-6-s5)）。`page_check` と `page_review` は含められない |
+| `scope.workspace_subtree` | エージェントの書込みルート内に実在するディレクトリ。解決済み（シンボリックリンクで外へ出ない）で、書込みの床の内側。Stira のチェックアウトは不可（[下](#保護されたサブツリーとパス-791)） |
 | `budget` | `total_tokens`（≤ 5 000 000）と `per_tick_tokens`（≤ 総量） |
 | `ttl_sec` | 既定 7200（2 時間）、上限 21600（6 時間）。延長しない |
 | `max_iterations` | 既定 10、上限 20 |
 | `no_progress_ticks` | 既定 3 |
+| `report_files` | 任意、既定はなし（ADR 0028 §4）: 進展の指紋が無視する、作業ディレクトリ内の相対ファイルパス（8 個まで。[下](#報告ファイルadr-0028-4)）。発行時に固定 |
 | `verifier` | `user`（v1 ではこれだけ）。確認の無いグラントは発行できない |
 | `issued_*` | 発行時の壁時計・スリープ込み・スリープ抜きの読み |
 | `issuer` | `dashboard`（ホスト確認済み） |
@@ -38,6 +39,177 @@
 true）**と**、検証済みの `os_sandbox` ホスト（ADR 0019）の両方が要ります。`limits_only` の
 ホストでは、設定に関係なく `run_checks` を含むグラントは拒否されます
 （`grant_run_checks_not_contained`）— 設定で外せない安全の床です。
+
+### 保護されたサブツリーとパス (#791)
+
+**既定で拒否（ADR 0029 Q3 / B6）。** サブツリーが **Stira のチェックアウトの保護された部分と重なる**
+グラントは発行できません。チェックアウトとは、`src/stiracore/__init__.py` が開けるディレクトリです
+（名前の解決はファイルシステムのとおり。ファイルは存在を見るだけで、読みません）。重なるのは、
+サブツリーがチェックアウトそのもの・それを含む場合と、チェックアウトの内側で次の場所以外にある場合です:
+
+| チェックアウトの内側 | そこへのグラント |
+|---|---|
+| `.local/`（既定のデータディレクトリ。`STIRA_DATA_DIR` が無いとき、ワークスペースは `<checkout>/.local/stira/workspace`）と `workspace/` | **通常のグラント**（オプション不要）。ほかの場所と同じく自分のプロジェクトを書けます（`pyproject.toml`、`conftest.py`、`__init__.py` も）。効くのは下の「あとで実行されるファイル」の一覧だけです。サーバーのデータディレクトリそのものは、これまでどおり書込みの床です |
+| チェックアウトの `docs/` の内側のディレクトリ(例 `docs/research/`) | `grant_subtree_protected` で拒否。オプションと確認の両方があるときだけ可。そのときの書き込みは許可リスト(`docs/` から `docs/eval`・`docs/adr`・境界文書を除く)だけ(レビュー #791 N1: Stira 自身のツリーだから) |
+| それ以外: チェックアウトのルート、`src/`、`src/stiracore/…`、`dashboard/…`、`tests/`、`docs/` そのもの（`docs/eval/` を含むため） | 拒否: `grant_subtree_protected` |
+
+あとで実行されるディレクトリ（`.git/` など、下の一覧）の内側にあるサブツリーも、オプションの有無に
+関係なく同じように拒否します（そこではグラントは何も書けません）。パスは先に解決します
+（シンボリックリンク、`..`）。判定できない場合（読めないディレクトリ、サブツリーの下のディレクトリが
+200 000 を超える）も拒否します: `grant_subtree_protected`。これが無いと、グラントの `editor` が
+承認の層・評価器・上限を書き換え、再起動後は変わった規則で動いてしまいます。
+
+**動いているサーバー自身のツリーは、グラントのサブツリーになりません。** サーバーが動いている
+パッケージのディレクトリ（`stiracore.__file__`）、その内側と外側のディレクトリ、それを含む
+チェックアウトの保護された部分は、**下のオプションがあっても**拒否します:
+`grant_subtree_running_checkout`。自己開発は別のワークツリーで行います。
+
+**広げるオプション「自己開発の範囲」（B6b）。** ユーザー設定
+`autonomy.grant_self_development: true`（`gateway-config.json`、既定オフ、起動時に読む）があるとき、
+人は発行の本文に別の確認 `"self_development": true` を付けて、**動いているサーバーのものではない
+チェックアウト**へのグラントを発行できます —
+「このグラントは Stira のチェックアウトの中で作業できます。`editor` が書けるのは `docs/` の下だけです」。
+このグラントが書けるのは下の**許可リストだけ**です（現在は `docs/`。`docs/eval/`、境界文書、
+一覧 3 の名前は除く）。チェックアウトのほかの部分 — 配信されるダッシュボード、承認・封じ込め・
+評価器・予算・軸のコード、`tests/`（新しいテストも書けません）— は読み取り専用です。グラントの記録には
+`self_development: true` が入ります（そのときだけ。グラントのビューにも同じキー。設定画面のパネルと
+Stage のボードは、そのグラントにバッジ「自己開発」を付け、ツールチップで書ける範囲を示します）。あとから
+通常のグラントと見分けられます。設定なしの確認は拒否（`grant_self_development_off`）、確認なしの設定も
+拒否（`grant_subtree_protected`）です。ホストで確認する要約には、広げる点として
+`changes: loosen:self_development` が出ます。発行のほかの条件（ブレーカー NORMAL、`ISSUE` の入力、
+ホストでの確認）は変わりません。モデルの出力はどちらも設定できません: 依頼書の下書き（ADR 0029）は
+既定値を使い、そのサブツリーは拒否されたままです。
+設定画面の発行フォームは、別のチェック欄「このグラントは Stira のチェックアウトの中で作業できる
+（書けるのは docs/ だけ）」を、**設定がオンのサーバーでだけ**出します。初期状態はオフで、オンにした
+ときだけ `self_development: true` を送ります。確認ダイアログは広げる点を 1 行として示し、3 つの拒否
+（`grant_subtree_protected`、`grant_subtree_running_checkout`、`grant_self_development_off`）は
+言葉で表示します（en / ja）。
+
+**グラントの `editor` が決して書かないもの** — ルール・グラント・オプションに関係ありません（反復は
+`tool_refused`、詳細 `protected_path` で止まります。読むことはできます。判定できないパスは拒否）。
+検査は承認のゲートの前と、ツールの中（書込みごとの直前）の両方で行います。
+`stiracore/self_protect.py` にある閉じた一覧です:
+
+**1. あとで実行されるファイル（どのワークスペースでも）** — あとで人のマシンで実行されるもの。
+パスのどこかの要素として、書かれたとおりでも解決後でも（相対、`./`、`..`、シンボリックリンク、
+大文字小文字、末尾のスラッシュやドット）:
+`.git`（ディレクトリ — hooks、`config`、`info/` — と、ワークツリーの `.git` ポインタファイル）、
+`.gitattributes`、`.gitmodules`、`.github/`、`.gitlab-ci.yml`、`.pre-commit-config.yaml`、
+`.vscode/`、`.idea/`、`.devcontainer/`、`.envrc`、`.husky/`、`.kiro/`、`.claude/`、`.cursor/`、
+および `*.code-workspace`。`Makefile` は一覧に**入れません**（Stira もグラントのツールも `make` を
+実行しません。人がほかのコードと同じように読みます）。
+
+**2. Stira のチェックアウトの中: 許可リスト**（`docs/proposer-edit-boundary.md` §4: 列挙されて
+いないものは範囲外）。グラントの `editor` が書けるのは `docs/` の下だけです。チェックアウトのほかの
+部分はすべて拒否します — `src/`（下の一覧にあるかどうかに関係なく全モジュール）、`dashboard/`
+（全部: サーバー配線、テンプレート、`static/js`、`static/i18n`、`stage/` — 配信されるページは承認の層の
+ブラウザ側です）、`tests/`、`ci/`、`scripts/`、ルートのファイル。サブツリーが `.local/` か
+`workspace/` にあるグラントは、その場所のファイルについてこの規則で判定しません（上の表）。
+
+**3. 許可リストの内側でも守る二重の線と、層の名前つきの記録**（その項目と、その下のすべて。
+許可リストが増えても拒否します）:
+
+| 層 | パス |
+|---|---|
+| import 時に走るコードと評価器の上書き（**どの深さでも**） | `__init__.py`、`conftest.py`、`pytest.ini`、`.pytest.ini`、`tox.ini`、`setup.cfg`、`setup.py`、`pyproject.toml`、`ruff.toml`、`.ruff.toml`、`sitecustomize.py`、`usercustomize.py` |
+| 承認と封じ込め、その配線 | `src/stiracore/__init__.py`、`core/approval.py`、`core/approval_store.py`、`core/engine.py`、`core/containment.py`、`core/turn_lock.py`、`core/checkpoint.py`、`control/job_approvals.py`、`agent/checkpoint_hooks.py`、`agent/nxp_agent.py`、`agent/grant_child.py`、`tools/tool_policy.py`、`tools/tool_consent.py`、`tools/tool_config.py`、`tools/tool_registry.py`、`tools/exec_gate.py`、`yolo/`、`grants/`、`authority/` |
+| egress とマスク | `labels.py`、`tools/own_dashboard_gate.py`、`tools/http_consent.py`、`tools/web_tools.py`、`integrations/`、`providers/`、`agent/model_factory.py`、`observability/masking.py`、`observability/security.py`、`middleware/taint_observer.py`、`middleware/containment_observer.py`、`tools/episodic_formatter.py` |
+| 床 | `identity_paths.py`、`self_protect.py`、`middleware/identity_guard.py`、`tools/os_protection.py`、`tools/checked_open.py`、`tools/file_editor_tool.py`、`tools/file_tools.py`、`tools/child_env.py` |
+| 人格のコア | `core/neural_state.py`、`core/coherence.py`、`core/amygdala.py`、`agent/stimulus_classifier.py`、`agent/ja_hybrid/`、`middleware/sycophancy_monitor.py`（SOUL / IPD はもともと書込みの床） |
+| 評価器、軸の検査、境界の文書 | `tests/`（`tests/attack/` を含む）、`ci/`、`scripts/`、`docs/eval/`、`docs/proposer-edit-boundary.md`、`conftest.py`、`pyproject.toml`、`release-exclude.txt`、`src/stiracore/eval/`、`core/breaker_sim.py`、`tools/run_checks.py`、`tools/page_check.py`、`tools/page_check_guard.py` |
+| 監査の記録 | `observability/event_store.py`、`audit_chain.py`、`event_chain.py`、`turn_events.py` |
+| 予算・上限・設定の既定値 | `tools/delegate_tool.py`、`scheduler/`、`diagnostics/`、`config/` |
+| サーバーが配信するものすべてと、その配線 | `dashboard/` |
+
+チェックアウトの中では、ハードリンクが 2 つ以上ある既存のファイルも拒否します（一覧のファイルの
+別名かもしれないため）。動いているサーバーのパッケージのディレクトリの中は、すべての書込みを
+拒否します。データディレクトリはこれまでどおり書込みの床です。Stira 自身の UI を直す作業は、
+グラントではなく、別のワークツリーでの通常の開発で行います。
+
+**必ず人（グラントの外でも）。** `editor` と `file_write` による、あとで実行されるファイル
+（上の 1 と同じ一覧、同じ綴りの扱い）への書込みは、自動では承認されません:
+ツールのルールが Always でも承認カードを出し、YOLO の窓も継続許可も答えません。音声を
+`output_path` に保存する `speak` も同じゲートです。ほかの書込みツールはこうしたパスを取りません:
+`journal` は `journal/<日付>.md`、記憶のツールはデータディレクトリ、`run_checks` は使い捨ての写しの中、
+`page_check` / `page_look` は `.stira-verify/` に書きます。
+
+### グラントのページツール（ADR 0015 rev 6, S5）
+
+**範囲に `page_look` を含める**と、人が見ていない反復が、自分のワークスペースのページ
+ファイルを閉じたブラウザで**承認カードなしに**開けます。グラントの中ではグラントがその
+呼び出しに答えます（監査の行は `answered_by: grant`、グラント ID、ラウンド番号、
+`origin: grant`）。`page_look` 自身の保存済みルールには関係ありません。ただし Never のときは、その
+ラウンドにツールを出しません。**また、`file_read` の現在のルールが Always の間だけ**です
+（ページはワークスペースのファイルを読めるので、グラント自身の `file_read` ならカードが要る
+ものを、ページ経由でカードなしに読むことはありません）。ユーザー設定
+`autonomy.page_look_unattended` が `true` の
+ときだけ有効です（既定 `false`）。以下はすべて、失敗したら閉じる側に倒します。
+
+**これは承認の門に足した 1 行です。** `page_look` の保存済みルールが **Ask（毎回確認）** なら、
+通常は呼び出しごとにカードが出ます。`page_look` を含むグラントの中では**カードを出しません**。
+そのグラントを発行したときの、入力とホスト確認つきの `ISSUE` が承認にあたり、下の表の検査が
+各呼び出しの前に立ちます。この行は狭く作っています: 対象は `page_look` だけ、グラント自身の
+子エージェントの中だけです（`CheckpointHooks.grant_answered`。設定するのは
+`create_grant_child` だけで、チャットのフックには付きません）。ルールが **Never** のときは
+グラントは答えません。グラントが答えるのは **`file_read` のルールが Always の間だけ**です:
+`file_read` が Ask か Never ならラウンドを拒否し（`file_read_not_always` / `not_in_scope`）、
+ラウンドの途中でルールを下げると次のページツールの呼び出しで止まります。
+設定がオフのとき、軸の検査が失敗したとき、対象が作業ディレクトリの外の
+とき、範囲にこのツールが無いときは、何も実行せず、カードも出しません（確認ではなく拒否です）。
+テスト: `test_grant_answered_never_passes_a_never_rule`、
+`test_grant_answered_does_not_pass_setting_off_axis_failure_or_out_of_scope`、
+`test_grant_page_look_capped_when_file_read_ask`、
+`test_file_read_rule_is_read_live_at_every_page_call`。
+
+| いつ | 何を検査するか | 失敗したとき |
+|---|---|---|
+| 発行 | 設定。このサーバーに `page_look` が登録されていること（ブラウザが見つかった）。この範囲での**軸の完全な検査**（ADR 0015 A1–A10）が `pass` であること。範囲に `file_read` があり、**その現在のルールが Always** であること（A9） | 拒否: `grant_page_look_setting_off` / `grant_page_look_unavailable` / `grant_page_look_axis`（`reason` は軸のコード） |
+| 各ラウンドの境界（押下またはハートビート開始）。ほかの受付検査の後、プロバイダーを読む前 | 設定と軸の完全な検査。A9 は、現在のルールで残るツールで判定（`file_read` のルールが Never なら `not_in_scope`、Ask なら `file_read_not_always` で失敗）。グラントではラウンド台帳が健全で検証に通ること（A6） | **持続する**コード（`browser_guard_unverified`・`rules_locked`・`record_unhealthy`・`ledger_unhealthy`・`write_floor_changed`・`reviewer_changed`・`platform_unmeasured`、および持続しないものに挙げていないすべてのコード。例: `axis_unreadable`・`not_in_scope`・`file_read_not_always`・設定オフ）: 押下を `axis_<code>` で拒否し、目標を `blocked(axis_failed)` にします。原因を直した後（例: `file_read` のルールを Always にする）、人が再開します。再起動では再開できません: 起動のたびにすべてのグラントを取り消す（`revoked(restart)`）ので、再起動でしか消えない原因（`write_floor_changed`・`reviewer_changed`）のときは、再起動の後に**新しいグラントを発行**します。**持続しない**コード（`guard_pending`・`breaker_not_normal`・`rules_changed`・`axis_stale`）: 押下を `axis_<code>` で拒否し、目標は active のまま。ハートビート開始は同じコードでスキップし、次の境界で測り直します |
+| `page_look` / `view_image` の各呼び出し。**permit の前と、consume の後にもう一度** | 設定と軸の軽い検査。A9 は呼び出しごとにルールを読み直します（現在のルールで残るラウンドのツール、`file_read` のルールが Always） | 反復を止めます。終了コード `page_tools_unavailable`、詳細はそのコード（設定のときは `setting_off`。ラウンドの記録の `axis.end` は `other`）。この終了では目標をブロックしません（次の境界が決めます） |
+| `page_look` の各呼び出し | ツール自身が解決した対象（相対パス、`~`、`file://` URL）が、**`scope.workspace_subtree` の内側**のワークスペースのページファイルであること。ブラウザに渡すのは解決済みのパスで、呼び出しの文字列ではありません | 反復を `tool_refused` で止めます（`outside_subtree`。URL・存在しないファイル・ページでないファイルは `path_invalid`） |
+| `page_look` の各呼び出し | ラウンドの上限: 枠を取れるのは **12** 回まで。**3** 回が失敗で終わったら、それ以上は取れません（失敗 = `ok` / `truncated` 以外の状態。成功しても失敗数は戻りません）。実行中の呼び出しは終わるまでその 3 つのうち 1 つを占めるので、同時に走るのは最大 3 −（それまでの失敗数）回です | その呼び出しを `page_look_call_limit` / `page_look_repeated_failure` / `page_look_busy`（実行中の呼び出しが場所を占めている。失敗ではなく、枠も取らないので、もう一度呼べます）で拒否します。permit を取らず、ブラウザも起動しません。ラウンドは続きます |
+
+実行された呼び出しは、ほかのツール呼び出しと同じく permit を 1 つ取り、ラウンドの記録
+（`tools.page_look`・`tools.view_image`）に数えます。上限はラウンドごとです（ラウンドには
+チャットのターンがないので、チャットのターンごとの数え方は使えません）。グラント全体では
+最大 20 × 12 = 240 回です。ページの副リソースは、作業ディレクトリだけでなくワークスペース
+全体について、`file_read` の床のもとで読まれます（A9）。グラントが答えるのを `file_read` の
+ルールが Always の間だけにしているのは、このためです。
+
+**ラウンドの記録の `axis.end`。** 上のページの検査で止まったラウンドは、そのコード（最初の
+もの）を残します。ページのツールを範囲に持つグラントのそれ以外のラウンド（`done` で終わった
+もの、ページを 1 回も呼ばなかったもの、ほかの理由で止まったもの）は、終わりに軽い検査（設定、
+現在のルール、軸）をもう一度行い、その結果を書きます。そのため、終了コードが `done` でも
+`axis.end` が失敗のコード（`file_read_not_always`・`not_in_scope`・設定のときの `other`・
+検査を読めなかったときの `axis_unreadable`）になることがあります。これは記録だけです。何も
+止めず、目標もブロックしません（次の境界が決めます）。テスト: `test_round_record_carries_axis`、
+`test_axis_end_of_a_round_nothing_stopped_is_the_light_check_at_its_end`、
+`test_axis_end_is_measured_without_a_page_call_and_after_another_stop`。
+
+**ページの実行中にルールを下げたとき。** 上の検査は呼び出しの開始前に行います。すでに実行中の
+`page_look` の呼び出しは、ルールを下げただけでは止まりません。止まるのは、その変更が authority
+epoch を動かすときだけです。設定画面でのルールの保存は動かします（実行中の呼び出しは取り消され、
+結果は捨てられます）。`tool-config.json` を手で編集しても動きません。
+
+**グラントの `view_image` は絞り込まれます。** 見せるのは、スクリーンショット登録簿（R1、
+メモリのみ）が**このグラント**の `page_look` の実行として持つ
+`.stira-verify/<run>/<n>.png` だけで、ファイルのサイズと SHA-256 が一致している間だけです
+（リンクをたどらずに読み、比較したバイト列そのものを見せます）。それ以外は固定のコードで
+拒否し（`run_unknown`、`run_other_grant`（別のグラントの実行、またはどのグラントのものでも
+ない実行）、`shot_changed`、`shot_missing`（ディスクには新しい 5 実行だけが残る））、
+`audit.page.view_image.refused` の行を書きます。`page_look` と一緒のときだけ範囲に含め
+られます。`page_review` は、グラントが作った実行を拒否します（`run_other_grant`）:
+まだどのグラントも `page_review` を範囲に含められません。
+
+**ラウンドの記録。** `axis` は `{start, end}` です。`start` は境界の結果（境界で失敗した
+ときはラウンドが動かないので `pass`）、`end` はラウンドを止めたコードか、終わりの軽い検査の
+結果です。ページツールを含まないグラントは両方 `not_run` を書き、軸の検査を実行しません。
+台帳の `VERSION` は 1 のままです: S5 より前のビルドも、ラウンドが書く値をすべて読めます。
+拒否するのは `stop` が `axis_failed` の行だけで、ラウンドがそれを書くのは、目標がすでに
+そうブロックされている間に終わった場合だけです。
+
+変えていないこと: 子エージェント、ジョブ、bot / webhook のターン、YOLO ウィンドウには、
+この経路でページツールは渡りません。`page_check` と `page_review` は範囲に含められません。
 
 **1 サーバーに生きているグラントは最大 1 つ**（v1）。
 
@@ -145,6 +317,18 @@ MCP サーバー、切り離されたジョブ — が操作できてしまう�
 不要です。ステージ C がオンのとき、`/new` は常に権限エポックを進めます（狭める操作: それ以前に出た
 他の保持者の許可証も無効になる）。
 
+### スクリプトでの流れ（API）
+
+流れ: `POST /api/grants/issue`（または `/resume`、`/verify`）が 428 `grant_confirmation_required`
+で操作と一回限りのトークンを返す → 確認する → 同じリクエストをヘッダー `X-Stira-Host-Operation`
+付きで再送します。`command` / `dialog` チャネルでは人がホストで確認します（`stira approvals decide <short>`、
+TTY で **`APPROVE`** と入力。`--deny` で拒否）。ブラウザチャネル（`allow_browser_confirm: true`）では
+`POST /api/grants/operations/<op_id>/confirm`（または `/api/host-operations/<id>/confirm`）に
+`{"token": …, "acknowledged": true, "instance": …}` の JSON を送ります。これは**ダッシュボードのページから**
+送る必要があります（同一オリジン、`Sec-Fetch-Site: same-origin` と `Origin` ヘッダー、ページが有効化済み）。
+スクリプトだけの素の呼び出しは 503 `host_channel_unavailable` です。設計どおりです（スクリプトが自分の操作を
+確認できないため）。スケジューラでの同じ流れは [guide-scheduler-heartbeat_ja.md](guide-scheduler-heartbeat_ja.md) を参照。
+
 ## 運用手順
 
 1. オンにする: `gateway-config.json` → `{"autonomy": {"stage_c": true}}`、ホスト確認を設定（上）、再起動。
@@ -159,6 +343,10 @@ MCP サーバー、切り離されたジョブ — が操作できてしまう�
 
 どれも権限を広げず、閉じる側に倒れます。残る項目は #620 で追います。
 
+* **`run_checks` の検出はファイルだけを見る（#647）。** ワークスペースのコードを検出時に動かさない
+  設計のため、editable インストール（`.pth` / finder フック）は「未インストール」と報告されます。
+  書込ルートの外を指す symlink の `.venv` も検出で使われます（main と同じ）。
+* **再開時に時計が読めない場合（#647）。** テストでしか到達できません。本番の経路はありません。
 * **キルの順序（W4.5、#620 W5-3）。** キルのリスナーはメモリ内で取り消すだけ。グラントの
   ライフサイクルイベントとストアの書込の依頼は、権限側のキルの永続化の試みと取消の開始の後で
   走ります: 止まった記録係が遅らせるのはそれらで、キルではありません。その間に落ちても失うのは
@@ -409,6 +597,53 @@ W5 は、ファイルを書いたかチェックを走らせた反復を進展�
 
 エージェントの `goal_report` は指紋に**入りません**（ラベルは結果ではない）。同じ障害の規則だけに使います。
 
+### 報告ファイル（ADR 0028 §4）
+
+メモのファイル（`NOTES.md` など。目標にそう書いてある）を毎ラウンド書き直すモデルは、グラントが書いた
+ファイルを変えるので、毎ラウンドが `new` になり、`blocked(no_progress)` が出ませんでした。グラントを
+発行する人は、そういうファイルを**報告ファイル**として挙げられます: 発行の要求の `report_files`。作業
+ディレクトリからの相対パスのリストで、**8 個**までです（既定はなし。そのときは何も変わりません）。
+
+* **何をするか。** 報告ファイルは作業フォルダの識別に入りません: 最初に書かれても、ほかのファイルの後に
+  書かれても、追わず、反復の終わりにも読みません。変化が報告ファイルだけのラウンドは `none`（履歴に 1 つ、
+  進展なし）なので、そういうラウンドが `no_progress_ticks` 回続くと `no_progress` が出ます。チェックの
+  行は指紋に残ります: チェックも走らせたラウンドは、これまでどおりその結果で決まります。
+* **厳しくなる方向にしか効きません。** ファイルを無視すると `new` が減るだけです。`no_progress` と
+  `loop_detected` は早く出るか同じ時に出て、遅くはなりません。本当の作業まで覆うリストは目標を止めます
+  （人が再開する）。だからリストは短く、パターンは書けません。
+* **読めなければ unknown（これまでどおり）。** 読めないものがあれば今も `unknown` です: 終わりに読めない
+  追跡中のファイル、そして反復で最初に書く前のバイトを読めなかった報告ファイルも同じです。報告ファイルへの
+  書込も、完了の申告では、それより前のチェックの結果を古いものにします（W6c）。
+* **発行時に拒否するもの**（8 個を超えると `grant_cap_exceeded`、それ以外は `grant_field_invalid`。
+  パスは応答に入らない）: 文字列のリストでないもの、空のパス、255 文字を超えるパス、絶対パスと `~`、
+  `.`・`..`・空の要素（末尾の `/` も）、バックスラッシュ、制御文字、グロブの文字（`* ? [ ] { }`）、重複
+  （大文字小文字を区別せずに比べる: `NOTES.md` と `notes.md` は同じ名前）、
+  秘密のマスクで変わる名前、通常のファイルでない既存のパス（ディレクトリ、FIFO）、途中のどこかに
+  シンボリックリンクがあるパス（作業ディレクトリの外を指せない）。次のものも拒否します（#761）:
+  Unicode の NFC でない名前、C1 制御文字、書式文字（双方向の制御文字、幅ゼロの文字）、行・段落の
+  区切り文字、スラッシュやバックスラッシュに見える文字（U+2215 など）、空白かドットで終わる要素。
+  まだ無いファイルは受け付けます。この厳しい検査は発行時だけです: すでにストアにあるグラントは
+  これまでどおり読み込めます。
+* **人のリストで、発行時に固定。** リストは要求の本体の一部で、ホストで確認する操作のダイジェストは
+  その本体に結び付いています（同じ操作を別のリストで送ると拒否）。操作の要約には
+  `changes: report_files:<個数>` と出ます — 個数だけで、パスは出ません（ホストのダイアログ / コマンド
+  にも）。あとから変えるものはありません: ルートもツールも無く、モデルは自分の報告ファイルを指定
+  できません。変えるには、取り消して発行し直します。表示に `report_files: <個数>` が出るのは、リスト付きで
+  発行したグラントだけです。パスはグラントストア（`grants.json`、`0600`）にだけあります。
+* **照合。** 書込の解決済みのパスがちょうど `<作業ディレクトリ>/<パス>` のとき、報告ファイルへの書込と
+  みなします。既知の限界: 大文字小文字を区別しないファイルシステムで別のつづり（`notes.md`）に書くと
+  一致せず、これまでどおり追います。Unicode の正規化も同じです — リストの名前は NFC で、同じ名前の
+  別の形（NFD。ファイルシステムやツールによってはこの形になる）に書くと一致せず、これまでどおり
+  追います。あとで誰かが報告ファイルをシンボリックリンクに置き換えると、それを
+  通した書込はこれまでどおり追います（どれも W6a の挙動に戻るだけで、それより緩くはなりません）。
+* **古い版に戻すとき。** `report_files`（または `heartbeat_start`）付きで発行したグラントが入っている
+  グラントストアは — 終わったグラントや取り消したグラントでも — その欄ができる前の版ではストアごと
+  拒否されます: `grant_store_malformed` になり、グラントサービスは不健全のままです。戻す前に、
+  サーバーを止めて `grants.json` をどかしてください（写しは残す）。中のグラントはそれですべて
+  終わります。
+* **設定のフォームにはまだ欄がありません**: `POST /api/grants/issue` の本体に `report_files` を入れて
+  送ります。
+
 | ツール | 指紋に入るもの | 取り除くもの（決して入らない） |
 |---|---|---|
 | `editor` | 書いたファイルのいまのバイトと、その相対パス（識別の一部として。64 MiB を超えるものはサイズと 3 MiB の見本） | mtime、inode、モード、使ったコマンド、何も変えなかった書込のバイト（どの大きさでも） |
@@ -449,6 +684,20 @@ mtime・ctime が読む前後で一致し、読んだ後のパス自体の `lsta
 | 同じ `goal_report(blocked, code)` が数えた反復で **3** 回続く | `blocked(<code>)` の代わりに `blocked(same_blocker)` |
 | `no_action` の反復が（最後の再開から）**2** 回続く | `blocked(no_progress)` |
 | `max_iterations`（変更なし） | `blocked(max_iterations)` |
+
+**チャットのターンの中（#684）。** 上の規則はグラントの反復を単位に見ます。通常の 1 ターンの中のツール
+呼び出しには、同じ語彙と数を使う純関数の検知器が `stiracore/progress/doom_loop.py` にあります。
+`loop_detected`: ターンの書き込みが同じファイルに **3** 回続く（停止のしきい値は **6**。別のファイルへの
+書き込みで数え直し）。`same_blocker`: 同じ呼び出しが同じ失敗の分類で、間に何も変わらないまま **2** 回失敗
+する（停止のしきい値は **3**）。失敗の分類と対応（`FAILURE_ACTIONS`）: `timeout` → 待って再試行、
+`invalid_args` → 引数を直す、`missing_info` → 調べる、`test_failed` → コードを直す（テストは直さない）、
+`permission_denied` → 人に聞く、`other` → やり方を変える。`DoomLoopHook` は既定では検知を sink に
+**知らせるだけ**です（コード・回数・ツール名のみ。パス・引数・結果の本文は含まない）。モデルへの注意
+（`nudge`）と、繰り返しの取り消し（`stop`）はコンストラクタのスイッチで、どちらも既定は OFF。承認・ルール・
+ブレーカーの判定は読みません。チャットサーバーへの取り付けはまだありません。既知の限界: `loop_detected` は
+同じファイルへの書き込みが続く場合だけ見ます（A、B、A、B と交互に書くループは見つかりません）。`stop` を ON に
+すると、フックはチェックポイントのゲートの後に動くので、人が承認した直後の呼び出しが取り消され、その
+グラントが `binding_mismatch` で無効になることがあります（取り付ける前に、位置と記録する理由を決めてください）。
 
 **A-A をループとする理由。** 数えた反復が 2 回続けて同じ作業フォルダの識別・同じチェックなら、2 回目は何も
 していません（同じファイルに対して、いま走らせたものをまた走らせた）。3 回を待てば、何もしないモデルの反復を
@@ -580,6 +829,51 @@ v1 では完了を確かめるのは**人**です。エージェントは申告�
 ロックなしのターンの印とキルの旗は置く直前に読みます。その読み取りと辞書への格納の間の最後の一瞬に立ったものは、後の
 ものとして扱います（W1 の柵つきの確定と同じ、受け入れた一瞬です）。
 
+### 完了の条件: `done_when`（#683）
+
+任意で、既定はオフです。グラントを発行する人は、**完了の申告が自分に届く前に通っていなければならない
+検査**を宣言できます: 発行の要求の `done_when`。`run_checks` の種別（`pytest`・`unittest`・
+`node_test`・`ruff`・`compileall`。1〜4 個 — `run_checks` の 1 回は最大 4 種別 —、重複なし）のリストで、`verifier: "checks"` と一緒に送ります。
+宣言はこれだけです — パス・しきい値・リトライ回数・文はありません。検査はグラントの作業ディレクトリで
+走ります。
+
+* **何をするか。** `goal_report(claim_complete)` のとき、ハーネスが宣言された種別を**自分で**、`run_checks`
+  の 1 回の呼び出しで走らせます（同じ実行器: 容器、ネット無し、マスク、許可リストの出力。モデルの呼び出しと
+  同じ範囲の検査 — 設定、確認済みの隔離、サブツリー）。宣言したすべての種別に通った行があるときだけ
+  （読めなければ通らない: 読めない結果・拒否・エラーは pass ではない）申告を記録し、目標は
+  `awaiting_verification` になります。そのあとは今までどおり人が確認します（`checks` → `user` の 2 段）。
+  そうでなければ申告は**拒否**され、反復は続きます: モデルには固定のコード `not_proven` と通らなかった種別
+  だけが返り（出力やテスト id は無し）、ラウンド台帳の行に `done_when: {"result", "unmet"}`（`met` /
+  `not_proven`、種別のコードだけ）が載ります。モデル自身の `run_checks` の呼び出しはこの判定に数えません。
+  この実行はほかの呼び出しと同じく申告の証跡（`checks`）に入ります。
+* **走らせないとき:** `run_checks` のいまのルールが Always でない（Ask は呼び出しごとに人のカードが要るが、
+  申告の経路では出さない。Never）、またはラウンドのツールから外れたとき。その申告は `not_proven`
+  （宣言した種別すべてが未達）です。
+* **作業ディレクトリにある種別だけを宣言します。** 求めた種別が 1 つでもそこで使えないと `run_checks` は
+  呼び出し全体を拒否する（`kind_unavailable`）ため、そのグラントの申告は毎回 `not_proven`（宣言した種別
+  すべてが未達）になります。
+* **検査の間の停止や書き込み。** ハーネスの検査の間に反復が止まったら（人のターン、壁時間、実行中の
+  取り消し）、申告は記録されません。同じターンの editor の書き込み（子は 1 ターンのツールを並行に走らせる）
+  が検査と重なったら `not_proven`（宣言した種別すべてが未達）です。実行の結果が失敗と読めた拒否のあと
+  editor の書き込みが無いまま申告を繰り返すと、検査を走らせずに同じ拒否を返します。検査器の例外や読めない
+  結果のあとは、次の申告で再実行します。人が editor を通さずに外部で変えても再実行されません — 次の反復か
+  editor の書き込みで再実行されます。止まったラウンドの台帳にも `done_when: met` が残ることがあります
+  （ラウンドの終了コードと合わせて読む）。許容する残余: ゲートの最後の確認と申告の記録の間の短い窓にある
+  同じターンの書き込みは見えません。
+* **実行の見え方。** ゲートの実行はハーネスのもので、モデルの呼び出しではありません: ラウンドのツール一覧や
+  ツール呼び出しの数には入りません（記録は台帳の `done_when`）。ブラウザの確認ダイアログには、宣言した
+  種別がコード（`done_when:<種別>`）で出ます。
+* **発行時に拒否するもの**（`grant_field_invalid`）: リストでない、空、重複、一覧にない種別、`scope.tools`
+  に `run_checks` が無い。`done_when` の無い `verifier: "checks"` と、`verifier: "user"` に付けた
+  `done_when` は `grant_verifier_invalid`。
+* **人のリストで、発行時に固定。** ホストで確認する操作のダイジェストが結び付く本体の一部で、要約には
+  種別ごとに `changes: done_when:<種別>` と出ます。変えるルートもツールもありません。表示に
+  `done_when: [<種別>, ...]` が出るのは、宣言付きで発行したグラントだけです。
+* **`done_when` が無ければ何も変わりません**: `verifier: "user"`、申告時の検査なし、ストア・表示・台帳に
+  新しい欄なし。
+* **古い版に戻すとき**、新しい欄を持つグラントストアやラウンド台帳は拒否されます（`report_files` と同じ）。
+  設定のフォームにはまだ欄がありません: `POST /api/grants/issue` の本体に入れて送ります。
+
 ## ハートビート開始（W6d）
 
 **既定でオフ、それも二重に。** ゲートウェイのスイッチ `autonomy.heartbeat_start`（既定 `false`。
@@ -625,11 +919,13 @@ tick のたびに *イベントによる* 起床があります（サーバー�
 `grant_state`、`goal_state`、`awaiting_verification`、`heartbeat_unhealthy`、`breaker`、`kill`、
 `authority_unhealthy`、`store_unhealthy`、`clock`、`ttl`、`max_iterations`、`budget`、`turn_busy`、
 `iteration_running`、`abandoned_call`、`min_spacing`、`no_action`、`flood`、`executor_unavailable`、
-`executor_refused`（実行部が断ったその他）— をグラントごとに数えます（メモリだけ、最近の 4 グラント）。
+`executor_refused`（実行部が断ったその他）、`ledger_unhealthy`（ラウンド台帳に記録できない。下の
+「ラウンド台帳」。最後の条件なので、開始するはずだった起床だけを見送る）— をグラントごとに数えます（メモリだけ、最近の 4 グラント）。
 待ち行列もたまった分も再実行もありません: スリープや再起動のあとの起床は 1 回の起床です（逃した分は
 まとめられる。ADR 0021 はモデルを呼ぶ仕事の追い付き実行を禁じています）。*状態による* 見送り（状態が
 変わるまで続くもの: 上の理由のうち、混雑・一時的な `not_enabled`、`no_grant`、`turn_busy`、
-`iteration_running`、`abandoned_call`、`min_spacing`、`flood`、`executor_refused` 以外）は、
+`iteration_running`、`abandoned_call`、`min_spacing`、`flood`、`executor_refused` 以外。
+`ledger_unhealthy` はライフサイクルイベントを出しません: 台帳は権限サービスの対象ではない）は、
 ライフサイクルイベント `grant_tick` `active → paused` `tick_skipped_<理由>` を **1 回** 出します。
 同じ理由をもう一度出すのは、その間にハートビートでの開始か別の状態による理由があったときだけ（間の
 混雑による見送りでは足りない）、このプロセスでグラントごとに最大 32 件。ハートビートでの開始は `grant_tick`
@@ -643,6 +939,73 @@ tick は何もしません（`no_grant`）。
 確認済みの `os_sandbox` ホストと `run_checks_unattended` が必要。範囲・ツール・予算はグラントのもの。
 完了の申告を確認するのはユーザー。人のターン（ターンのロックのどの持ち手も）は、押下のときと同じく
 これを譲らせます。
+
+**ラウンド台帳（ADR 0028 §5、#757）。** グラントの反復が終わるたびに（人の押下でもハートビートでの
+開始でも）、実行部はデータディレクトリの `grant-rounds.jsonl` に `round` レコードを **1 件** 追記
+します。台帳は観測です: 権限の判断がこれを読み返すことはなく、ライフサイクルイベントも通知も出さず、
+権限サービスをラッチすることもありません。
+
+* **許可リスト。** レコードの欄は次のものだけです: `k`、`grant`（32 桁の 16 進 ID）、`round`、
+  `of_max`、`origin`（`press` / `tick`）、`start`、`end`（壁時計の秒）、`wall_ms`、`end_code`、
+  `detail`、`progress`（`new` / `repeat` / `none` / `unknown`）、回数の `model_calls`、`writes`、
+  `approval_waits`、`reports`、`files_changed`、`tools`（範囲のツールごとと `goal_report` の回数。
+  加えて `page_look`、`page_review`、`view_image`。グラントの範囲に書けないので今は常に 0）、
+  `tokens_in`、`tokens_out`、`cache_read`、`cache_write`、`largest_input`、`summaries`
+  （プロバイダーが報告しなければ `null`）、`errors`（固定コードを最大 8 個）、`limits`
+  （`iteration_wall_sec`、`ttl_left_s`、`iterations_left`、`tokens_left`、`ceiling_min`、
+  `out_cap`、`out_cap_source`、`ctx_mode`。最後の 3 つは今は `null` / `unknown`）、`stop`
+  （グラントを終わらせた、または止めた規則。無ければ `null`）、`axis`（`{"start", "end"}`。
+  それぞれ ADR 0015 rev 6 の固定の軸コード。今は常に `not_run` — グラントでは軸の検査を走らせず、
+  この値を読むものもありません、#767）。文字列はすべて固定の一覧の値で、
+  実行部が知らないコードは `other` と書きます。目標、モデルの文、パスやファイル名、チェックの出力、
+  URL、秘密を入れる欄はありません。
+* **`axis` より前の行。** すでにディスクにある台帳の行はそのまま残します: `axis` の無い
+  （ページ系ツールの回数も無い）`round` の行は、今までどおり読み、検証し、ローテーションし、鎖は
+  新しい行に続きます。表示にも `axis` は付きません。新しい行には必ず付きます。新しい行のあとに
+  古い形の行があれば `round_ledger_malformed` です。この変更より前のビルドは、新しい行を含む台帳を
+  読めません。
+* **切り詰めずに断る。** 知らないキー、自由文の値、一覧に無い文字列、型の違う値を含むレコードは
+  丸ごと断ります: 何も書かず、欄の名前をログに出し、台帳の状態は `round_ledger_record_refused` に
+  なります。
+* **`approval` 種別**（答えの出た「毎回確認」1 件: `tool`、`args_digest`（16 進 12 桁）、
+  `target_class`、`decision`、`approved_by`、`reason`、回数）は同じスキーマと同じ鎖に含まれ、
+  書き込み側は受け付けます。実行部はまだこれを書きません（`round` レコードだけ）。`approved_by` は
+  今は `person` か `none` です。モデルの承認者は後の段階で、スキーマの変更は要りません。
+* **鎖とファイル。** 各行は `v`、`seq`、`prev`（前の行のハッシュ）、`hash`（行の正規化した JSON の
+  SHA-256）を持ちます。ファイルは `0600`、1 行ずつ追記して flush し、`authority-lifecycle.jsonl` と
+  同じ安全な開き方の規則で開きます（[authority-service](authority-service_ja.md)）。追記で 1 MiB を
+  超えるときは、先に `grant-rounds.1.jsonl` に移します（古いものは消える）。鎖は新しいファイルに
+  続きます。移す前に、書き込み側はそのファイルが自分の最後に書いたものかを確かめます: 知らないうちに
+  置き換えられたファイルは、古い区間の上に移しません（`round_ledger_replaced`。起動時の
+  ローテーションでも同じ）。書き換えた・消した・並べ替えた行、切れた最後の行、安全でないファイル、書き込み側の
+  知らないうちに置き換えられたファイルは検出します（`round_ledger_hash_mismatch`、
+  `round_ledger_sequence_gap`、`round_ledger_torn`、`round_ledger_malformed`、
+  `round_ledger_unsafe`、`round_ledger_unreadable`、`round_ledger_replaced`、
+  `round_ledger_write_failed`）。そのあと台帳はサーバーを再起動するまで使えません。それ以上は
+  書かず、自動では直しません。
+* **限界。** 鎖に鍵はありません: 壊れは検出しますが、同じ OS ユーザーによるファイル全体の書き直しは
+  検出しません。末尾から行ごと切り取られた場合、動いている書き込み側は気づきますが、新しく開いた
+  読み手は気づきません。残すのは 2 つの区間だけなので、ローテーションより前の古いラウンドは消えます。
+* **読み方。** `GET /api/grants/<id>/rounds` は `{"ledger": "ok" | "off" | "round_ledger_*",
+  "rounds": [...]}` を返します — そのグラントのレコードを古い順に、`v` と `seq` 付き、`prev` /
+  `hash` なしで。知らない ID は `grant_unknown`。グラントのボードの読み出し（アクティビティの
+  ポーリング）には最近の 5 ラウンドと台帳の状態が載ります。ホストでは
+  `python -m stiracore.control.grant_rounds_cli --data-dir DIR [--grant ID] [--last N]
+  [--format table|json]` が `round` レコードと集計の 1 行（ラウンド数、経過時間、報告された
+  トークン、`new` のラウンド数）を表示します。読むだけで、台帳が使えないときは固定コードを出して
+  終了コード 1 で終わります。サーバーが書いている間は、追記やローテーションがコマンドの手順の間に
+  入り、`round_ledger_unsafe` や `round_ledger_sequence_gap` に見えることがあります。コマンドは
+  コードを出す前に読み直します（最大 2 回）。サーバーが動いている間にまだコードが出るなら、
+  もう一度実行してください。
+* **記録できないとき。** 書き込みの失敗、断られたレコード、そのほかラウンドを記録できなかった失敗は
+  ログに出て、台帳の状態として見えます。
+  そのあと **ハートビート** での開始は `tick_skipped(ledger_unhealthy)` で見送ります: 誰も観測
+  できない無人の実行は始めません。人の **押下** はそのまま動きます（そのラウンドは記録されません）。
+  レコードの `stop` と上限の残りは、そのグラント自身のメモリ上のレコードから取ります。1 秒以内に
+  読めなければ、`stop` は `unknown`、`ttl_left_s` / `iterations_left` / `tokens_left` は `0` です。
+  直すには: サーバーを止め、`grant-rounds*.jsonl` の写しを取り、`grant-rounds.jsonl` と
+  `grant-rounds.1.jsonl` の**両方**をどかしてから起動します。片方だけどかすと、途中の欠けた鎖が
+  残り、拒否されます（`round_ledger_sequence_gap`）。
 
 **コストの見える化。** ハートビートで始めた反復ごとに、数値だけ: モデル呼び出し回数、報告された
 入力 / 出力トークン、プロバイダーが報告したときは `cache_read` / `cache_write`、経過時間

@@ -823,10 +823,17 @@ def payload_for_log(tool_name: Any, kind: str, value: Any) -> Any:
             ]
             return {**value, "content": kept}
         return value
-    if kind == "input" and tool_name == "page_check":
+    if kind == "input" and tool_name in ("page_check", "page_look"):
         from .page_check import input_for_log
 
         return input_for_log(value)  # @workspace/<relative path> or a refusal code
+    if tool_name == "page_review" and kind in ("input", "output"):
+        # ADR 0015 rev 6 (S6): the run id; Stira's JSON only — never a reviewer's note.
+        from . import page_review as _pr
+
+        if kind == "input":
+            return _pr.input_for_log(value)
+        return _pr.for_log(value) if isinstance(value, Mapping) else value
     if kind == "input" and tool_name == "file_write" and isinstance(value, Mapping):
         body = value.get("content")
         if isinstance(body, str):
@@ -835,7 +842,7 @@ def payload_for_log(tool_name: Any, kind: str, value: Any) -> Any:
         return value
     if kind != "output" or not isinstance(value, Mapping):
         return value
-    if tool_name == "page_check":
+    if tool_name in ("page_check", "page_look"):
         return _page_check_for_log(value)
     blocks = value.get("content")
     if not isinstance(blocks, list):

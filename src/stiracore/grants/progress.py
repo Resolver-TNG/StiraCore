@@ -7,7 +7,9 @@ the workspace stands:
   has written (at most :data:`FILES_KEPT`, the most recently written; older ones leave the
   identity silently): HMAC(relative path) and HMAC(current SHA-256) each, a missing file
   as the explicit :data:`ABSENT` marker (:func:`read_files`; a stat cache only saves
-  re-reading an unchanged file, it never answers for a changed one);
+  re-reading an unchanged file, it never answers for a changed one) — **except the grant's
+  report files** (ADR 0028 §4: the person's list at issue, at most 8 files; the executor
+  leaves them out, so a round that only rewrites its notes is ``none``);
 * the iteration's check outcomes as **one set of per-check rows** (:func:`normalize_checks`
   per call, the union over every call: kind, status, reason code, exit class, counts —
   durations, pids, temp paths, timestamps, ids, failure texts, output, the call's overall
@@ -334,6 +336,34 @@ def claim_checks(result: Any) -> tuple[str, tuple]:
         return "unknown", ()  # the overall status is not the rows' worst
     rows.sort()
     return ("pass" if worst == "passed" else "fail"), tuple(rows)
+
+
+#: #683: the result of a claim's ``done_when`` gate (fixed codes).
+DONE_WHEN_MET = "met"
+DONE_WHEN_NOT_PROVEN = "not_proven"
+
+
+def done_when_verdict(done_when: Any, result: Any) -> tuple[str, tuple[str, ...]]:
+    """#683: whether one harness-run ``run_checks`` result proves the declared kinds —
+    ``("met", ())`` only when :func:`claim_checks` is ``pass`` **and** every declared kind
+    has a passed row; else ``("not_proven", unmet)`` with the declared kinds that have no
+    passed row (every declared kind when the result is not readable). Kind codes only."""
+    from .schema import CHECK_KINDS
+
+    declared = tuple(k for k in (done_when or ()) if k in CHECK_KINDS)
+    if not declared:
+        return DONE_WHEN_NOT_PROVEN, ()
+    try:
+        code, rows = claim_checks(result)
+    except Exception:  # noqa: BLE001 - unreadable: nothing proven
+        code, rows = "unknown", ()
+    if code not in ("pass", "fail"):
+        return DONE_WHEN_NOT_PROVEN, tuple(sorted(declared))
+    passed = {row[0] for row in rows if row[1] == "passed"}
+    unmet = tuple(sorted(k for k in declared if k not in passed))
+    if code == "pass" and not unmet:
+        return DONE_WHEN_MET, ()
+    return DONE_WHEN_NOT_PROVEN, unmet or tuple(sorted(declared))
 
 
 def combine_checks(a: tuple[str, tuple] | None, b: tuple[str, tuple]) -> tuple[str, tuple]:

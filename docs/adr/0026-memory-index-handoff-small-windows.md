@@ -1,7 +1,9 @@
 # ADR 0026: Memory structure for small context windows — index first, a handoff note, a corrected token estimate and window profiles (phase 1); hierarchical compression designed only (phase 2)
 
 **Path:** `docs/adr/0026-memory-index-handoff-small-windows.md`
-**Status:** Proposed (revision 4, 2026-10-23: the send boundary checks the minimum input — SOUL
+**Status:** Accepted for phase 1 (implemented: memory index, handoff note, token estimate, window
+profiles; operator, 2026-11-15). Phase 2 (§6, hierarchical compression) stays Proposed and needs its
+own go after ADR 0018 phase 1 and #193. History: Proposed (revision 4, 2026-10-23: the send boundary checks the minimum input — SOUL
 + anchors + the sent tool definitions — and the estimate may not under-count by more than 10 %,
 after design review round 3; revision 3: a fail-closed send boundary on a known window,
 `context_window_too_small`, after round 2; revision 2 after round 1: handoff kept out of
@@ -303,7 +305,8 @@ write filter, the HITL approval of ADR 0006 (bound to the agent, tool and argume
 expiry; a refused or expired approval runs nothing) and the YOLO tiers (ADR 0012) apply exactly
 as to `memory_write`, through the same code path. No new approval state, card or revocation
 logic is added; the tests assert that the tool goes through that path (Ask ⇒ a card; Never ⇒ not
-listed and refused; WARNING ⇒ removed).
+listed and refused; WARNING ⇒ removed — since #259 listed and refused with
+`breaker_write_refused`, see the ADR 0010 addendum).
 
 **Relation to ADR 0005's summary.** Phase 1 keeps them separate: the summary compresses the
 conversation inside a session; the handoff carries intent across sessions. Phase 2 (§6c) lets

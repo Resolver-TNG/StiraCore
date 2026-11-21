@@ -40,7 +40,13 @@ def _refusal(env) -> str:
     return info.value.extra["reason"]
 
 
-def _threads():
+def _threads(timeout: float = 10.0):
+    """The iteration threads still alive once each was given ``timeout`` to exit:
+    ``wait_idle`` returns when the iteration's end is written, a moment before its thread
+    is out (#716)."""
+    for thread in threading.enumerate():
+        if thread.name.startswith("grants-iteration"):
+            thread.join(timeout)
     return [t for t in threading.enumerate() if t.name.startswith("grants-iteration")]
 
 

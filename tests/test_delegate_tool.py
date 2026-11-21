@@ -28,6 +28,8 @@ from stiracore.agent.checkpoint_hooks import CheckpointHooks
 from stiracore.agent.nxp_agent import NXPAgent
 from stiracore.agent.subagent import GuardedDelegate, create_nxp_subagent
 from stiracore.core import BreakLevel, NeuralState, StiraConfig, StiraEngine
+from stiracore.tools import run_checks as rc
+from stiracore.tools import tool_policy
 from stiracore.tools.delegate_tool import (
     CHILD_OUTPUT_NOTE,
     CHILD_SYSTEM_PROMPT,
@@ -39,6 +41,7 @@ from stiracore.tools.delegate_tool import (
     DelegationSettings,
     neutralize_child_markers,
 )
+from stiracore.tools.tool_config import ToolConfig
 from stiracore.yolo import tiers
 
 
@@ -98,7 +101,7 @@ def build(script, tools=(), rules=None, settings=None, **kwargs):
     parent = NXPAgent(
         model=model,
         tools=[*tools, tool],
-        tool_policy=lambda name: rules.get(name, "always"),
+        tool_policy=kwargs.pop("tool_policy", None) or (lambda name: rules.get(name, "always")),
         stimulus_classifier=_quiet(),
         callback_handler=None,
         **kwargs,
@@ -261,6 +264,46 @@ def test_parent_breaker_is_checked_live_while_the_child_runs():
     assert "circuit breaker" in text_of(child_results(model)["c2"])
 
 
+def test_a_warning_parent_with_write_tools_in_its_list_gives_the_child_reads_only():
+    """#259: the parent's turn list keeps ``file_write`` at WARNING (refused at the call);
+    a ``delegate`` that still runs (here: not configured as write class) gives the child
+    only the reads, and the child's ``file_write`` call is never executed."""
+    calls: list = []
+    parent, _tool, model, _rules, _ = build(
+        [
+            delegate_turn(tools=["file_write", "lookup"]),
+            tool_turn("file_write", {"path": "x.txt"}, "c1"),
+            tool_turn("lookup", {}, "c2"),
+            text_turn("child"),
+            text_turn("done"),
+        ],
+        tools=[Probe("file_write", calls, write=True), Probe("lookup", calls)],
+        config=StiraConfig(blocked_tool_names={"file_write"}),
+        state=NeuralState(stability=0.4),
+    )
+    parent("go")
+    assert "file_write" in model.requests[0]["tool_names"]  # the parent's list is fixed
+    assert model.requests[1]["tool_names"] == ["lookup"]  # the child's: reads only
+    assert calls == ["lookup"]
+    assert "not given: file_write" in text_of(results(parent.agent.messages)["d1"])
+
+
+def test_a_warning_parent_refuses_delegate_when_it_is_write_class():
+    """The server's set-up (``delegate`` in ``blocked_tool_names``): offered at WARNING,
+    refused at the call with ``breaker_write_refused``; no child runs."""
+    calls: list = []
+    parent, _tool, model, _rules, _ = build(
+        [delegate_turn(tools=["lookup"]), text_turn("done")],
+        tools=[Probe("lookup", calls)],
+        config=StiraConfig(blocked_tool_names={"delegate"}),
+        state=NeuralState(stability=0.4),
+    )
+    parent("go")
+    assert "delegate" in model.requests[0]["tool_names"]
+    assert len(model.requests) == 2 and calls == []
+    assert "breaker_write_refused" in text_of(results(parent.agent.messages)["d1"])
+
+
 def test_child_never_gets_exec_or_delegation_tools_even_when_the_rule_is_always():
     calls: list = []
     names = ["shell", "use_agent", "handoff_to_user", "subagent", "lookup"]
@@ -274,6 +317,80 @@ def test_child_never_gets_exec_or_delegation_tools_even_when_the_rule_is_always(
     for name in ("shell", "use_agent", "handoff_to_user", "subagent", "delegate"):
         assert name in text.split("not given:", 1)[1]
     assert {"delegate", "subagent", "handoff_to_agent"} <= NOT_FOR_CHILDREN
+
+
+# Tools a child is refused **by name**, because their rule can read an effective Always
+# (``tool_policy.CONDITIONAL_ALWAYS_TOOLS``) and the rule alone would then hand them to a
+# child (#768; ADR 0015 rev 6, C13 / O4). A tool that joins the conditional-Always set adds
+# its name here (the page tools of #763, S3 / S6).
+REFUSED_TO_CHILDREN_BY_NAME = frozenset({"run_checks", "page_look", "page_review"})
+
+
+def test_not_for_children_enumerates_the_conditional_always_tools():
+    assert REFUSED_TO_CHILDREN_BY_NAME <= NOT_FOR_CHILDREN
+    # Nothing joins the conditional-Always set without a decision here.
+    assert tool_policy.CONDITIONAL_ALWAYS_TOOLS <= REFUSED_TO_CHILDREN_BY_NAME
+
+
+def _child_never_gets(name: str) -> None:
+    rules = {name: "always", "lookup": "always", "delegate": "always"}
+    calls: list = []
+    for requested in ([name, "lookup"], None):
+        arguments = {} if requested is None else {"tools": requested}
+        parent, _tool, model, _rules, _ = build(
+            [delegate_turn(**arguments), text_turn("child"), text_turn("done")],
+            tools=[Probe(name, calls), Probe("lookup", calls)],
+            tool_policy=lambda tool: rules.get(tool, "never"),
+        )
+        parent("go")
+        assert name in model.requests[0]["tool_names"]
+        assert model.requests[1]["tool_names"] == ["lookup"]
+        text = text_of(results(parent.agent.messages)["d1"])
+        assert "status: done" in text
+        assert (f"not given: {name}" in text) is (requested is not None)
+    assert calls == []
+
+
+def test_children_never_get_page_look():
+    """ADR 0015 rev 6 (S3): page_look is refused to a child by name, even when the parent's
+    rule reads Always (what S4's conditional Always will allow; forced here)."""
+    _child_never_gets("page_look")
+
+
+def test_children_never_get_page_review():
+    """ADR 0015 rev 6 (S6): page_review (a send) is refused to a child by name, even when
+    the parent's rule reads Always (what S7's conditional Always will allow; forced here)."""
+    assert "page_review" in NOT_FOR_CHILDREN
+    _child_never_gets("page_review")
+
+
+@pytest.mark.parametrize("name", ["run_checks"])
+def test_children_never_get_run_checks(name, monkeypatch):
+    """``run_checks`` saved Always and **effective** (a verified ``os_sandbox`` host): the
+    parent's rule reads Always, the child is still not given it (also when no ``tools``
+    argument is passed: the default is every Always tool of the turn). ``page_look``'s
+    effective case: ``test_children_still_never_get_page_look_with_effective_always``."""
+    monkeypatch.setitem(rc._HOST, "status", rc.Containment(rc.OS_SANDBOX, "run_checks_ready", "t"))
+    monkeypatch.setitem(rc._HOST, "enabled", True)
+    monkeypatch.setitem(rc._TURN, "same", 0)
+    enabled = {name, "lookup", "delegate"}
+    saved = ToolConfig(mode="custom", enabled_tools=enabled, ask_tools=set())
+    assert saved.policy_of(name) == "always"  # the premise: effective, not capped
+    calls: list = []
+    for requested in ([name, "lookup"], None):
+        arguments = {} if requested is None else {"tools": requested}
+        parent, _tool, model, _rules, _ = build(
+            [delegate_turn(**arguments), text_turn("child"), text_turn("done")],
+            tools=[Probe(name, calls), Probe("lookup", calls)],
+            tool_policy=saved.policy_of,
+        )
+        parent("go")
+        assert name in model.requests[0]["tool_names"]  # the parent turn has it
+        assert model.requests[1]["tool_names"] == ["lookup"]
+        text = text_of(results(parent.agent.messages)["d1"])
+        assert "status: done" in text
+        assert (f"not given: {name}" in text) is (requested is not None)
+    assert calls == []
 
 
 def test_child_has_no_argument_to_widen_itself(monkeypatch):

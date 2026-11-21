@@ -148,6 +148,9 @@ GOAL_REASONS = {
             "run_checks_unavailable",
             "iteration_timeout",
             "workspace_changed",
+            # ADR 0015 rev 6 (S5): a sticky failure of the axis check at a round boundary
+            # of a grant that names a page tool.
+            "axis_failed",
             # W5: what the agent may report through ``goal_report(kind="blocked")``.
             *AGENT_BLOCKED_CODES,
         }
@@ -230,6 +233,9 @@ def new_grant(request: IssueRequest, *, grant_id: str, issuer: str, now: ClockRe
         late_verification="",
         ended_wall=0.0,
         heartbeat_start=request.heartbeat_start is True,
+        report_files=tuple(request.report_files),
+        self_development=request.self_development is True,
+        done_when=tuple(request.done_when),
     )
 
 

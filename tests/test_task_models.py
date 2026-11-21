@@ -50,8 +50,12 @@ def test_default_every_task_inherits_and_the_file_is_unchanged() -> None:
     assert config.task_models == {}
     assert "task_models" not in config.as_dict()
     routes = tm.resolve_routes(config.task_models, MAIN, {})
-    assert set(routes) == set(tm.TASKS) == {"tool_summary", "context_summary"}
+    assert set(routes) == set(tm.TASKS) == {"tool_summary", "context_summary", "visual_review"}
+    off = routes.pop("visual_review")  # unset = off, not inherit (ADR 0015 rev 6, S6)
+    assert off.off and off.source == "off" and off.spec is None
     assert all(route.inherit and route.source == "inherit" for route in routes.values())
+    assert "visual_review" not in config.as_dict() and config.visual_review == {}
+    routes = tm.resolve_routes(config.task_models, MAIN, {})
     router = tm.TaskModelRouter(routes, MAIN)
     chat = FakeModel([], model_id="chat")
     # The chat model itself, behind the task's no-tools boundary (review r588).
@@ -65,6 +69,90 @@ def test_saved_task_models_round_trip(tmp_path) -> None:
     path = tmp_path / "gateway-config.json"
     GatewayConfig(task_models={"tool_summary": HAIKU}, path=path).save()
     assert GatewayConfig.load(path).task_models == {"tool_summary": HAIKU}
+
+
+# --- visual_review: unset = off, and a vision model (ADR 0015 rev 6, S6) ----------------
+
+
+def test_visual_review_unset_is_off_and_builds_nothing() -> None:
+    built = []
+    router = tm.TaskModelRouter(tm.resolve_routes({}, MAIN, {}), MAIN, build=built.append)
+    chat = FakeModel([], model_id="chat")
+    assert router.model_for("visual_review", chat) is None  # never the chat model
+    assert router.model_for("visual_review", None) is None
+    assert built == [] and not router.routed()
+    # Off: no settings row (nothing runs); set, it has one like the others.
+    assert [r["task"] for r in router.describe()] == ["tool_summary", "context_summary"]
+    assert [r["task"] for r in tm.describe_routes({}, MAIN, {})] == [
+        "tool_summary",
+        "context_summary",
+    ]
+    on = tm.TaskModelRouter(tm.resolve_routes({"visual_review": HAIKU}, MAIN, AWS), MAIN)
+    row = on.describe()[-1]
+    assert (row["task"], row["off"], row["inherit"], row["model_id"]) == (
+        "visual_review",
+        False,
+        False,
+        HAIKU,
+    )
+    assert row["env"] == "STIRA_TASK_MODEL_VISUAL_REVIEW"
+    # An empty variable does not turn it on.
+    routes = tm.resolve_routes({}, MAIN, {"STIRA_TASK_MODEL_VISUAL_REVIEW": " "})
+    assert routes["visual_review"].off
+
+
+def test_visual_review_requires_vision() -> None:
+    text_only = ModelSpec("llamacpp", "qwen3-32b", {})
+    vision = ModelSpec("llamacpp", "qwen3-32b", {"capabilities": {"vision": True}})
+    # ``inherit`` must be written out, and counts only when the chat model's row says vision.
+    for source in ({"visual_review": "inherit"}, {}):
+        env = {} if source else {"STIRA_TASK_MODEL_VISUAL_REVIEW": "inherit"}
+        with pytest.raises(tm.TaskModelError) as caught:
+            tm.resolve_routes(source, text_only, env)
+        assert (caught.value.code, caught.value.task) == ("no_vision", "visual_review")
+    route = tm.resolve_routes({"visual_review": "inherit"}, vision, {})["visual_review"]
+    assert route.inherit and not route.off and route.source == "config"
+    # A routed model without vision refuses the start; one with vision is accepted.
+    with pytest.raises(tm.TaskModelError) as caught:
+        tm.resolve_routes({"visual_review": "qwen3-4b"}, vision, {})
+    assert caught.value.code == "no_vision"
+    route = tm.resolve_routes({"visual_review": HAIKU}, MAIN, AWS)["visual_review"]
+    assert route.spec.model_id == HAIKU and not route.off
+    # The other tasks need no vision, and an unset visual_review never refuses a start.
+    assert tm.resolve_routes({"tool_summary": "qwen3-4b"}, text_only, {})["visual_review"].off
+    # The settings rows show the code instead of raising.
+    (row,) = [
+        r
+        for r in tm.describe_routes({"visual_review": "inherit"}, text_only, {})
+        if r["task"] == "visual_review"
+    ]
+    assert row["error"] == "no_vision" and "no_vision" in tm.CODES
+
+
+def test_visual_review_inherit_is_recorded_and_takes_no_tools() -> None:
+    vision = ModelSpec("llamacpp", "qwen3-32b", {"capabilities": {"vision": True}})
+    records = []
+    router = tm.TaskModelRouter(
+        tm.resolve_routes({"visual_review": "inherit"}, vision, {}),
+        vision,
+        on_record=records.append,
+    )
+    chat = FakeModel([text_turn("{}")], model_id="qwen3-32b")
+    model = router.model_for("visual_review", chat)
+    assert model.inner is chat
+    asyncio.run(_drain(model))
+    assert [(r["task"], r["provider"], r["status"]) for r in records] == [
+        ("visual_review", "llamacpp", "success")
+    ]
+    with pytest.raises(tm.TaskModelError) as caught:
+        asyncio.run(_drain(model, tool_specs=[{"name": "shell"}]))
+    assert caught.value.code == "tools_not_allowed"
+
+
+def test_saved_visual_review_budget_round_trips(tmp_path) -> None:
+    path = tmp_path / "gateway-config.json"
+    GatewayConfig(visual_review={"daily_tokens": 20000}, path=path).save()
+    assert GatewayConfig.load(path).visual_review == {"daily_tokens": 20000}
 
 
 # --- resolution order -------------------------------------------------------------------

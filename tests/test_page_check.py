@@ -447,7 +447,10 @@ def test_errors_missing_files_and_outside_reads_are_counted(ws, launched):
         encoding="utf-8",
     )
     result = pc.run_page_check("bad.html", _policy(ws), wait_ms=300)
-    assert result["page_errors"]["count"] == 2
+    # The two exceptions and ``nope.js`` that did not load (#766: a code, no file name).
+    assert result["page_errors"]["count"] == 3
+    assert "script_load_failed" in result["page_errors"]["first"]
+    assert "nope" not in str(result["page_errors"])
     assert any("ReferenceError" in e for e in result["page_errors"]["first"])
     assert result["console_errors"] == {"count": 2, "first": ["first 1", "second"]}
     assert result["missing_files"] == {"count": 1, "first": ["nope.js"]}
@@ -528,9 +531,35 @@ def test_navigation_away_is_refused_and_counted(ws, launched):
 
 @needs_browser
 def test_reload_loop_stops_at_the_page_limit(ws, launched):
+    # The wait is how long the page may take for its four loads (unloaded: a few tenths of
+    # a second). 1.5 s was too little for a browser on a busy machine (#515).
     (ws / "loop.html").write_text("<script>setTimeout(() => location.reload(), 30)</script>")
-    result = pc.run_page_check("loop.html", _policy(ws), wait_ms=1500, screenshot=False)
-    assert (result["status"], result["reason"]) == ("truncated", "page_limit")
+    result = pc.run_page_check("loop.html", _policy(ws), wait_ms=5000, screenshot=False)
+    assert (result["status"], result["reason"]) == ("truncated", "page_limit"), result
+    assert result["blocked"]["navigations"] >= 1, result
+
+
+def test_the_page_limit_counts_main_frame_loads_only(ws):
+    """The limit itself, without a browser or a clock (#515): load ``PAGE_LIMIT + 1`` of
+    the main frame is refused and gives the reason; a frame's document does not count."""
+    run = _fake_run(ws)
+
+    def load(frame):
+        params = {
+            "requestId": "r",
+            "request": {"url": (ws / "ok.html").as_uri()},
+            "resourceType": "Document",
+            "frameId": frame,
+        }
+        run.on_event({"method": "Fetch.requestPaused", "params": params, "sessionId": "S"})
+        return run.b.sent[-1][0]
+
+    for _ in range(pc.PAGE_LIMIT):
+        assert load("MAIN") == "Fetch.continueRequest"
+        assert load("FRAME") == "Fetch.continueRequest"
+    assert run.reason is None and run.blocked["navigations"] == 0
+    assert load("MAIN") == "Fetch.failRequest"
+    assert (run.reason, run.blocked["navigations"]) == ("page_limit", 1)
 
 
 @needs_browser
@@ -540,8 +569,12 @@ def test_a_busy_page_stops_at_the_time_limit(ws, launched):
     (ws / "busy.html").write_text("<script>setTimeout(() => { while (true) {} }, 50)</script>")
     started = time.monotonic()
     result = pc.run_page_check("busy.html", _policy(ws), wait_ms=200, time_limit=4)
-    assert (result["status"], result["reason"]) == ("truncated", "time_limit")
-    assert time.monotonic() - started < 12
+    elapsed = time.monotonic() - started
+    assert (result["status"], result["reason"]) == ("truncated", "time_limit"), result
+    # Measured: the whole call — the browser's start, the run (at most ``time_limit``) and
+    # ending a browser whose page never yields. The page would loop forever; the margin is
+    # for the start and the end on a busy machine (#515), not for the run.
+    assert elapsed < 4 + 26, elapsed
     _gone(launched)
 
 
@@ -604,7 +637,9 @@ def test_a_new_page_target_is_closed_and_counted(ws):
 @pytest.mark.parametrize(
     ("url", "kind", "verdict", "counter"),
     [
-        ("{ws}/ok.html", "Script", "Fetch.continueRequest", None),
+        # #766: an allowed workspace sub-resource is answered by Stira; a document is not.
+        ("{ws}/ok.html", "Script", "Fetch.fulfillRequest", None),
+        ("{ws}/ok.html", "Document", "Fetch.continueRequest", None),
         ("{out}/outside.html", "Image", "Fetch.failRequest", "outside_workspace"),
         ("data:text/plain,x", "Image", "Fetch.continueRequest", None),
         ("https://cdn.test/x?q=1", "Script", "Fetch.continueRequest", None),

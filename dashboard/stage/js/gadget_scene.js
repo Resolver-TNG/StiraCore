@@ -27,6 +27,25 @@ export function boardHides(g, boardDown) {
 }
 
 const WORLD_H = 340;
+// Sprite-stack beacon (tools/stack_beacon.py): 16 baked paddle angles; the flat beacon was
+// 13 px tall, the stack is 19 px, so it is lifted by the difference to keep its foot in place.
+const BEACON_FRAMES = 16;
+const FOLDER_COUNTS = 3;
+const FOLDER_SWINGS = 4;
+const FOLDER_OUT_MAX = 7; // folder.out slides 0..7 px (state.folder)
+const FOLDER_STACK_DY = -3; // flat binder 28 px tall, stack 31 px
+// Frame name for `n` binders (the value of gadget.folder) swung out by `out` px; pure.
+export function folderFrame(n, out) {
+  const c = Math.min(FOLDER_COUNTS, Math.max(1, Number.isFinite(n) ? Math.round(n) : 1));
+  const o = Number.isFinite(out) ? Math.min(FOLDER_OUT_MAX, Math.max(0, out)) : 0;
+  return `folder.s${c}.${Math.round((o / FOLDER_OUT_MAX) * (FOLDER_SWINGS - 1))}`;
+}
+const BEACON_STACK_DY = -6;
+// Frame name for a spin phase (0..1 = one turn); pure, tests/stage_gadgets_test.cjs.
+export function beaconFrame(spin) {
+  const t = Number.isFinite(spin) ? ((spin % 1) + 1) % 1 : 0;
+  return `beacon.s${Math.floor(t * BEACON_FRAMES) % BEACON_FRAMES}`;
+}
 
 const BAYER = `
 float bayer4(vec2 p){
@@ -306,7 +325,12 @@ export class GadgetLayer {
       item.badge = [this.sprite('digits', 11.7, [5, 7]), this.sprite('digits', 11.71, [5, 7])];
       return item;
     }
-    item.parts.main = this.sprite(g.sprite, order + 0.01);
+    // sprite-stack beacon (tools/stack_beacon.py): paddle angle = the spin phase, k/16 of a turn
+    const stackBeacon = g.program === 'beacon' && this.meta.sprites['beacon.s0'];
+    // sprite-stack binders (tools/stack_folder.py): 1..3 binders, 4 swing steps
+    const stackFolder = g.program === 'folder' && this.meta.sprites['folder.s1.0'];
+    item.parts.main = this.sprite(stackBeacon ? 'beacon.s0' : stackFolder ? 'folder.s1.0' : g.sprite, order + 0.01);
+    if (stackBeacon || stackFolder) item.stack = true;
     if (g.program === 'stamp') {
       item.parts.seal = this.sprite('seal.approve', order + 0.02);
       item.parts.stamper = this.sprite('stamper', order + 0.03);
@@ -401,6 +425,10 @@ export class GadgetLayer {
           const level = crit ? 0.6 : 0.45 + 0.5 * v('beacon.pulse');
           u.uTint.value.set(...tint);
           u.uP.value.set(v('beacon.spin'), level, crit ? 1 : 0, 0);
+          if (item.stack) {
+            this.setSprite(main, beaconFrame(v('beacon.spin')));
+            dy = BEACON_STACK_DY; // keep the foot where the flat beacon's bottom was
+          }
           lightRGB = tint;
           lightLevel *= crit ? 1 : level;
           if (light) {
@@ -416,6 +444,10 @@ export class GadgetLayer {
           break;
         case 'folder':
           dx = Math.round(v('folder.out'));
+          if (item.stack) {
+            this.setSprite(main, folderFrame(pose['gadget.folder'], v('folder.out')));
+            dy = FOLDER_STACK_DY;
+          }
           break;
         case 'note':
           dy = v('note.press') > 0.5 ? 0 : -1;

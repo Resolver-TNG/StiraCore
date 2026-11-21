@@ -92,7 +92,27 @@ One note says whether the verification browser tool `page_check` (ADR 0015, #449
 with no network, a few input actions and checks — `type`, `wait_for`, five assertion forms —,
 screenshots), `page_check_no_browser` (install Chrome, Chromium or
 Edge, or set `STIRA_BROWSER_PATH`), `page_check_platform` (Windows, phase 1) or `page_check_root`
-(Chrome would need `--no-sandbox`). Always `info`: the tool is optional. No browser is started.
+(Chrome would need `--no-sandbox`). Always `info`: the tool is optional.
+
+The same note carries three fixed codes (ADR 0015 Addendum rev 6, slice S1, #765): `guard` —
+the start-time network guard measurement, `verified` / `unverified` / `unmeasured` —,
+`guard_code` (why: `guard_verified`, `platform_unmeasured` on Linux, `no_browser`,
+`canary_heard`, `browser_guard_unverified`, …) and `axis` (the axis check: `pass`, `not_run`,
+`guard_pending` while the measurement has no verdict yet,
+or the first failing invariant's code). They are **shown only**: no rule, tier or grant reads
+them yet. The state is kept in memory, so `stira doctor` (the command) measures it itself:
+where a browser is found on macOS it starts Stira's own fixed page once, with no network, and
+waits at most 10 s (measured: 3–5 s); on Linux, without a browser or after the wait it reads
+`unmeasured`, which is not an error. The doctor inside the server starts no browser and shows
+what the server holds in memory.
+
+The chat server begins that measurement itself, once per start, on a background thread when
+its listener exists (`serve()` in `dashboard/stira_server.py`). Without a usable browser it
+starts nothing; it never delays or stops the start (a failure is one line with the error's
+type name). A server that is stopped while the measurement still runs (the first seconds)
+waits for it, at most 10 s, so that its browser is closed. The start-up doctor's note was
+written before the measurement ended, so it reads
+`unmeasured (not_run)`; the current value is the settings row below.
 
 One note says whether and how the verification runner `run_checks` (ADR 0019, #167) would be
 contained: `run_checks_off` (info; gateway `run_checks: {"phase": 1}` turns it on),
@@ -113,6 +133,15 @@ OS permission is checked, the checks above, every write root with its findings a
 person to carry out, the fix text — in the page language. "Run again" calls the existing
 `POST /api/diagnostics/doctor` (CSRF-protected; the same read-only check as the chat sidebar,
 one temporary file per root). The section has no field and writes no setting; it adds no route.
+
+One row of its facts, **page_check network guard (read-only)**, shows the page tools' guard
+state now (ADR 0015 Addendum rev 6, slice S1, #765): `guard (guard_code)`, the axis check's
+code and the whole seconds since the measurement ended ("not measured yet" when there is
+none). Both doctor routes add it to their answer as `page_guard`
+(`{"guard", "guard_code", "axis", "measured_age_s"}`), read from the server's memory at the
+request: three fixed codes and a number, never a path, a URL or page text; a value outside
+that shape is shown as `unverified (guard_unreadable)`. No route, field or setting accepts a
+value for it, "Run again" does not measure again, and no rule reads it.
 
 ## Known limits (tracked on #267, not fixed by the tab)
 

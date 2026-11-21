@@ -109,8 +109,11 @@ def test_write_tools_omitted_by_breaker(level):
 
 
 def test_nxp_prepare_turn_enforces_write_filter():
+    """#259: the write tools stay in the list at WARNING; their calls are refused."""
+    from stiracore.agent.checkpoint_hooks import CheckpointHooks
     from stiracore.agent.nxp_agent import NXPAgent
     from stiracore.core import NeuralState, StiraEngine
+    from stiracore.middleware.identity_guard import BREAKER_WRITE_REFUSED, IdentityGuard
 
     agent = object.__new__(NXPAgent)
     agent.engine = StiraEngine(NeuralState(stability=0.45))
@@ -118,6 +121,11 @@ def test_nxp_prepare_turn_enforces_write_filter():
     agent.tools = (tools.webhook_send, tools.oauth_api_call)
     agent.system_prompt_provider = None
     agent.system_prompt = "identity"
+    agent.identity_guard = guard = IdentityGuard(agent.engine)
+    agent.checkpoint_hooks = CheckpointHooks(agent.engine)
     breaker = agent.engine.pre_turn()
     allowed, _ = agent._prepare_turn(breaker)
-    assert allowed == []
+    assert allowed == list(agent.tools)
+    for tool in agent.tools:
+        result = guard.check_tool_call(tool.tool_name, {})
+        assert not result.allowed and BREAKER_WRITE_REFUSED in result.reason

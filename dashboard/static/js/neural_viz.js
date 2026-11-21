@@ -31,7 +31,12 @@
       breaker: level ? t(`shell.${level}`) : '—', failures: hb.consecutive_failures || 0,
     });
   }
-  if (typeof module !== 'undefined') module.exports = {correlation, timestamp, heartbeatText};
+  // #137: vigilance is not displayed (chart, legend, both tables); the engine keeps it.
+  const HIDDEN = ['vigilance'];
+  const shownDimensions = dims => dims.filter(dim => !HIDDEN.includes(dim));
+  // Columns of a stimulus × dimension matrix that belong to the shown dimensions.
+  const shownColumns = (values, dims) => values.map(row => row.filter((_, i) => !HIDDEN.includes(dims[i])));
+  if (typeof module !== 'undefined') module.exports = {correlation, timestamp, heartbeatText, shownDimensions, shownColumns};
   if (!root.document) return;
   const doc = root.document;
   const container = doc.getElementById('neural-chart');
@@ -69,7 +74,7 @@
     table.append(body); doc.getElementById(id).replaceChildren(table);
   }
   function render(data) {
-    const dims = data.dimensions;
+    const dims = shownDimensions(data.dimensions);
     const history = data.history.filter(r => Number.isFinite(timestamp(r.timestamp)));
     const observed = history.concat([data.current]).sort((a, b) => timestamp(a.timestamp) - timestamp(b.timestamp));
     const predicted = data.prediction;
@@ -109,7 +114,7 @@
       item.prepend(icon); legend.append(item);
     });
     heatmap('neural-correlation', dims, dims, correlation(history, dims), 0.5, dimLabel);
-    heatmap('neural-emotion', data.emotion_matrix.stimuli, dims, data.emotion_matrix.values, 0.04, stimulusLabel);
+    heatmap('neural-emotion', data.emotion_matrix.stimuli, dims, shownColumns(data.emotion_matrix.values, data.emotion_matrix.dimensions || data.dimensions), 0.04, stimulusLabel);
     doc.getElementById('neural-status').textContent = t('neural.samples', {count: history.length});
     const hbEl = doc.getElementById('neural-heartbeat');
     const hbText = hbEl && heartbeatText(data.heartbeat, t, v => new Date(v * 1000).toLocaleTimeString());

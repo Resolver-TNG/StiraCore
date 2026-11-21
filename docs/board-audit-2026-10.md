@@ -28,8 +28,8 @@ ask it (docs/stage.md, "Who owns the board's control"). No restructuring was nee
 - **Rapid open / close** (200 pairs with frames between, jsdom): settles closed, `hidden`,
   one body, `onClose` once per close. OK.
 - **Reply during activity / pinned + activity**: a reply takes the activity unless pinned;
-  a pinned reply holds the activity unless explicit. OK. The pin survives an explicit switch
-  between the two — **#623** (behaviour choice, filed).
+  a pinned reply holds the activity unless explicit. OK. An explicit switch between the two
+  clears the pin (**#623**, decided 2026-11-16: the pin belongs to the content).
 - **Reload mid-turn**: the first read restores the last 20 rows and the running state from
   `turns.db` (server test). OK.
 - **Poll failure and recovery**: backoff ×2 to 60 s, offline at 2 failures, recovery resets

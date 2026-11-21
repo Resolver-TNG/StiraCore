@@ -379,12 +379,18 @@ def test_write_block_policy_matches_nxp_agent():
             visible_names = {t.tool_name for t in visible}
             blocked = write_blocked_names(config, agent.engine, breaker)
             unexecutable = set(STUB_TOOL_NAMES) & blocked
+            # #259: visible at every level; the guard refuses exactly the blocked names.
+            assert visible_names == set(STUB_TOOL_NAMES)
+            refused = {
+                name
+                for name in STUB_TOOL_NAMES
+                if not agent.identity_guard.check_tool_call(name, {}).allowed
+            }
             if breaker.actions & BreakAction.HALT:
-                # Visible, but every write call is rejected by the HITL gate.
-                assert visible_names == set(STUB_TOOL_NAMES)
+                # Every write call is rejected by the HITL gate (no approver).
                 assert unexecutable == set(STUB_TOOL_NAMES) - {"file_read"}
             else:
-                assert unexecutable == set(STUB_TOOL_NAMES) - visible_names
+                assert unexecutable == refused
             agent.engine._current_break_result = None
 
 
@@ -530,7 +536,8 @@ def test_nxp_runner_with_an_offline_model(dataset):
     assert {r["status"] for r in runs} == {"complete"}
     assert timing["stop_reason"] is None and timing["spent_usd"] > 0
     th06 = next(r for r in runs if r["scenario"] == "TH06" and r["condition"] == "off")
-    assert set(th06["rows"][0]["exposure_blocked"]) == set(STUB_TOOL_NAMES) - {"file_read"}
+    # #259: the tool list is the same at every breaker level (writes are refused at the call).
+    assert th06["rows"][0]["exposure_blocked"] == []
     assert all(row["stance"] is None for run in runs for row in run["rows"])
     real = next(r for r in runs if r["scenario"] == "TH06" and r["condition"] == "real")
     assert real["rows"][0]["stimulus"] == "threat"

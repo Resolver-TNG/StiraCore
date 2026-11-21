@@ -41,6 +41,7 @@ def test_only_server_sentences_resolved_by_the_system_map_to_codes():
         reasons.BREAKER_STRICTER: "breaker_stricter",
         reasons.JOB_RESTART: "job_restart",
         reasons.GRANT_STOPPED: "grant_stopped",
+        reasons.TURN_AUTO_STOPPED: "turn_auto_stopped",
     }
     for sentence, code in expected.items():
         assert reasons.resolution_code(sentence, "system") == code

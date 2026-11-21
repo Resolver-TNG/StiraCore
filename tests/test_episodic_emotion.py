@@ -19,6 +19,7 @@ import math
 import os
 import random
 import stat
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -411,6 +412,24 @@ def test_the_record_and_its_directory_are_private_to_the_user(tmp_path):
     assert stat.S_IMODE(path.parent.stat().st_mode) & 0o077 == 0
 
 
+def _assert_no_emotion_text(output: str) -> None:
+    """No emotion value in a memory tool's output.
+
+    ``Modified:`` is the file's mtime in ISO form; ``…:20.612345`` holds ``0.612`` by chance
+    (#781). Such a line must parse as a time and is then left out; everything else keeps
+    the substring check.
+    """
+    rest = []
+    for line in output.splitlines():
+        if line.startswith("Modified: "):
+            datetime.fromisoformat(line.removeprefix("Modified: "))  # a time, nothing else
+        else:
+            rest.append(line)
+    text = "\n".join(rest)
+    for value in ("0.612", "joy", TURN_ID, "trust", "stability"):
+        assert value not in text, (value, text)
+
+
 def test_memory_tools_search_and_harvest_prompts_never_see_the_snapshot(tmp_path):
     store = _store(tmp_path)
     record_episode(store, "hello", "hi there", key="chat-1", emotion=_snapshot())
@@ -418,8 +437,7 @@ def test_memory_tools_search_and_harvest_prompts_never_see_the_snapshot(tmp_path
     shown = tools["memory_read"](layer="episodic", key="chat-1")
     found = tools["memory_search"](query="hello", layer="episodic")
     for output in (shown, found):
-        for value in ("0.612", "joy", TURN_ID, "trust", "stability"):
-            assert value not in output
+        _assert_no_emotion_text(output)
     for query in ("0.612", "joy", TURN_ID, "warning"):
         assert store.search(query) == []  # the literal search index has no emotion text
     entry = store.read(MemoryLayer.EPISODIC, "chat-1")
@@ -430,6 +448,24 @@ def test_memory_tools_search_and_harvest_prompts_never_see_the_snapshot(tmp_path
     assert {k: v for k, v in entry.metadata.items() if k != "format"} == {
         k: v for k, v in v1.metadata.items() if k != "format"
     }
+
+
+def test_a_file_time_that_reads_like_an_emotion_value_is_not_a_leak(tmp_path):
+    """#781: ``Modified:`` is the file's mtime; ``…:20.612345`` holds ``0.612`` by chance."""
+    store = _store(tmp_path)
+    record_episode(store, "hello", "hi there", key="chat-1", emotion=_snapshot())
+    stamp = 1_700_000_000.612345
+    os.utime(store.memory_dir / "episodic" / "chat-1.md", (stamp, stamp))
+    tools = {t.tool_name: t for t in create_memory_tools(store)}
+    shown = tools["memory_read"](layer="episodic", key="chat-1")
+    found = tools["memory_search"](query="hello", layer="episodic")
+    for output in (shown, found):
+        assert "0.612" in output  # the old substring check of the whole output failed here
+        _assert_no_emotion_text(output)
+    # A value outside the file-time line is still caught, and so is one written as that line.
+    for leak in ("\ntrust 0.612", "\nModified: 0.612", "\nMetadata: {'category': 'joy'}"):
+        with pytest.raises((AssertionError, ValueError)):
+            _assert_no_emotion_text(shown + leak)
 
 
 # --- opt-in emotion-proximity recall ----------------------------------------------------

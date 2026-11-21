@@ -42,6 +42,9 @@ from stiracore.agent.context_management import (
     ContextManagementSettings,
     resolve_context_window_source,
 )
+from stiracore.agent.context_management import (
+    status_view as context_status_view,
+)
 from stiracore.agent.context_profile import assembler_budget
 from stiracore.agent.hitl_resume import replay_preview, resume_approved_request
 from stiracore.agent.model_switch import apply_model_selection
@@ -90,6 +93,7 @@ from stiracore.control.memory_jobs import (
     distiller_model_factory,
     plan_counts,
 )
+from stiracore.control.memory_layout import DataLayout
 from stiracore.control.procedural_proposals import REVIEW_LOG_NAME, ProcedureProposals
 from stiracore.core import breaker_reasons, hitl_reasons
 from stiracore.core.approval import OperationLedger
@@ -140,6 +144,7 @@ from stiracore.observability.masking import (
     MaskingFormatter,
     install_record_masking,
 )
+from stiracore.observability.memory_api import create_memory_table_blueprint
 from stiracore.observability.neural_history import (
     NeuralHistory,
     create_neural_history_blueprint,
@@ -185,6 +190,8 @@ from stiracore.tools import (
 )
 from stiracore.tools import file_tools as file_tools_module
 from stiracore.tools import page_check as page_check_tool
+from stiracore.tools import page_look as page_look_tool
+from stiracore.tools import page_review as page_review_tool
 from stiracore.tools import run_checks as run_checks_tool
 from stiracore.tools import tool_summary as tool_summary_module
 from stiracore.tools import web_tools as web_tools_module
@@ -309,43 +316,42 @@ def _stira_tools(
     write_policy=None,
     delegate_tool=None,
 ):
-    """Compose tools, retaining writes at CRITICAL when the HITL gate owns them.
+    """Compose the chat agent's tools. #259 (ADR 0010 addendum): the list no longer depends
+    on the breaker level, so the cached tool prefix (``tools_hash``) survives a transition.
+    A write the breaker stops is refused at the call (``IdentityGuard``,
+    ``breaker_write_refused``): every write-class name here is in the engine's
+    ``blocked_tool_names`` (registry writes, ``bound_memory_write_names``, ``delegate``).
+    Under CRITICAL + ``halt`` (the server's choice) write calls go to the person's card.
 
-    ``delegate_tool`` (#486, ADR 0016) is offered only while ``writes_allowed`` holds for
-    the breaker level (NORMAL or COHERENCE: the same criterion the child's write check
-    uses), delegation is switched on, **and** the turn is a chat / Stage turn a person's
-    message started (``yolo_origin.started_by_person()``, #493 review M4 and round 2
-    minor 3). A webhook, bot, approval-resume, a window's automatic continue or other
+    ``delegate_tool`` (#486, ADR 0016) is offered only while delegation is switched on,
+    **and** the turn is a chat / Stage turn a person's message started
+    (``yolo_origin.started_by_person()``, #493 review M4 and round 2 minor 3), **and** the
+    breaker level either allows writes (NORMAL / COHERENCE, ``writes_allowed``) or is
+    WARNING, where its call is refused (#259). At CRITICAL it stays out of the list as
+    before: under ``halt`` its call would reach a card rather than a refusal (fail closed).
+    A webhook, bot, approval-resume, a window's automatic continue or other
     unattended turn never gets it: its call would be a card nobody may be watching, and its
     definition would cost tokens on every such turn. (The heartbeat and the scheduler call
-    no model, ADR 0008.)
+    no model, ADR 0008.) ``hitl_enabled`` and ``bound_memory_write_names`` no longer change
+    the list (kept for the callers' signature).
 
     read_only_paths/protected_dirs (and the write roots of write_policy, #243)
     reach the file tools' execution-boundary wrapper, which also holds inside
     hook-less inner agents (#144/#145).
     """
     normalized = str(getattr(breaker_level, "value", breaker_level)).lower()
-    hitl_boundary = hitl_enabled and normalized == "critical"
-    effective_level = None if hitl_boundary else breaker_level
     tools = list(
         tool_registry.get_tools(
-            effective_level,
+            None,
             read_only_paths=read_only_paths,
             protected_dirs=protected_dirs,
             write_policy=write_policy,
         )
     )
-    if tool_registry.writes_allowed(effective_level):
-        tools.extend(bound_memory_tools)
-    else:
-        tools.extend(
-            tool
-            for tool in bound_memory_tools
-            if _registered_tool_name(tool) not in bound_memory_write_names
-        )
+    tools.extend(bound_memory_tools)
     if (
         delegate_tool is not None
-        and tool_registry.writes_allowed(breaker_level)
+        and (tool_registry.writes_allowed(breaker_level) or normalized == "warning")
         and yolo_origin.started_by_person()
         and delegate_tool.offered()
     ):
@@ -1207,15 +1213,25 @@ class _NewSessionHost:
 HEARTBEAT_DISABLED = {"enabled": False, "running": False}
 
 UI_HOME_STAGE_OFF_WARNING = (
-    'WARNING: gateway-config "ui.home" is "stage" but the Stage is off (STIRA_STAGE is not set);'
-    " / opens the chat"
+    'WARNING: gateway-config "ui.home" is "stage" but the Stage is off (turn it on in'
+    " Settings → Screens, or set STIRA_STAGE=1); / opens the chat"
 )
+
+
+def _stage_on(config_store) -> bool:
+    """Whether this start registers the Stage (#477): gateway-config ``stage_enabled``,
+    with STIRA_STAGE=1/0 over it. An unreadable configuration leaves only the variable."""
+    try:
+        gateway_config, _agent_config = config_store.load()
+    except (OSError, ValueError, TypeError):
+        gateway_config = None
+    return stage_enabled(gateway_config)
 
 
 def _ui_home(config_store, stage_on: bool) -> str:
     """The page ``/`` opens (#350): gateway-config ``ui.home``, read once at start-up.
 
-    "stage" only takes effect when the Stage page exists (STIRA_STAGE=1); anything else,
+    "stage" only takes effect when the Stage page exists (``_stage_on``); anything else,
     including an unreadable configuration, falls back to the chat.
     """
     try:
@@ -1447,6 +1463,20 @@ def _episode_labels(config_store):
     return user, agent
 
 
+def _episode_placeholders(config_store):
+    """The language (``ja`` default / ``en``) of the fixed words in an episode line (#653).
+
+    ``episode_labels.placeholders`` in ``agent-config.json`` (read at start-up); unset, unknown or
+    unreadable = ``ja``. Never fails. Stored episodes are not rewritten.
+    """
+    try:
+        _gateway, agent_config = config_store.load()
+        value = agent_config.episode_labels.get("placeholders", "ja")
+    except Exception:  # noqa: BLE001 - optional; keep the default language
+        return "ja"
+    return value if value in ("ja", "en") else "ja"
+
+
 def _associative_recall(config_store, store, engine, ignore_terms=()):
     """The opt-in associative recall (#170), or None when off. Read at start-up; never fails.
 
@@ -1557,6 +1587,79 @@ def _finish_recall(recall, turn_recorder) -> None:
         )
 
 
+def _live_tool_rules(config_store):
+    """A reader of the saved tool rules, read from the file at every call — what the gate's
+    ``_tool_policy_reader`` reads, not the turn's start snapshot, so a rule a person
+    narrows during a turn is seen by the next check. Rules that cannot be read are locked
+    rules (every tool Never, #190)."""
+
+    def rules():
+        try:
+            with config_store.lock:
+                tool_config = config_store.load_tools()
+        except Exception:  # noqa: BLE001 - unreadable rules lock (fail closed)
+            tool_config = ToolConfig.locked(config_store.tool_path, "unreadable")
+        return tool_config
+
+    return rules
+
+
+def _wire_page_look_always(agent, rules, event_store, tool_paths) -> bool:
+    """ADR 0015 rev 6 S4 (#773): what ``page_look``'s conditional Always reads on this
+    server. Only while ``page_look`` is registered (else nothing measures the axis and no
+    card preparer exists). Every value comes from the server's own objects, read at each
+    check; nothing comes from a model or a request. The scope reader catches nothing: a
+    reader that raises fails its item in ``page_look`` (fail closed, the saved Always stays
+    a card)."""
+    hooks = getattr(agent, "checkpoint_hooks", None)
+    if "page_look" not in tool_registry.WRITE_TOOLS or hooks is None:
+        # No gate to prepare a card for: no scope either (a saved Always stays capped).
+        page_look_tool.set_axis_scope(None)
+        return False
+
+    def scope():
+        return page_check_tool.AxisScope(
+            policy=tool_paths["write_policy"],
+            tool_config=rules,
+            event_store=event_store,
+            engine=agent.engine,
+            file_read_rule=lambda: tool_policy.rule_policy(rules(), "file_read"),
+            browser=tool_registry.PAGE_CHECK_STATUS.path,
+        )
+
+    page_look_tool.set_axis_scope(scope)
+    # Before the gate reads the rule: a saved Always re-measures a non-sticky axis code,
+    # and a capped one says so on the card.
+    hooks.input_preparers["page_look"] = lambda tool_input: page_look_tool.prepare_input(
+        tool_input, rules
+    )
+    return True
+
+
+def _wire_page_review(router, chat_model, section) -> bool:
+    """ADR 0015 rev 6 S6 (#774): register ``page_review`` only while a person routed the
+    task ``visual_review`` (``router``: the server's ``TaskModelRouter``; ``section``: the
+    gateway's ``visual_review``, the budget). Unset: no reviewer is built and no tool is
+    registered — the tool definitions the chat model gets are unchanged. Called before the
+    tool list, the tool rules and the breaker read the registry's names. Returns whether
+    the tool is registered."""
+    return tool_registry.enable_page_review(
+        page_review_tool.reviewer_for(router, chat_model, section)
+    )
+
+
+def _wire_page_review_card(agent) -> bool:
+    """S6c (#774): the approval card of ``page_review`` is Stira's text. Before the gate,
+    the call's input becomes the run id plus what Stira knows: that it is a send, the
+    reviewer's provider and model id, the image count (``page_review.prepare_input``);
+    every other key a model wrote is dropped. Only while the tool is registered."""
+    hooks = getattr(agent, "checkpoint_hooks", None)
+    if "page_review" not in tool_registry.WRITE_TOOLS or hooks is None:
+        return False
+    hooks.input_preparers["page_review"] = page_review_tool.prepare_input
+    return True
+
+
 def _tool_availability_provider(config_store, applied_tool_config, *, memory_rate_bound: bool):
     """The agent's Tool Availability section (#508), rebuilt per turn from what is saved.
 
@@ -1586,12 +1689,29 @@ def _tool_availability_provider(config_store, applied_tool_config, *, memory_rat
                     if code == "page_check_no_browser"
                     else tool_availability.UNSUPPORTED_HOST
                 )
+            if "page_look" not in registered:
+                # Same browser, same reason as page_check (ADR 0015 rev 6 S3).
+                absent["page_look"] = absent.get(
+                    "page_check",
+                    tool_availability.DEPENDENCY_MISSING
+                    if tool_registry.PAGE_CHECK_STATUS.code == "page_check_no_browser"
+                    else tool_availability.UNSUPPORTED_HOST,
+                )
             if "run_checks" not in registered:
                 absent["run_checks"] = (
                     tool_availability.NOT_CONFIGURED
                     if tool_registry.RUN_CHECKS_STATE.get("code") == "run_checks_off"
                     else tool_availability.UNSUPPORTED_HOST
                 )
+            if (
+                "page_review" not in registered
+                and page_review_tool.configured()
+                and "page_check" in absent
+            ):
+                # ADR 0015 rev 6 S6: only while a person set the task visual_review and
+                # no browser was found (page_check's reason). Unset: no line at all — the
+                # prompt of a server that never opted in does not change.
+                absent["page_review"] = absent["page_check"]
             unbound = {}
             if not memory_rate_bound and "memory_rate" in registered:
                 unbound["memory_rate"] = tool_availability.NOT_CONFIGURED
@@ -1606,6 +1726,8 @@ def _tool_availability_provider(config_store, applied_tool_config, *, memory_rat
                 **tool_registry.READ_TOOLS,
                 **tool_registry.WRITE_TOOLS,
                 "page_check": page_check_tool.page_check,
+                "page_look": page_look_tool.page_look,
+                "page_review": page_review_tool.page_review,
                 "run_checks": run_checks_tool.run_checks,
             }
             return tool_availability.section(
@@ -2111,6 +2233,17 @@ def _build_app(
     # Durable ledger: a restored checkpoint never repeats an approved side effect.
     operation_ledger = OperationLedger(DATA_DIR / "hitl-operations.db")
     lifecycle.add("ledger", lambda _t: _close_label(operation_ledger), order=90, abort_only=True)
+    # Filled once the audit chain exists (below); a call before that has no audit row.
+    task_model_audit: dict = {"record": None}
+    # Routed side-task calls leave one turn event each: task, model, tokens, status (no text).
+    task_router = task_models.TaskModelRouter(
+        task_routes,
+        main_model_spec,
+        on_record=lambda record: _record_task_model(turn_recorder, task_model_audit, record),
+    )
+    # ADR 0015 rev 6 S6 (#774): page_review only while task_models.visual_review is set —
+    # before the breaker, the tool rules and the tool list see the names. Unset: nothing.
+    _wire_page_review(task_router, lambda: agent.model, GATEWAY_CONFIG.visual_review)
     # Register every loaded write-capable name with the existing breaker.
     config.blocked_tool_names = (
         set(config.blocked_tool_names)
@@ -2282,14 +2415,7 @@ def _build_app(
     # W1 (#296): every breaker change away from NORMAL (and between non-NORMAL levels)
     # moves the authority epoch, with or without YOLO.
     agent.engine.on_breaker_transition = authority_service.breaker_transition
-    # Filled once the audit chain exists (below); a call before that has no audit row.
-    task_model_audit: dict = {"record": None}
-    # Routed side-task calls leave one turn event each: task, model, tokens, status (no text).
-    agent.task_models = task_models.TaskModelRouter(
-        task_routes,
-        main_model_spec,
-        on_record=lambda record: _record_task_model(turn_recorder, task_model_audit, record),
-    )
+    agent.task_models = task_router
     # #585: web_fetch(summarize=True) runs the tool_summary task (no tools, framed result,
     # at most MAX_SUMMARIES_PER_TURN per turn).
     summarizer = tool_summary_module.ToolSummarizer(
@@ -2324,6 +2450,7 @@ def _build_app(
     # Speaker labels of new episodes (#653). Earlier episodes keep the labels they were
     # written with, so recall skips the old labels and the current ones.
     user_label, agent_label = _episode_labels(config_store)
+    episode_placeholders = _episode_placeholders(config_store)
     # Opt-in associative recall (#170); None (the default) leaves the prompt unchanged.
     associative_recall = _associative_recall(
         config_store,
@@ -2484,10 +2611,8 @@ def _build_app(
                 "ttl": agent.prompt_cache.ttl,
                 "active": bool((agent.last_prompt_cache or {}).get("active")),
             },
-            "context_management": {
-                "enabled": agent.context_management.enabled,
-                "mode": (agent.last_context_management or {}).get("mode"),
-            },
+            # #746: enabled / mode / the refusal reason code (allow-listed values only).
+            "context_management": context_status_view(agent),
             # Read-only window for the context gauge (#350); null when it cannot be resolved.
             "context_window": _context_window_view(agent),
             # Doctor summary + open permission cards (#244); masked, no full paths.
@@ -2514,7 +2639,9 @@ def _build_app(
         payload["heartbeat"] = heartbeat_status()
         return payload
 
-    episodic_formatter = EpisodicFormatter(user_label=user_label, agent_label=agent_label)
+    episodic_formatter = EpisodicFormatter(
+        user_label=user_label, agent_label=agent_label, placeholders=episode_placeholders
+    )
 
     def sync_model_selection():
         """Apply the model saved from /settings before this turn (#208)."""
@@ -2823,8 +2950,9 @@ def _build_app(
     # (the "approvals" step; the entry point runs it before interpreter shutdown).
     app.extensions["lifecycle"] = lifecycle
     install_i18n(app)
-    # Stage (#341) is opt-in (STIRA_STAGE=1): without it there is no route and no nav item.
-    stage_on = stage_enabled()
+    # Stage (#341) is on by default (gateway ``stage_enabled`` from the settings page, #477, or
+    # STIRA_STAGE=1/0, which wins; #350 decision 2026-11-16): turned off, there is no route and no nav item.
+    stage_on = _stage_on(config_store)
     # ui.home (#350): "stage" opens / on the Stage and lists it first in the menu.
     ui_home = _ui_home(config_store, stage_on)
     if not stage_on:
@@ -2922,6 +3050,8 @@ def _build_app(
             config_location_provider=lambda: dict(config_location),
             # The heartbeat card's read-only status (#472).
             heartbeat_status_provider=lambda: heartbeat_status(),
+            # #474: the read-only dry run of ``stira memory retention`` (counts only).
+            retention_layout_provider=lambda: DataLayout.at(DATA_DIR),
         )
     )
 
@@ -2938,6 +3068,20 @@ def _build_app(
         if tool_registry.RUN_CHECKS_STATE["registered"]
         else None
     )
+    # ADR 0015 rev 6 S3: one audit.page.page_look.* row per call no person's card answered
+    # (allow-listed fields only: counts, the axis code, hashes).
+    page_look_tool.set_audit(
+        AuditChain(event_store).record_page if "page_look" in tool_registry.WRITE_TOOLS else None
+    )
+    # S6 (#774): one audit.page.page_review.* row per call, a person's card included (a
+    # send; allow-listed fields only: codes, counts, hashes, the reviewer's provider / model).
+    page_review_tool.set_audit(
+        AuditChain(event_store).record_page if "page_review" in tool_registry.WRITE_TOOLS else None
+    )
+    # S4 (#773): the axis scope and the card preparer of page_look's conditional Always.
+    _wire_page_look_always(agent, _live_tool_rules(config_store), event_store, tool_paths)
+    # S6c (#774): page_review's card names the reviewer and the image count (Stira's text).
+    _wire_page_review_card(agent)
     # #457: one audit.read.denied row per refused read (the tool, a keyed path hash, a code).
     file_tools_module.set_read_audit(
         AuditChain(event_store).record_read_refusal
@@ -3219,6 +3363,8 @@ def _build_app(
             write_failures,
             doctor_report=lambda: doctor_state["report"],
             run_doctor=run_write_doctor,
+            # ADR 0015 Addendum rev 6, S1: the read-only settings row (codes from memory).
+            page_guard=page_check_tool.guard_row,
         )
     )
     app.extensions["write_failures"] = write_failures
@@ -3280,9 +3426,13 @@ def _build_app(
         # #454 (ADR 0020): the workspace artifacts behind /api/artifacts.
         return render_template("artifacts.html")
 
+    # #652: the key / importance / retention table of the Memory page (GET only, no body).
+    app.register_blueprint(create_memory_table_blueprint(store))
+
     @app.get("/memory")
     def memory_page():
-        # Read-only three-layer view backed by /api/memory/tree below.
+        # Read-only three-layer view backed by /api/memory/tree below; the table under it
+        # reads /api/memory/entries (#652).
         return render_template("forest.html")
 
     @app.get("/")
@@ -3460,6 +3610,34 @@ def listen_socket(host: str, port: int) -> socket.socket:
     return sock
 
 
+def _start_page_guard(start=None) -> str:
+    """Begin G, the page tools' start-time guard measurement (ADR 0015 Addendum rev 6,
+    S1), once, on a background thread: this returns at once. Without a usable browser
+    nothing is started. Observation only (no rule reads the result), and it never stops
+    the server: a failure is one line with the error's type name. Returns a fixed code.
+    """
+    try:
+        status = tool_registry.PAGE_CHECK_STATUS
+        if not status.available or not status.path:
+            return "no_browser"
+        begin = start or page_check_tool.start_guard_measurement
+        return "started" if begin(status.path) else "not_started"
+    except Exception as error:  # noqa: BLE001 - the measurement never stops a start
+        print(f"WARNING: page guard measurement not started ({type(error).__name__})")
+        return "failed"
+
+
+def _finish_page_guard(wait=None) -> bool:
+    """At the server's stop: wait, bounded (at most 10 s), for a G that still runs, so its
+    browser and temporary directory are gone before the process is (the browser runs in a
+    session of its own and would outlive it). Starts nothing; never raises."""
+    try:
+        return bool((wait or page_check_tool.wait_guard_measurement)())
+    except Exception as error:  # noqa: BLE001 - a stop never fails on the wait
+        print(f"WARNING: page guard measurement not awaited ({type(error).__name__})")
+        return False
+
+
 def serve(application, host: str, port: int) -> None:
     """Serve ``application`` threaded, as ``Flask.run`` did, on :func:`listen_socket`."""
     from werkzeug.serving import make_server
@@ -3472,6 +3650,7 @@ def serve(application, host: str, port: int) -> None:
     try:
         server.log_startup()
         print("Press CTRL+C to quit", file=sys.stderr, flush=True)
+        _start_page_guard()  # once per start, when the listener exists; never blocks
         server.serve_forever()
     finally:
         server.server_close()
@@ -3609,6 +3788,9 @@ def main(app_factory=None) -> None:
             raise SystemExit(4) from None
     finally:
         stopped = lifecycle.shutdown()
+        # A G that began with this start and still runs (the first seconds): let it close
+        # its browser (bounded), after the stops above.
+        _finish_page_guard()
         # After the bounded stops (no tool call is left running): an in-process caller of
         # main() (tests, harnesses) is not held to a dashboard that is gone.
         yolo_own_dashboard.disarm()

@@ -26,12 +26,13 @@ its **goal** is the objective (ADR 0011 §2, §8). Both live in one record:
 | `kind` | always `goal` — the discriminator against YOLO windows (`kind="yolo"`): a goal grant is never handled as a window, nor the reverse |
 | `session_ref` | `grant:<id>` — the dedicated session the W5 iteration will run in |
 | `goal` | free text, **only in the grant store** (`grants.json`, `0600`). Refused when `mask_secrets` would change it. Everywhere else — logs, lifecycle events, the outbox, list views, errors, audit — the goal is referenced by `grant_id` only |
-| `scope.tools` | a non-empty subset of `file_read`, `editor`, `run_checks`, `memory_read`, `memory_search`, `memory_list`, `current_time` |
-| `scope.workspace_subtree` | an existing directory inside the agent's write roots, resolved (no symlink escape) and within the write floor |
+| `scope.tools` | a non-empty subset of `file_read`, `editor`, `run_checks`, `memory_read`, `memory_search`, `memory_list`, `current_time`, `page_look`, `view_image` (`view_image` only together with `page_look`; [page tools](#page-tools-in-a-grant-adr-0015-rev-6-s5)). `page_check` and `page_review` cannot be named |
+| `scope.workspace_subtree` | an existing directory inside the agent's write roots, resolved (no symlink escape) and within the write floor; not a Stira checkout ([below](#protected-subtrees-and-paths-791)) |
 | `budget` | `total_tokens` (≤ 5 000 000) and `per_tick_tokens` (≤ total) |
 | `ttl_sec` | default 7200 (2 h), hard cap 21600 (6 h), never extended |
 | `max_iterations` | default 10, hard cap 20 |
 | `no_progress_ticks` | default 3 |
+| `report_files` | optional, default none (ADR 0028 §4): at most 8 relative file paths inside the subtree that the progress fingerprint ignores ([below](#report-files-adr-0028-4)). Fixed at issue |
 | `verifier` | `user` (nothing else in v1). A grant without verification cannot be issued |
 | `issued_*` | wall clock + sleep-including + sleep-excluding readings at issue |
 | `issuer` | `dashboard` (host-confirmed) |
@@ -41,6 +42,186 @@ its **goal** is the objective (ADR 0011 §2, §8). Both live in one record:
 (default true) **and** a verified `os_sandbox` host (ADR 0019). On a `limits_only` host a
 grant whose scope names `run_checks` is refused (`grant_run_checks_not_contained`) whatever
 the setting says — a safety floor the setting cannot lift.
+
+### Protected subtrees and paths (#791)
+
+**Refused by default (ADR 0029 Q3 / B6).** A grant cannot be issued for a subtree that
+**overlaps the protected part of a Stira checkout** — a directory from which
+`src/stiracore/__init__.py` opens (as the file system resolves the names; the file is only
+looked for, not read). The subtree overlaps it when it is the checkout itself or holds one,
+or lies inside it anywhere but these places:
+
+| Inside a checkout | A grant there |
+|---|---|
+| `.local/` (the default data directory: without `STIRA_DATA_DIR` the workspace is `<checkout>/.local/stira/workspace`) and `workspace/` | an **ordinary grant**, no option. It writes its project as anywhere else (`pyproject.toml`, `conftest.py`, `__init__.py` included); only the run-later list below applies. The server's data directory itself stays on the write floor as before |
+| a directory inside `docs/` of a checkout (for example `docs/research/`) | refused `grant_subtree_protected` unless the option and the tick are on (review #791 N1: it is Stira's own tree); with them on, writes are limited to the allow-list (`docs/` less `docs/eval`, `docs/adr`, the boundary document) |
+| everything else: the checkout root, `src/`, `src/stiracore/…`, `dashboard/…`, `tests/`, `docs/…` | refused: `grant_subtree_protected` |
+
+A subtree that lies inside a run-later directory (`.git/` …, the list below) is refused the
+same way, with or without the option (a grant could write nothing there). The path is
+resolved first (symlinks, `..`), and a check that cannot judge (an unreadable directory,
+more than 200 000 directories below the subtree) refuses: `grant_subtree_protected`.
+Otherwise the grant's `editor` could rewrite the approval layers, the evaluators and the
+limits, and a restart would run with the changed rules.
+
+**The running server's own tree is never a grant's subtree.** The package directory the
+server runs from (`stiracore.__file__`), every directory inside or around it, and the
+protected part of a checkout that holds it are refused **also with the option below**:
+`grant_subtree_running_checkout`. Self-development happens in a separate worktree.
+
+**The widening option "self-development scope" (B6b).** With the user setting
+`autonomy.grant_self_development: true` (`gateway-config.json`, default off, read at
+start) a person may issue such a grant **for a checkout other than the running server's**
+by sending the separate confirmation `"self_development": true` in the issue body — "this
+grant may work inside a Stira checkout; its `editor` writes only below `docs/`". Such a
+grant writes **only the allow-list** below (today: `docs/`, less `docs/eval/`, the boundary
+document and the names of list 3); everything else in the checkout — the served dashboard,
+the approval, containment, evaluator, budget and axis code, and `tests/` (it adds no new
+test either) — is read-only for it. The
+grant record carries `self_development: true` (only then; the grant's view shows the same
+key, and the settings panel and the Stage board mark such a grant with the badge
+"Self-development", whose tooltip says what it writes), so a later reader can tell it from
+an ordinary grant. The confirmation
+without the setting is refused (`grant_self_development_off`); the setting without the
+confirmation is refused (`grant_subtree_protected`). The host-confirmed summary names the
+loosening as `changes: loosen:self_development`, and the issue keeps its other conditions
+(NORMAL breaker, typed `ISSUE`, host confirmation). No model output can set either: the
+assisted-brief proposal (ADR 0029) uses the default and its subtree stays refused.
+On the settings page the issue form shows the separate box "This grant may work inside a
+Stira checkout (it writes only docs/)" **only on a server where the setting is on**; it
+starts unticked and `self_development: true` is sent only when it is ticked. The
+confirmation dialog lists the loosening as its own line, and the three refusals
+(`grant_subtree_protected`, `grant_subtree_running_checkout`,
+`grant_self_development_off`) are shown in words (en / ja).
+
+**What a grant's `editor` never writes** — whatever the rules, the grant and the option
+say (the iteration stops `tool_refused`, detail `protected_path`; reading stays allowed; a
+path that cannot be judged is refused). The check runs before the approval gate and again
+in the tool itself, right before every write. Closed lists in `stiracore/self_protect.py`:
+
+**1. Run-later files, in any workspace** (they run later on the person's machine) — as a
+path component anywhere in the path, as spelled or as resolved (relative, `./`, `..`, a
+symlink, any case, a trailing slash or dot):
+`.git` (the directory — hooks, `config`, `info/` — and a worktree's `.git` pointer file),
+`.gitattributes`, `.gitmodules`, `.github/`, `.gitlab-ci.yml`, `.pre-commit-config.yaml`,
+`.vscode/`, `.idea/`, `.devcontainer/`, `.envrc`, `.husky/`, `.kiro/`, `.claude/`,
+`.cursor/`, and any `*.code-workspace`. `Makefile` is **not** on the list (neither Stira
+nor a grant's tools run `make`; a person reads it like other project code).
+
+**2. Inside a Stira checkout: an allow-list** (`docs/proposer-edit-boundary.md` §4: what is
+not listed is out of bounds). A grant's `editor` writes only below `docs/`. Everything
+else in the checkout is refused — `src/` (every module, listed below or not), `dashboard/`
+(all of it: the server wiring, templates, `static/js`, `static/i18n`, `stage/` — the
+served pages are the browser half of the approval layer), `tests/`, `ci/`, `scripts/`, the
+root files. A grant whose own subtree lies in `.local/` or `workspace/` is not judged by
+this rule for the files in that place (the table above).
+
+**3. The second line inside the allow-list, and the named record of the layers** (the
+entry and everything below it; refused also if the allow-list grows):
+
+| Layer | Paths |
+|---|---|
+| Import-time code and evaluator overrides, **at any depth** | `__init__.py`, `conftest.py`, `pytest.ini`, `.pytest.ini`, `tox.ini`, `setup.cfg`, `setup.py`, `pyproject.toml`, `ruff.toml`, `.ruff.toml`, `sitecustomize.py`, `usercustomize.py` |
+| Approval and containment, and what wires them | `src/stiracore/__init__.py`, `core/approval.py`, `core/approval_store.py`, `core/engine.py`, `core/containment.py`, `core/turn_lock.py`, `core/checkpoint.py`, `control/job_approvals.py`, `agent/checkpoint_hooks.py`, `agent/nxp_agent.py`, `agent/grant_child.py`, `tools/tool_policy.py`, `tools/tool_consent.py`, `tools/tool_config.py`, `tools/tool_registry.py`, `tools/exec_gate.py`, `yolo/`, `grants/`, `authority/` |
+| Egress and masking | `labels.py`, `tools/own_dashboard_gate.py`, `tools/http_consent.py`, `tools/web_tools.py`, `integrations/`, `providers/`, `agent/model_factory.py`, `observability/masking.py`, `observability/security.py`, `middleware/taint_observer.py`, `middleware/containment_observer.py`, `tools/episodic_formatter.py` |
+| Floors | `identity_paths.py`, `self_protect.py`, `middleware/identity_guard.py`, `tools/os_protection.py`, `tools/checked_open.py`, `tools/file_editor_tool.py`, `tools/file_tools.py`, `tools/child_env.py` |
+| Persona core | `core/neural_state.py`, `core/coherence.py`, `core/amygdala.py`, `agent/stimulus_classifier.py`, `agent/ja_hybrid/`, `middleware/sycophancy_monitor.py` (SOUL / IPD are on the write floor already) |
+| Evaluators, the axis check, the boundary document | `tests/` (with `tests/attack/`), `ci/`, `scripts/`, `docs/eval/`, `docs/proposer-edit-boundary.md`, `conftest.py`, `pyproject.toml`, `release-exclude.txt`, `src/stiracore/eval/`, `core/breaker_sim.py`, `tools/run_checks.py`, `tools/page_check.py`, `tools/page_check_guard.py` |
+| Audit records | `observability/event_store.py`, `audit_chain.py`, `event_chain.py`, `turn_events.py` |
+| Budgets, limits, settings defaults | `tools/delegate_tool.py`, `scheduler/`, `diagnostics/`, `config/` |
+| Everything the server serves, and its wiring | `dashboard/` |
+
+Inside a checkout an existing file with a second hard link is refused too (it may be a
+listed file under another name), and inside the running server's package directory every
+write is refused. The data directory stays on the write floor as before. UI work on Stira
+itself is ordinary development in a separate worktree, not a grant.
+
+**Always a person (outside grants too).** A write by `editor` or `file_write` to a
+run-later file — the same list as 1 above, with the same spellings — is never approved
+automatically: the tool gate shows an approval card even when the tool's rule is Always,
+and neither a YOLO window nor a session allowance answers it. `speak` saving its audio at
+`output_path` is on the same gate. The other write tools do not take such a path:
+`journal` writes `journal/<date>.md`, the memory tools write the data directory,
+`run_checks` runs in a throwaway copy and `page_check` / `page_look` write `.stira-verify/`.
+
+### Page tools in a grant (ADR 0015 rev 6, S5)
+
+**`page_look` in the scope** lets an unattended iteration open its own workspace page
+files in the closed browser **without an approval card**: in a grant the grant answers the
+call (the audit row says `answered_by: grant`, with the grant id, the round and
+`origin: grant`), whatever `page_look`'s own saved rule says — except Never, which keeps
+the tool out of the round — **and only while `file_read`'s live rule is Always** (a page
+can read workspace files, so a grant never reads through a page what its own `file_read`
+call would need a card for). It is off unless the user setting
+`autonomy.page_look_unattended` is `true` (default `false`). Everything below fails closed.
+
+**This is one new row of the approval gate.** A saved rule of **Ask** for `page_look`
+normally means a card for every call; inside a grant that names `page_look` it shows **no
+card** — the typed, host-confirmed `ISSUE` of that grant is the approval, and the checks in
+the table stand before every call. The row is narrow: only `page_look`, only in the grant's
+own child agent (`CheckpointHooks.grant_answered`, set by `create_grant_child` alone; the
+chat's hooks never have it); a rule of **Never** is never answered by the grant; the grant
+answers only while **`file_read`'s rule is Always** — with Ask or Never for `file_read`
+the round is refused (`file_read_not_always` / `not_in_scope`), and a rule lowered inside
+a round stops the next page tool call; with the
+setting off, a failing axis check, a target outside the subtree or a scope that does not
+name the tool, nothing runs and still no card is shown (the call is refused, not asked).
+Tests: `test_grant_answered_never_passes_a_never_rule`,
+`test_grant_answered_does_not_pass_setting_off_axis_failure_or_out_of_scope`,
+`test_grant_page_look_capped_when_file_read_ask`,
+`test_file_read_rule_is_read_live_at_every_page_call`.
+
+| When | What is checked | On failure |
+|---|---|---|
+| Issue | the setting; `page_look` registered on this server (a browser was found); the **full axis check** (ADR 0015 A1–A10) is `pass` for this scope — `file_read` must be in it **and its live rule must be Always** (A9) | refused: `grant_page_look_setting_off` / `grant_page_look_unavailable` / `grant_page_look_axis` (`reason`: the axis code) |
+| Each round boundary (a press or a heartbeat start), after the other admission checks and before the provider is read | the setting and the full axis check, A9 over the tools the live rules leave (a `file_read` rule of Never fails it `not_in_scope`, a rule of Ask `file_read_not_always`); in a grant the round ledger must be healthy and verify (A6) | **sticky** code (`browser_guard_unverified`, `rules_locked`, `record_unhealthy`, `ledger_unhealthy`, `write_floor_changed`, `reviewer_changed`, `platform_unmeasured`, and every code not listed as non-sticky, e.g. `axis_unreadable`, `not_in_scope`, `file_read_not_always`, the setting off): the press is refused `axis_<code>` and the goal is `blocked(axis_failed)` — a person resumes it after the cause is fixed (for example `file_read`'s rule set to Always). A restart does not resume it: every start revokes all grants (`revoked(restart)`), so a cause that only a restart clears (`write_floor_changed`, `reviewer_changed`) needs a **new grant** after the restart. **Non-sticky** code (`guard_pending`, `breaker_not_normal`, `rules_changed`, `axis_stale`): the press is refused `axis_<code>`, the goal stays active, a heartbeat start is skipped with the same code and the next boundary measures again |
+| Each `page_look` / `view_image` call, **before the permit and again after the consume** | the setting and the light axis check; A9 reads the rules again at each call (the round's tools the live rules still leave, and `file_read`'s rule Always) | the iteration stops, end `page_tools_unavailable`, detail = the code (`setting_off` for the setting: the round record's `axis.end` is then `other`); the goal is not blocked by this end (the next boundary decides) |
+| Each `page_look` call | the target, as the tool itself resolves it (a relative path, `~`, a `file://` URL), is a workspace page file **inside `scope.workspace_subtree`**; the browser is given that resolved path, not the call's text | the iteration stops `tool_refused` (`outside_subtree`; `path_invalid` for a URL, a missing file or a file that is not a page) |
+| Each `page_look` call | the round's bound: at most **12** calls take a slot, and none once **3** calls ended in a failure (a failure is any status but `ok` / `truncated`; a success takes nothing back). A running call holds one of those three places until it ends, so at most 3 − (failures so far) calls run at once | the call is refused `page_look_call_limit` / `page_look_repeated_failure` / `page_look_busy` (running calls hold the places; nothing failed, the call takes no slot and may be made again); it takes no permit and starts no browser; the round goes on |
+
+Every call that runs takes a permit like any other tool call and is counted in the round
+record (`tools.page_look`, `tools.view_image`). The bound is per round (a round has no chat
+turn, so the chat's per-turn count does not apply); over a whole grant that is at most
+20 × 12 = 240 calls. The page's sub-resources are still read under `file_read`'s floor for
+the whole workspace (A9), not only the subtree — which is why the grant answers only
+while `file_read`'s rule is Always.
+
+**The round record's `axis.end`.** A round that one of the page checks above stopped keeps
+that code (the first one). Every other round of a grant that names a page tool — one that
+ended `done`, one that made no page call, one that something else stopped — runs the light
+check once more at its end (the setting, the live rules, the axis) and writes the result.
+So `axis.end` can be a failing code (`file_read_not_always`, `not_in_scope`, `other` for
+the setting, `axis_unreadable` for a check that could not be read) while the end code is
+`done`. This is a record only: it stops nothing and does not block the goal (the next
+boundary decides). Tests: `test_round_record_carries_axis`,
+`test_axis_end_of_a_round_nothing_stopped_is_the_light_check_at_its_end`,
+`test_axis_end_is_measured_without_a_page_call_and_after_another_stop`.
+
+**A rule lowered while a page is running.** The checks above run before a call starts. A
+`page_look` call that is already running is not stopped by a lowered rule by itself: it is
+stopped only when the change moves the authority epoch. Saving the rules in Settings does
+(the running call is cancelled and its result discarded); a hand edit of
+`tool-config.json` does not.
+
+**`view_image` in a grant is narrowed.** It shows only a file
+`.stira-verify/<run>/<n>.png` that the screenshot registry (R1, memory only) holds for a
+run made by a `page_look` call of **this** grant, and only while the file's size and
+SHA-256 still match (read without following a link; the bytes shown are the bytes that
+were compared). Anything else is refused with a fixed code — `run_unknown`,
+`run_other_grant` (another grant's run, or a run no grant made), `shot_changed`,
+`shot_missing` (the disk keeps the newest 5 runs) — and writes an
+`audit.page.view_image.refused` row. It can be named only together with `page_look`.
+`page_review` refuses a run a grant made (`run_other_grant`): no grant can name it yet.
+
+**The round record.** `axis` is `{start, end}`: `start` the boundary's result (`pass`,
+since a failing boundary runs no round), `end` the code that stopped the round or the light
+check at its end. A grant that names no page tool writes `not_run` for both and runs no
+axis check. The ledger's `VERSION` stays 1: the build before S5 already reads every value a
+round writes; it refuses only a row whose `stop` is `axis_failed`, which a round writes
+only if it ends while the goal is already blocked so.
+
+Not changed: children, jobs, bot / webhook turns and YOLO windows never get a page tool
+this way; `page_check` and `page_review` cannot be named in a scope.
 
 At most **one live grant per server** (v1).
 
@@ -165,6 +346,25 @@ logged at start. Revoke, pause and the kill switch never need a confirmation. Wi
 `/new` always advances the authority epoch (a narrowing: it also voids other holders'
 permits issued before it).
 
+### Scripted flow (API)
+
+The sequence is: `POST /api/grants/issue` (or `/resume`, `/verify`) answers 428
+`grant_confirmation_required` with the operation and its one-time token → confirm it → send
+the same request again with the header `X-Stira-Host-Operation`. With the `command` or
+`dialog` channel the person confirms on the host (`stira approvals decide <short>`, typed
+word **`APPROVE`**; `--deny` refuses). With the browser channel
+(`allow_browser_confirm: true`) the confirm call is
+`POST /api/grants/operations/<op_id>/confirm` (or `/api/host-operations/<id>/confirm`) with a
+JSON body `{"token": …, "acknowledged": true, "instance": …}`. It **must come from the
+dashboard page** (same origin, `Sec-Fetch-Site: same-origin` and an `Origin` header, the page
+armed): a bare call from a script is refused. On `/api/grants/operations/<op_id>/confirm`
+the answer is 409 `grant_operation_refused` with `host_code` `host_browser_refused` (a
+missing `Sec-Fetch-Site` / `Origin`) or `host_channel_unavailable` (no browser channel); on
+`/api/host-operations/<id>/confirm` it is 403 `host_browser_refused` or 503
+`host_channel_unavailable`. This is by design
+(a script cannot confirm its own operation). See
+[guide-scheduler-heartbeat.md](guide-scheduler-heartbeat.md) for the same flow on the scheduler.
+
 ## Operator procedure
 
 1. Turn it on: `gateway-config.json` → `{"autonomy": {"stage_c": true}}`, set up the host
@@ -180,6 +380,12 @@ permits issued before it).
 
 None of these widens authority; each fails closed. Open items stay tracked in #620.
 
+* **`run_checks` discovery reads files only (#647).** By design no workspace code runs at
+  discovery, so an editable install (a `.pth` / finder hook) is reported as not installed.
+  A `.venv` that is a symlink pointing outside the write root is still used by discovery
+  (same on main).
+* **Clock unreadable at resume (#647).** Reachable only in tests; no production path
+  produces it.
 * **Kill ordering (W4.5, #620 W5-3).** The kill listener only revokes in memory. The
   grants' lifecycle events and the store write request run after the authority's kill
   persistence attempt and the start of its cancellations: a blocking recorder delays
@@ -479,6 +685,62 @@ of
 The agent's `goal_report` is **not** part of it (a label is not an outcome); it only drives
 the same-blocker rule.
 
+### Report files (ADR 0028 §4)
+
+A model that rewrites a notes file every round (`NOTES.md`, as its goal told it to) changes
+a file the grant wrote, so every round was `new` and `blocked(no_progress)` never fired. The
+person who issues the grant can list such files as **report files**: `report_files` in the
+issue request, a list of at most **8** paths relative to the working directory (default:
+none, and then nothing changes).
+
+* **What it does.** A report file is left out of the workspace identity: it is never
+  tracked and never read at an iteration's end, whether it is written first or after other
+  files. A round whose only change is a report file is `none` (one place in the history, no
+  progress), so `no_progress` fires after `no_progress_ticks` such rounds. The check rows
+  stay in the fingerprint: a round that also ran checks is judged by them as before.
+* **It can only tighten.** Ignoring a file makes `new` rarer; `no_progress` and
+  `loop_detected` fire earlier or at the same time, never later. A list that covers the real
+  work blocks the goal (a person resumes it), which is why it is short and takes no pattern.
+* **Fail closed, unchanged.** Anything that cannot be read is still `unknown`: a tracked
+  file that cannot be read at the end, and also a report file whose bytes could not be read
+  before the iteration's first write to it. A write to a report file still makes earlier
+  check results stale for a completion claim (W6c).
+* **Refused at issue** (`grant_cap_exceeded` for more than 8 paths, otherwise
+  `grant_field_invalid`; the path is never in the answer): anything that is not a list of
+  text, an empty path or one over 255 characters, an absolute path or `~`, a `.` / `..` or
+  empty component (so no trailing `/`), a backslash, a control character, a glob character
+  (`* ? [ ] { }`), a duplicate (compared without case: `NOTES.md` and `notes.md` are one
+  name), a name that secret masking would change, an existing path
+  that is not a regular file (a directory, a FIFO), and a path with a symbolic link
+  anywhere in it (so it cannot point out of the subtree). Also refused (#761): a name that
+  is not in Unicode NFC, a C1 control, a format character (bidi controls, zero-width
+  characters), a line or paragraph separator, a character that looks like a slash or
+  backslash (for example U+2215), and a component that ends with a space or a dot. A file
+  that does not exist yet is accepted. These stricter checks run at issue only: a grant
+  already in the store keeps loading.
+* **The person's list, fixed at issue.** The list is part of the request body the
+  host-confirmed operation's digest is bound to (the same operation with another list is
+  refused), and the operation's summary names it as `changes: report_files:<count>` — a
+  count, never a path (also on the host dialog / command). Nothing changes it afterwards:
+  there is no route and no tool for it, and the model cannot name its own report file. To
+  change it, revoke and issue again. The views carry `report_files: <count>` only on a
+  grant issued with a list; the paths are in the grant store only (`grants.json`, `0600`).
+* **Matching.** A write counts as a write to a report file when its resolved path is
+  exactly `<subtree>/<path>`. Known limits: on a case-insensitive file system a write under
+  another spelling (`notes.md`) is not matched and is tracked as before; the same holds for
+  Unicode normalisation — the listed name is NFC, and a write under another form of the
+  same name (NFD, as some file systems and tools produce) is not matched and is tracked as
+  before; if someone later
+  replaces a report file by a symbolic link, writes through it are tracked as before (all
+  fall back to W6a's behaviour, never to less).
+* **Going back to an older version.** A grant store that holds a grant issued with
+  `report_files` (or with `heartbeat_start`) — also an ended or revoked one — is refused as
+  a whole by a version from before that field existed: `grant_store_malformed`, and the
+  grant service stays unhealthy. Before you go back, stop the server and move `grants.json`
+  away (keep a copy); every grant in it ends with that.
+* **The settings form has no field for it yet**: send `report_files` in the body of
+  `POST /api/grants/issue`.
+
 | Tool | What enters the fingerprint | Stripped (never part of it) |
 |---|---|---|
 | `editor` | the final bytes of a changed file, with its relative path (as part of the state; over 64 MiB: its size and a 3 MiB sample of its bytes) | mtime, inode, mode, the command used, the bytes of a write that changed nothing (for every size) |
@@ -526,6 +788,23 @@ the next end reads everything fresh again, so the same unreadable file is unknow
 | the same `goal_report(blocked, code)` on **3** counted iterations in a row | `blocked(same_blocker)` instead of `blocked(<code>)` |
 | **2** `no_action` iterations in a row (since the last resume) | `blocked(no_progress)` |
 | `max_iterations` (unchanged) | `blocked(max_iterations)` |
+
+**Inside a chat turn (#684).** These rules judge whole grant iterations. For the tool calls
+of one ordinary turn, `stiracore/progress/doom_loop.py` has a pure detector with the same
+words and numbers: `loop_detected` when the turn's writes go to the same file **3** times in
+a row (stop threshold **6**; a write to another file starts over), `same_blocker` when the
+same call fails with the same failure class **2** times with nothing changed in between
+(stop threshold **3**). Failure classes and what each asks for (`FAILURE_ACTIONS`):
+`timeout` → wait and retry, `invalid_args` → repair, `missing_info` → look it up,
+`test_failed` → fix the code (not the tests), `permission_denied` → ask a person, `other` →
+change the approach. `DoomLoopHook` **only reports** a finding to its sink by default
+(codes, counts and tool names; no path, argument or result text); the note to the model
+(`nudge`) and the cancelling of further repeats (`stop`) are constructor switches, both off.
+It reads no approval, rule or breaker decision. The chat server does not attach it yet. Known
+limits: `loop_detected` only sees writes to one file in a row (A, B, A, B is not found); with
+`stop` on, the hook sits after the checkpoint gate, so a call a person just approved can be
+cancelled and its grant is voided as `binding_mismatch` (decide the place and the recorded
+reason before attaching it).
 
 **Why A-A is a loop.** Two counted iterations in a row with the same workspace identity and
 the same checks did nothing the second time (the agent reran what it had just run, on the
@@ -691,6 +970,58 @@ grant's state). The lock-free turn mark and kill flag are read immediately befor
 one set in the last instant between that read and the dictionary store is taken as after it
 (the same accepted instant as in W1's fenced commits).
 
+### Completion checks: `done_when` (#683)
+
+Optional, off by default. The person who issues a grant can declare **which checks must pass
+before a claim reaches them**: `done_when` in the issue request, a list of `run_checks` kinds
+(`pytest`, `unittest`, `node_test`, `ruff`, `compileall`; one to four — one `run_checks`
+call runs at most four —, no duplicate), sent
+together with `verifier: "checks"`. That is the whole declaration — no path, no threshold,
+no retry count, no text. The checks run on the grant's working directory.
+
+* **What it does.** At `goal_report(claim_complete)` the harness runs the declared kinds
+  **itself**, in one `run_checks` call (the same runner: container, no network, masked,
+  allow-listed output; the same scope checks as a model's call — the setting, the verified
+  containment, the subtree). Only when every declared kind has a passed row (fail closed:
+  an unreadable result, a refusal or an error is not a pass) is the claim recorded and the
+  goal moves to `awaiting_verification`; then the person verifies as before (two stages:
+  `checks` → `user`). Otherwise the claim is **refused** and the iteration goes on: the
+  model gets the fixed code `not_proven` and the kinds that did not pass (no output, no test
+  id), and the round ledger's row carries `done_when: {"result", "unmet"}` (`met` /
+  `not_proven`, kind codes only). The model's own `run_checks` calls do not count for the
+  gate; the run joins the claim's evidence (`checks`) like any call.
+* **Not run** when `run_checks`' live rule is not Always (Ask would need a person's card per
+  call, which the claim path does not show; Never), or it left the round's tools: the claim
+  is then `not_proven` (every declared kind unmet).
+* **Declare only kinds the working directory has.** `run_checks` refuses the whole call when
+  one requested kind is unavailable there (`kind_unavailable`), so such a grant's claims are
+  always `not_proven` with every declared kind unmet.
+* **A stop or a write while the checks run.** If the iteration stops while the harness's
+  checks run (a person's turn, the wall time, an in-flight cancel), the claim is not
+  recorded. An editor write of the same turn (the child runs one turn's tools concurrently)
+  that overlaps the run makes it `not_proven` (every declared kind unmet). A repeated claim
+  with no editor write since the last refusal whose run read as a failure gets the same
+  refusal without a new run; a runner error or an unreadable result runs again at the next
+  claim. A change a person makes outside the editor does not run it again — the next
+  iteration or an editor write does. A round that stopped can still show `done_when: met`
+  in the ledger: read it with the round's end code. Accepted residual: a write of the same
+  turn in the short window between the gate's last look and the claim's record is not seen.
+* **Where the run shows.** The gate's run is the harness's, not a model call: it is not in the
+  round's tool list or tool-call count (the ledger's `done_when` is its record). The
+  browser's confirmation dialog names each declared kind as its code (`done_when:<kind>`).
+* **Refused at issue** (`grant_field_invalid`): not a list, empty, a duplicate, a kind
+  outside the list, or `run_checks` not in `scope.tools`; `grant_verifier_invalid` for
+  `verifier: "checks"` without `done_when` or `done_when` with `verifier: "user"`.
+* **The person's list, fixed at issue.** It is part of the body the host-confirmed
+  operation's digest is bound to, and the summary names every kind
+  (`changes: done_when:<kind>`). There is no route or tool that changes it; the views carry
+  `done_when: [<kind>, ...]` only on a grant issued with it.
+* **Without `done_when` nothing changes**: `verifier: "user"`, no check at a claim, no new
+  key in the store, the views or the ledger.
+* **Going back to an older version** refuses a grant store or a round ledger that holds the
+  new key (as with `report_files`). The settings form has no field for it yet: send it in the
+  body of `POST /api/grants/issue`.
+
 ## Heartbeat start (W6d)
 
 **Off by default, twice.** The gateway switch `autonomy.heartbeat_start` (default `false`;
@@ -775,12 +1106,14 @@ narrowing since the wake), `scheduler_stopped`, `shutdown` (the executor is stop
 event), `repeated_failure` (three consecutive `failed` / `model_error` / `timeout` ends since
 the last press or resume: like the no-action gate, until a person presses or resumes),
 `executor_refused` (anything
-else the executor refused) — counted per grant (memory only, the last 4 grants). There is
+else the executor refused), `ledger_unhealthy` (the round ledger cannot record, see "The
+round ledger" below; the last clause, so it only replaces a start) — counted per grant (memory only, the last 4 grants). There is
 no queue, no backlog and no replay: a wake after a sleep or a restart is one wake (missed
 ones coalesce; ADR 0021 forbids catch-up for model-calling work). A *state-class* skip (one
 that lasts until a state changes: every reason above except the busy / transient ones
 `not_enabled`, `no_grant`, `turn_busy`, `iteration_running`, `abandoned_call`,
-`min_spacing`, `flood`, `executor_refused`) posts **one** lifecycle event `grant_tick`
+`min_spacing`, `flood`, `executor_refused`, and `ledger_unhealthy`, which posts no
+lifecycle event at all: the ledger is not an authority subject) posts **one** lifecycle event `grant_tick`
 `active → paused` `tick_skipped_<reason>`; the same reason is posted again only after a
 heartbeat start or another state-class reason in between (a busy skip in between is not
 enough), at most 32 events per grant in this process; a heartbeat start posts `grant_tick` `idle → running` `tick_started` (bounded
@@ -794,6 +1127,78 @@ floors are unchanged: `run_checks` still needs a verified `os_sandbox` host and
 `run_checks_unattended`; the scope, the tools and the budget are the grant's; the user
 verifies a completion claim. A person's turn (any turn-lock holder) yields it exactly as
 for a press.
+
+**The round ledger (ADR 0028 §5, #757).** When an iteration of a grant ends — a person's
+press or a heartbeat start — the executor appends **one** `round` record to
+`grant-rounds.jsonl` in the data directory. The ledger is observation: nothing reads it
+back for an authority decision, it posts no lifecycle event and no notification, and it
+never latches the authority service.
+
+* **Allow-list.** A record has exactly these fields, and nothing else: `k`, `grant` (the
+  32-hex id), `round`, `of_max`, `origin` (`press` / `tick`), `start`, `end` (wall seconds),
+  `wall_ms`, `end_code`, `detail`, `progress` (`new` / `repeat` / `none` / `unknown`),
+  the counts `model_calls`, `writes`, `approval_waits`, `reports`, `files_changed`,
+  `tools` (a count per scope tool and `goal_report`, and — always 0 today, no grant scope
+  can name them — `page_look`, `page_review`, `view_image`), `tokens_in`, `tokens_out`,
+  `cache_read`, `cache_write`, `largest_input`, `summaries` (`null` when the provider
+  reported none), `errors` (at most 8 fixed codes), `limits` (`iteration_wall_sec`,
+  `ttl_left_s`, `iterations_left`, `tokens_left`, `ceiling_min`, `out_cap`,
+  `out_cap_source`, `ctx_mode` — the last three are `null` / `unknown` today), `stop`
+  (the rule that ended or paused the grant, or `null`) and `axis` (`{"start", "end"}`, each
+  a fixed axis code of ADR 0015 rev 6; always `not_run` today — the axis check is not run in
+  a grant and nothing reads the value, #767). Every string is a member of a fixed
+  list; a code the executor does not know is written as `other`. There is no field for the
+  goal, model text, a path or file name, check output, a URL or a secret.
+* **Rows from before `axis`.** A ledger already on disk keeps its rows as they are: a
+  `round` row without `axis` (and without the page tool counts) is still read, verified and
+  rotated, and the chain continues into the new rows. It is shown without `axis`. New rows
+  always carry it; an old-shaped row after a new one is `round_ledger_malformed`. A build
+  from before this change cannot read a ledger that holds a new row.
+* **Refused, not truncated.** A record with an unknown key, a free-text value, a string
+  outside its list or a wrong type is refused as a whole: nothing is written, the field's
+  name is logged, and the ledger's state becomes `round_ledger_record_refused`.
+* **The `approval` kind** (one answered Ask: `tool`, `args_digest` (12 hex), `target_class`,
+  `decision`, `approved_by`, `reason`, counts) is part of the same schema and chain, and
+  the writer accepts it; the executor does not write one yet (only `round` records).
+  `approved_by` is `person` or `none` today; a model approver is a later step and needs no
+  schema change.
+* **Chain and file.** Each line carries `v`, `seq`, `prev` (the previous line's hash) and
+  `hash` (SHA-256 over the line's canonical JSON). The file is `0600`, appended and flushed
+  per line, and opened under the safe-open rules of `authority-lifecycle.jsonl`
+  ([authority-service](authority-service.md)). An append that would pass 1 MiB first moves
+  the file to `grant-rounds.1.jsonl` (the older one goes); the chain continues in the new
+  file. Before the move the writer checks that the file is still the one it wrote last: a
+  file replaced behind it is not moved over the older segment (`round_ledger_replaced`,
+  also at the start-up rotation). An edited, removed or reordered line, a torn last line, an unsafe file or a file
+  replaced behind the writer is detected (`round_ledger_hash_mismatch`,
+  `round_ledger_sequence_gap`, `round_ledger_torn`, `round_ledger_malformed`,
+  `round_ledger_unsafe`, `round_ledger_unreadable`, `round_ledger_replaced`,
+  `round_ledger_write_failed`): the ledger is then unusable until the server is restarted,
+  nothing more is written and nothing is repaired automatically.
+* **Limits.** The chain has no key: it detects damage, not a rewrite of the whole file by
+  the same OS user. Whole lines cut from the end are noticed by the running writer, not by
+  a fresh reader. Only two segments are kept, so older rounds are gone after a rotation.
+* **Reading.** `GET /api/grants/<id>/rounds` answers `{"ledger": "ok" | "off" |
+  "round_ledger_*", "rounds": [...]}` — the grant's records, oldest first, with `v` and
+  `seq` and without `prev` / `hash`; an unknown id is `grant_unknown`. The grant's board
+  read (the activity poll) carries the last 5 rounds and the ledger's state. On the host,
+  `python -m stiracore.control.grant_rounds_cli --data-dir DIR [--grant ID] [--last N]
+  [--format table|json]` prints the `round` records and a summary line (rounds, wall hours,
+  reported tokens, `new` rounds); it only reads, and exits 1 with the fixed code when the
+  ledger cannot be used. While the server is writing, an append or a rotation can land
+  between the command's steps and look like `round_ledger_unsafe` or
+  `round_ledger_sequence_gap`; the command reads again (twice at most) before it reports a
+  code. If it still shows one while the server is running, run it again.
+* **When it cannot record.** A failed write, a refused record or any other failure to
+  record a round is logged and shown as the ledger's state. A **heartbeat** start is then
+  skipped `tick_skipped(ledger_unhealthy)`:
+  an unattended run that nobody could observe is not started. A person's **press** still
+  runs (its round is not recorded). The record's `stop` and limits come from that grant's
+  own record in memory; if it cannot be read within a second, `stop` is `unknown` and
+  `ttl_left_s` / `iterations_left` / `tokens_left` are `0`. To recover: stop the server,
+  copy `grant-rounds*.jsonl`, move **both** `grant-rounds.jsonl` and
+  `grant-rounds.1.jsonl` away, and start again. Moving only one leaves a chain with a
+  missing part, which is refused (`round_ledger_sequence_gap`).
 
 **Cost visibility.** Per heartbeat-started iteration, as numbers only: model calls, the
 reported input / output tokens, `cache_read` / `cache_write` when the provider reports them,

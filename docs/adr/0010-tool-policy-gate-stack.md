@@ -41,8 +41,9 @@ from `tool-config.json` at **every call**. A reader that fails, or answers anyth
 * **rule** — the saved rule;
 * **breaker** — as the engine really enforces it. NORMAL / COHERENCE: `allow`.
   WARNING: `forbidden` for write and exec tools (WARNING requires confirmation and there
-  is no confirmation route at that level, so `NXPAgent._turn_tools` hides them —
-  stricter than Ask), `allow` for reads. CRITICAL with `critical_action="halt"`
+  is no confirmation route at that level, so `IdentityGuard` refuses their calls —
+  stricter than Ask; before #259 `NXPAgent._turn_tools` hid them, see the addendum),
+  `allow` for reads. CRITICAL with `critical_action="halt"`
   (stira): `prompt` for every write/exec call whatever the rule (the CRITICAL-HALT
   gate asks a human), `allow` for reads; `"readonly"`: `forbidden` for write/exec,
   `allow` for reads (reads stay available at CRITICAL, ADR 0002). When the engine's
@@ -184,6 +185,23 @@ A grant whose scope cannot be bounded is not created: exec-class tools cannot be
 (`always_not_allowed`). A HITL approval is never persistent: it is single-use, bound to
 the exact call, and expires (#146, ADR 0006).
 
+**Conditional Always** (`tool_policy.CONDITIONAL_ALWAYS_TOOLS`). A person may save Always
+for these tools (a loosening as above: NORMAL breaker, the typed `confirm_always`, a
+settings-history row), but the gate reads it as **Ask** (`rule_always_capped`, with a cap
+code) whenever its conditions do not hold; anything that cannot be read is a cap. The
+grant states the conditions (`grant.conditions`); while capped the row shows the saved
+Always with `always_cap_reason` and no grant.
+
+| Tool | Effective only while | Cap codes | Decided in |
+|---|---|---|---|
+| `run_checks` | this host's containment is verified `os_sandbox`, and the turn has fewer than `REPEATED_FAILURE_RUNS` same failures | the containment mode, `repeated_failure` | ADR 0019 Q3 |
+| `page_look` | the cached axis result is a fresh `pass`; the turn's origin class is `chat_person` / `yolo_window`; `file_read`'s effective rule is Always; fewer than `REPEATED_FAILURE_RUNS` (3) of the turn's rule-answered calls failed (any reason) or are still running, and at most `CALLS_PER_TURN` (12) rule answers in the turn — counted per YOLO window too across automatic continues, each answer a slot the gate reserves, and the tool re-checks every condition and both saved rules before a browser starts (S4c, #773) (`grant.conditions`: `axis_pass_and_fresh`, `origin_chat_person_or_yolo_window`, `file_read_always`, `no_repeated_failure_in_turn`) | an axis code, `origin_not_covered`, `file_read_not_always`, `repeated_failure`, `call_limit`, `cap_unreadable` | ADR 0015 rev 6, S4 / S4c |
+
+Both stay `PERSON_TOOLS` for YOLO (a window never answers their card) and are refused to a
+`delegate` child by name. `page_look`'s cap codes are `page_look.CAP_CODES`: every axis code
+but `pass` (among them `guard_pending` — G has no verdict yet, measured again at the next
+card, #778), `origin_not_covered`, `repeated_failure`, `call_limit` and `cap_unreadable`.
+
 **Open:** time-limited Always (an expiry date that falls back to Ask). Not implemented;
 until then the page states "until revoked" explicitly.
 
@@ -240,6 +258,7 @@ only mirrors the saved rule to mark unsaved drafts, and the server re-checks eve
   a rule is saved (or the rules lock); between saves only the breaker filter and the
   registry's fail-closed drops (e.g. a consent bridge that no longer holds) change it
   (#259, unchanged; measured, #368: [tool-definitions.md](../tool-definitions.md)).
+  Since the #259 addendum `NXPAgent` itself applies no breaker filter to named tools.
 * Not in scope: argument-pattern rules (e.g. `shell(git push *)`), recording the
   deciding layer in the EventStore (#171), category-wide approval switches.
 
@@ -304,10 +323,13 @@ the floor), and the server starts with a warning. A person chooses another place
 explicit `workspace_dir` (operations.md §10); inside the data directory the floor still
 wins. The start-up doctor and `stira doctor` check the effective roots (episodic, stash).
 
-**Open (needs a decision).** Whether the context stash should be written only by its own
-store: the agent's file tools can write there (as before #271), which lets the agent plant
-an entry the read-back tool returns as an offloaded result. Refusing it needs ADR 0005's
-"inside the write roots" rule for the stash to change.
+**Accepted as is (#288, decided 2026-11-16).** The context stash stays writable by the
+agent's file tools (as before #271): the agent can plant an entry that the read-back tool
+returns as an offloaded result. Context management is opt-in and no default changes; a
+host-only stash (the stash on the write floor, ADR 0005's rule changed) or an integrity
+check on entries are the options if this is ever needed. The related gaps (a symlink inside
+the stash, an un-neutralised read-back marker) are pinned as strict xfails in
+`tests/test_context_management_gaps.py` and listed in `docs/context-management.md`.
 
 ## Addendum (#312): the read floor
 
@@ -819,3 +841,63 @@ refused with the reason (as before it was never sent, now the model is told why)
 `HttpConsentGatedTool` (inside the own-dashboard guard) consumes the mark, runs the
 approved arguments and holds the grant only while one upstream step runs. GET and every
 other method ask nothing and run as before, without a mark.
+
+## Addendum (#259): the breaker refuses writes at the call; the tool list stays fixed
+
+**Context.** Until #259, `NXPAgent._turn_tools` removed the write-class tools from the
+list the model sees at WARNING and at CRITICAL without `halt`. Changing the tool set
+changes the cached tool prefix (#254 / #257), so every transition turn re-wrote the
+cache. Other harnesses (Claude Code, Codex) keep the tool set fixed and express state
+changes as refusals and appended notes (#254 survey).
+
+**Options.** (A) keep removing the tools (the model cannot call them); (B) keep the list
+fixed and refuse the calls at execution; (C) a setting to choose.
+
+**Decision (commander, 2026-11-16): B.** The breaker rarely trips, so a model that sees a
+tool it cannot use costs little; a stable list protects the prompt cache.
+
+* `NXPAgent` no longer removes named tools by breaker level (standard, MCP and the
+  delegate tools alike; `NXPSubagent` too). While the breaker withholds writes, a tool
+  whose name cannot be resolved (e.g. a `ToolProvider`) is still left out: the call-time
+  check decides by name, so fail closed stays.
+* `IdentityGuard.check_tool_call` refuses, at WARNING and at CRITICAL without `halt`, every
+  call to a name the old filter removed (`blocked_tool_names` ∪ the live `WRITE_TOOLS`,
+  MCP included), **by name, whatever the arguments and whatever was approved** (an
+  `editor view` too, as it was hidden before). The refusal is an error tool result with the
+  fixed reason code `breaker_write_refused` (also on the Ask gate's breaker refusal and on
+  the heuristic write-shaped names). Under `halt` nothing changes: each call goes to a
+  person's card.
+* The model is told in the runtime (volatile) block only — one fixed line,
+  `Circuit breaker WARNING|CRITICAL: write and exec tool calls are refused
+  (breaker_write_refused) …`, absent at NORMAL / COHERENCE and under `halt`. The static
+  (cached) system prompt is unchanged; the identity notice is unchanged.
+
+**The execution-side guarantee is kept.** Every path that ran a tool already passed
+`CheckpointHooks` and `IdentityGuard` (`NXPAgent`, `GuardedDelegate` for children with
+their own engine), and the refused set is exactly the set the list filter removed, read
+from the same turn snapshot (`breaker_status()`). Floors, write roots, Never, the HITL
+gate and the file-tool wrappers are untouched; the change only adds a refusal. Measured in
+`tests/test_tool_path_contract.py` (standard / MCP / delegation, WARNING / CRITICAL) and
+`tests/test_breaker_runtime_refusal.py`; the prompt-cache test fixes that tool
+definitions and `tools_hash` do not change on a transition.
+
+**Risks.** The model can try a refused tool (wasted calls, error results); the runtime
+note and the reason code are the mitigation. The eval harness's scripted runner labels
+such attempts `refused` (was `filtered`).
+
+**Chat server (security review of PR #838).** `_stira_tools` (`dashboard/stira_server.py`)
+no longer passes the level to `tool_registry.get_tools` and keeps the bound memory write
+tools at every level. Checked first: every name it used to drop at WARNING is in the
+engine's `blocked_tool_names` (the registry's `WRITE_TOOLS`, the bound memory write names,
+`delegate`), so each call is refused at WARNING and at CRITICAL without `halt`
+(`tests/test_breaker_server_tool_list.py`). One exception stays (fail closed): `delegate`
+is still left out at CRITICAL, because under the server's `halt` its call would reach a
+person's card rather than a refusal; so the chat server's tool prefix changes only on
+entering / leaving CRITICAL while delegation is offered. `IdentityGuard` also keeps the
+names refused at the turn's start (`turn_write_names`), so an MCP provider closed mid-turn
+stays refused until the turn ends. The eval harness's `write_blocked_names` uses the same
+`breaker_write_names`; its nxp rows' `exposure_blocked` is now empty under the breaker.
+
+**Notice by prompt mode.** The one-line runtime notice exists only in the split prompt
+mode (it sits in the volatile block); in `static` and `off` only the identity notice is
+added, and the refusal reason code in the tool result is the model's only signal.

@@ -19,7 +19,8 @@ level, ordered `open < restricted < closed < quarantine < terminated`. It is rai
 hits, own-dashboard calls, flow holds, bursts) — never by a model's judgement and never by
 text patterns alone. `restricted` returns by itself after a quiet period; `closed` and above
 return **only by a person** and survive a restart. The tool effect of each stage reuses what
-the breaker already does (WARNING's tool removal) so no second policy engine appears. #461's
+the breaker already does (WARNING's tool removal; since #259 the tools stay listed and their
+calls are refused, ADR 0010 addendum) so no second policy engine appears. #461's
 regression set is a table of scripted-attacker scenarios run through the real gate in the
 **loosest** configuration, each with the layer and code that must stop it, a mutation run
 that proves the layer is the one stopping it, and strict `xfail`s for today's holes.
@@ -32,7 +33,8 @@ that proves the layer is the one stopping it, and strict `xfail`s for today's ho
   every surface); its contract is "display only: nothing acts on a reason".
 * **What the levels already remove.** WARNING and CRITICAL `readonly` remove `WRITE_TOOLS`
   — which hold **every egress tool** (`web_fetch`, `http_request`, `webhook_send`,
-  `oauth_api_call`, …), the exec class and the local writes. CRITICAL `halt` (the chat
+  `oauth_api_call`, …), the exec class and the local writes (since #259 they stay listed and
+  their calls are refused, `breaker_write_refused`, ADR 0010 addendum). CRITICAL `halt` (the chat
   server) keeps them listed and asks a person per call (ADR 0010 §2). `delegate` is offered
   only while `writes_allowed` holds. So in tool terms a breaker WARNING is already close to
   #460's `closed`; what is missing is *why* it would get there and *who* may lift it.
@@ -83,9 +85,10 @@ both and takes the stricter; `decided_by` names `containment` when it decided. R
 | `quarantine` | removed | removed | removed | removed; episode recorded but **kept out of recall** until released | workspace only (read roots narrowed to `@workspace`) | **held** (§6) | ended |
 | `terminated` | no turn starts; the server's stop (#191) runs; artifacts, logs and the audit chain are kept | | | | | | ended |
 
-* Removal uses the existing mechanism (`_turn_tools` / `get_tools(level)`) so the tool list
-  changes once per transition (one cache rewrite, #259 — transitions are rare); the egress
-  card of `restricted` keeps the list unchanged.
+* Removal changes the tool list once per transition (one cache rewrite; transitions are
+  rare). Since #259 the breaker no longer removes tools (`_turn_tools` / `_stira_tools` keep
+  one list and refuse at the call), so a stage's removal needs its own list step (phase 0
+  removes nothing); the egress card of `restricted` keeps the list unchanged.
 * Never loosens: a stage only removes or adds a card; the floors, Never and CRITICAL_HALT are
   untouched; the effective decision is still the max.
 

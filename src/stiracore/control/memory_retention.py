@@ -52,7 +52,13 @@ from stiracore.memory_importance import BINDING_CHANGED, RETENTION_FIELD, bindin
 from stiracore.memory_origin import ORIGIN_UNKNOWN, ORIGIN_UNVERIFIED, origin_of
 from stiracore.tools.memory_store import MemoryLayer
 
-__all__ = ["RETENTION_KEYS", "RetentionPolicy", "apply_retention", "retention_report"]
+__all__ = [
+    "RETENTION_KEYS",
+    "RetentionPolicy",
+    "apply_retention",
+    "retention_report",
+    "setting_bounds",
+]
 
 _INT_MAX = 1_000_000
 _BYTES_MAX = 10**15  # *_bytes settings (a byte count is easily over a million)
@@ -76,6 +82,11 @@ _DEFAULTS = {
     ("episodic", "honour_expires_at"): False,
     ("memory_plans", "max_age_days"): PLAN_MAX_AGE_DAYS_DEFAULT,
 }
+
+
+def setting_bounds(name: str) -> tuple[int, int]:
+    """The range ``from_options`` accepts for an integer setting (``*_bytes``: 10^15)."""
+    return 1, (_BYTES_MAX if name.endswith("_bytes") else _INT_MAX)
 
 
 @dataclass(frozen=True)

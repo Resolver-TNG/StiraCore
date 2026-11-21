@@ -43,7 +43,7 @@
 | `AWS_SHARED_CREDENTIALS_FILE`, `AWS_CONFIG_FILE`, `HOME`, `USERPROFILE` | `~/.aws/credentials`、`~/.aws/config` | 同じ表示で AWS のファイルを探す場所。 | #205 |
 | `STIRA_HEARTBEAT` | gateway `hb_enabled`（OFF） | `stira_server` のモデル非依存のバックグラウンド tick。 | #238, [heartbeat-daemon.md](heartbeat-daemon.md) |
 | `STIRA_ACCESS_LOG_POLLING` | OFF（ポーリングの行は出さない） | ちょうど `1` のとき、画面のポーリングが成功した行（画面の定期ポーリングそのものの `GET` の `200`/`304` だけ: `/api/turns?limit=1`、`/api/turns/<id>/events?after_seq=<n≥1>`、`/api/hitl/pending`、`/api/hitl/history?limit=50`、`/api/gateway/status`、`/api/diagnostics/write-failures`、`/api/scheduler`、`/api/state`、`/api/history`、`/api/state/history?limit=500`。同じパスでも別のクエリの読み取りは出す）をアクセスログに再び出す。既定ではこれらの行を出さず、`stira.out.log` の WARNING/ERROR を読みやすくする。ポーリングの失敗（他のステータス）とそれ以外のリクエストは常に出る。画面のポーリングを調べるとき用。 | #369 |
-| `STIRA_STAGE` | OFF（設定項目なし） | チャットサーバーの Stage ページ `/stage/`（ターン・ツール・承認・Neural State・ブレーカーのピクセルアート表示。ダッシュボードのシェル内）。書き込みは既存 API だけ: 承認（`/api/hitl/<id>/decision`）とチャット送信（`POST /api/chat`、CSRF・`Idempotency-Key`、チャット画面と同じ送信ロジック）。新しいルート・権限はない。OFF ではルートもナビ項目もなく、gateway の `ui.home: "stage"` はチャットに戻る。 | #341, #350, [stage.md](stage.md) |
+| `STIRA_STAGE` | gateway `stage_enabled`（オン） | 設定ページ（「画面」欄）で保存したスイッチを上書きする: `1` / `true` / `yes` / `on` でオン、それ以外の値はオフ。未設定・空なら `stage_enabled` に従う。チャットサーバーの Stage ページ `/stage/`（ターン・ツール・承認・Neural State・ブレーカーのピクセルアート表示。ダッシュボードのシェル内）。書き込みは既存 API だけ: 承認（`/api/hitl/<id>/decision`）とチャット送信（`POST /api/chat`、CSRF・`Idempotency-Key`、チャット画面と同じ送信ロジック）。新しいルート・権限はない。OFF ではルートもナビ項目もなく、gateway の `ui.home: "stage"` はチャットに戻る。 | #341, #350, [stage.md](stage.md) |
 | `STIRA_SCHEDULER` | OFF（設定項目なし） | 運用者が定義する定期ジョブ。チャットサーバーの Gateway action は `health_check`（モデル不使用）と `memory_harvest`（#251。rule のみの Harvest で結果を staging へ。`distiller_mode` が `"rule"` でなければ拒否）。 | #239, [ADR 0008](adr/0008-scheduler.md) |
 | `STIRA_PROMPT_CACHE` | gateway `prompt_cache`（OFF） | 対象の Bedrock Claude モデルでのプロンプトキャッシュ。 | #254, [prompt-cache.md](prompt-cache.md) |
 | `STIRA_PROMPT_CACHE_TTL` | gateway `prompt_cache_ttl`（`5m`） | `5m` または `1h`。 | #254 |
@@ -53,6 +53,7 @@
 | `STIRA_HANDOFF_INJECT` | gateway `handoff_inject`（ON） | 引き継ぎノート: `handoff_write` / `handoff_read` ツールと、最新のノートを recalled 部に入れる（ノートが無ければ節も無い）。`0` で両方 OFF、`1` で ON。起動時に読む。 | [handoff_ja.md](handoff_ja.md) |
 | `STIRA_TASK_MODEL_TOOL_SUMMARY` | gateway `task_models.tool_summary`（`inherit`） | 処理 `tool_summary`（長いツール結果を求めに応じて要約する、#585）のモデル: `inherit`、会話と同じプロバイダのモデル ID、または `provider:model`。未知のモデル・SDK や認証情報の未設定は起動を拒否。指定したモデルが失敗したらその処理を失敗にする（別のモデルに切り替えない）。起動時に読む。 | [task-models_ja.md](task-models_ja.md) |
 | `STIRA_TASK_MODEL_CONTEXT_SUMMARY` | gateway `task_models.context_summary`（`inherit`） | コンテキスト管理（#258、オプトイン）の会話要約のモデル。値と規則は上と同じ。 | [task-models_ja.md](task-models_ja.md) |
+| `STIRA_TASK_MODEL_VISUAL_REVIEW` | gateway `task_models.visual_review`（**オフ**） | `page_review` のレビュー用モデル（ADR 0015 rev 6、#774）。未設定はオフで、ツールは登録されず、何も送りません。`inherit` は明示的に書く必要があります。モデルの能力表に `vision` が無ければ起動を拒否します（`no_vision`）。スクリーンショットはこのモデルのプロバイダに送られます。`gateway-config.json` の予算 `visual_review.daily_tokens` が必要です（既定値なし。未設定ならすべての呼び出しを `review_budget` で拒否）。起動時に読む。 | [task-models_ja.md](task-models_ja.md)、[verification_ja.md](verification_ja.md) |
 | `STIRA_EPISODIC_EMOTION` | agent `episodic_emotion_snapshot`（ON） | 新しいエピソードに保存時の感情スナップショットを記録するかどうか（#364。データ領域の床の中、prompt には入らない）。OFF ではエピソードは `episodic-summary/v1` のまま。エピソードを書くたびに読む。 | #364, [episodic-emotion_ja.md](episodic-emotion_ja.md) |
 | `STIRA_ASSOCIATIVE_RECALL` | agent `associative_recall.enabled`（OFF） | オプトインの連想想起（#170。発話に合う過去のエピソードをいくつか差し出す。モデル呼び出しなし。`memory.injected` を記録）。上書きするのは `enabled` だけで、上限は `agent-config.json` の値（無ければ既定値）。設定値が不正なら OFF のまま。起動時に読む。 | #170, [associative-recall_ja.md](associative-recall_ja.md) |
 | `STIRA_RECALL_EMOTION_PROXIMITY` | agent `associative_recall.emotion_proximity`（OFF） | 連想想起のオプトインの感情近接シグナル（#364、ADR 0017）。すでに関連のあるエピソードを、今の気分と保存時の気分の近さで並べ替える。1ターンで入れ替わる想起は最大1件、ブレーカーが NORMAL のときだけ。上書きするのは `emotion_proximity` だけで、連想想起が ON である必要がある。起動時に読む。 | #364, [associative-recall_ja.md](associative-recall_ja.md) |
@@ -114,7 +115,7 @@
 | 項目 | 既定 | 効果 | 上書きする環境変数 | Issue |
 |---|---|---|---|---|
 | `model_id` | `"global.anthropic.claude-sonnet-5"` | チャットのモデル ID。 | `STIRA_MODEL` | — |
-| `max_output_tokens` | `null` | モデル呼び出しごとの出力トークン上限。`null` = 自動: 選択中モデルの出力上限（`ModelCapabilities.max_output`）を 32000 で頭打ちにした値。思考も上限に含まれるモデルは 32000 に行の `thinking_reserve`（32000）を足した値で頭打ち。上限が記録されていないモデルはプロバイダ別の既定（ホスト型 API は `8192`、ローカルの llama.cpp/Ollama は `32000`、#416）。数値は指定どおり使う（モデルの上限を超えても検査しない）。上限に達したターンは切れたと表示され、ツール呼び出しは実行されない。[出力上限](#出力上限と途中で切れたターン)を参照。設定画面の「出力上限とコスト」で変更できる（自動が推奨の既定。モデルの文書上の上限を超える数値は警告のみで拒否しない。画面で変えるときは 1〜1000000。ファイルに既にある大きな値はそのまま残り、他の設定の保存を妨げない）。次のターンから反映。 | — | #363, #470, #416 |
+| `max_output_tokens` | `null` | モデル呼び出しごとの出力トークン上限。`null` = 自動: 選択中モデルの出力上限（`ModelCapabilities.max_output`）を 32000 で頭打ちにした値。思考も上限に含まれるモデルは 32000 に行の `thinking_reserve`（32000）を足した値で頭打ち。上限が記録されていないモデルはプロバイダ別の既定（ホスト型 API は `16384`、ローカルの llama.cpp/Ollama は `32000`、#416。`base_url` がループバックかプライベートアドレスの OpenAI 互換 endpoint も `32000`、#745）。数値は指定どおり使う（モデルの上限を超えても検査しない）。上限に達したターンは切れたと表示され、ツール呼び出しは実行されない。[出力上限](#出力上限と途中で切れたターン)を参照。設定画面の「出力上限とコスト」で変更できる（自動が推奨の既定。モデルの文書上の上限を超える数値は警告のみで拒否しない。画面で変えるときは 1〜1000000。ファイルに既にある大きな値はそのまま残り、他の設定の保存を妨げない）。次のターンから反映。 | — | #363, #470, #416 |
 | `region` | `"ap-northeast-1"` | Bedrock のリージョン。次のターンから反映: チャットサーバーは毎ターンの前にモデルの選択を解決し直し、リージョンが違えばモデルを作り直す（`AWS_REGION` が優先）。 | `AWS_REGION` | #470 |
 | `provider` | `"bedrock"` | モデルプロバイダ。 | `STIRA_PROVIDER` | #204 |
 | `base_url` | `null` | プロバイダのエンドポイント。API プロバイダのループバック以外の URL はここでだけ設定でき、設定画面からは設定できない。 | `STIRA_BASE_URL` | #205 |
@@ -134,8 +135,16 @@
 | `jev_enabled` | `false` | `false` = 分類器「自動」（Sokudan が入っていれば Sokudan、無ければルール）。`true` = `jev_classifier` を使う。起動時に適用。`GET /api/config/jev` は選択（`auto` / `rule` / `sokudan`）、その解決結果、実行中の分類器、`restart_required` を返す。`POST {"classifier": …}` は選択そのものを保存する。 | — | #227, #162 |
 | `jev_classifier` | `"rule"` | `"rule"` または `"sokudan"`。 | — | #227 |
 | `notify_targets` | `[]` | 保存・表示のみ。この宛先へ通知を送る処理はない。 | — | #272 |
-| `ui` | `{"home": "chat"}` | ダッシュボードの設定。`home`（`"chat"` か `"stage"`）: `/` で開くページ。`"stage"` はメニューの先頭にも Stage を置く。`STIRA_STAGE=1` のときだけ効き、OFF なら `/` はチャットのまま（起動時に WARNING）。`/chat` は常にある。起動時に読む。設定ページからは変えられない。`board_svg`（真偽値、ADR 0012 追記 2026-10-24 から**既定オン**、オフのときだけ書かれる）: 返答の ```` ```svg ```` ブロックを、許可した図形・色・文字だけで組み立て直した画像として Stage のボードに表示する（`dashboard/stage/js/svg_safe.js`。スクリプト・リンク・外部の読み込み・アニメーションなし。読めないものはコードのまま理由を表示）。設定ページの「ボード（Stage）」で変える（オフはそのまま保存、オンに戻すのは確認つき。どちらも設定履歴に残る）。Stage のページを開くたびに読む。チャット画面と Stage のログはコードのまま。 | — | #350, #453 |
+| `ui` | `{"home": "chat"}` | ダッシュボードの設定。`home`（`"chat"` か `"stage"`）: `/` で開くページ。`"stage"` はメニューの先頭にも Stage を置く。Stage がオンのとき（下の `stage_enabled`、または `STIRA_STAGE=1`）だけ効き、OFF なら `/` はチャットのまま（起動時に WARNING）。`/chat` は常にある。起動時に読む。設定ページの「画面」欄で変えられる（保存後、再起動で反映）。`board_svg`（真偽値、ADR 0012 追記 2026-10-24 から**既定オン**、オフのときだけ書かれる）: 返答の ```` ```svg ```` ブロックを、許可した図形・色・文字だけで組み立て直した画像として Stage のボードに表示する（`dashboard/stage/js/svg_safe.js`。スクリプト・リンク・外部の読み込み・アニメーションなし。読めないものはコードのまま理由を表示）。設定ページの「ボード（Stage）」で変える（オフはそのまま保存、オンに戻すのは確認つき。どちらも設定履歴に残る）。Stage のページを開くたびに読む。チャット画面と Stage のログはコードのまま。 | — | #350, #453 |
 <!-- gateway-fields:end -->
+
+### `stage_enabled` のキー（#477）
+
+オフのときだけ書かれます（既定はオン）。このキーの無いファイルでは Stage ページが有効です。`/` はチャットのままです（`ui.home`）。
+
+| フィールド | 既定値 | 効果 | 環境変数 | Issue |
+|---|---|---|---|---|
+| `stage_enabled` | `true` | Stage ページ（`/stage/` とメニュー項目。[stage.md](stage.md)）を登録する。`false` でオフ（ルートもメニュー項目も無い）。設定ページ: 「画面」欄。`ui.home` も同じ欄にある（Stage がオフの間は `"stage"` を選べない）。起動時に読むので、保存した変更は再起動待ち。ページであって権限ではない: 増えるのは GET のページルート 3 つだけで API は増えず、オンにする操作に確認はない。`STIRA_STAGE` があるとスイッチは無効になり変数名を表示、変更は拒否（`env_pinned`）。Stage の描画回数（fps）は設定ファイルの値ではなく、同じ欄がブラウザ（`localStorage` の `stira.stage.fps`）に保存する。 | `STIRA_STAGE` | #477, #809 |
 
 ### `context_profile` のキー（#368）
 
@@ -281,6 +290,8 @@ macOS では自己テストの後に生成した `sandbox-exec` の設定の中�
 | `autonomy.heartbeat_start` | `false` | W6d: ちょうど `true` **かつ** `stage_c_exec` がオン（さらにスケジューラーが動いている、`STIRA_SCHEDULER=1`）のとき、**発行時に自分の `heartbeat_start: true` を持つグラント**（発行時にホストで確認、あとから変更不可）を、スケジューラーのモデルを使わない `grant_tick` が始められます: スケジューラーの 1 回の起床につき最大 1 反復、人の押下と同じ `step` を通ります。`stage_c_exec` が無ければオフのまま（警告 `heartbeat_start_needs_stage_c_exec`）。スケジューラーが動いていなければ何も起こさない（警告 `heartbeat_start unavailable (reason=scheduler_off)` を 1 回。フラグ付きのグラントに `unavailable: scheduler_off`）。ハートビートのデーモン（`hb_enabled` / `STIRA_HEARTBEAT=1`、既定オフ）が無ければ起床はすべて `heartbeat_unhealthy` で見送られる（警告 `reason=heartbeat_off`、`unavailable: heartbeat_off`）。オフ: ティッカーなし、何も表示されず、応答はこれまでどおり。[grants](grants_ja.md)「ハートビート開始」参照。 |
 | `autonomy.tick_min_spacing_sec` | `300` | W6d: グラントの発行、反復の終わり（だれが始めたものでも）、（W6-F、#644）グラントの最後の再開から、ハートビートで始める反復までの最短時間（30〜86400 秒。下限 30 秒は下げられない）。それ以外の値は既定値（警告 `tick_min_spacing_sec_invalid`）。 |
 | `autonomy.allow_browser_confirm` | `false` | 発行・再開・確認には**ホストでの確認**（YOLO デスクの `dialog` か `command`: `STIRA_YOLO_ALLOW` + `STIRA_YOLO_HOST_CONFIRM=auto` / `dialog` / `command`）が要ります。無ければ拒否（`host_channel_required`）。`true` にすると、経路がブラウザのとき（`STIRA_YOLO_HOST_CONFIRM` が未設定か `browser` で `yolo.host_confirm` が `"browser"`、または YOLO がオフで `STIRA_YOLO_HOST_CONFIRM` とほかの `STIRA_YOLO_*` の上書き変数が未設定 — 残っていると起動を拒否、`… is set but the YOLO allowance is off`）にブラウザでの確認を受け付けます — ユーザーが選ぶ弱い層で、同じユーザーのプロセスが操作できます（起動時に記録）。設定されたホストの経路（`auto` / `dialog` / `command`）を置き換えることはありません（そちらが優先）。取り消し・一時停止・キルには不要。 |
+| `autonomy.grant_self_development` | `false` | #791（ADR 0029 B6b）: 既定では、`scope.workspace_subtree` が Stira のチェックアウト（`src/stiracore/__init__.py` を持つディレクトリ。データの場所 `.local/` と `workspace/` は通常のグラントを受け付けます）の保護された部分と重なる、またはチェックアウトを含むグラントは拒否します（`grant_subtree_protected`）。ちょうど `true` のとき、人が、動いているサーバーのものではないチェックアウトについてそのグラントを発行できます（動いているサーバーのものは常に拒否: `grant_subtree_running_checkout`）。そのグラントの `editor` が書けるのは許可リスト（`docs/`）だけです。発行の本文に別の確認 `self_development: true` が要り、ホストで確認する要約に `loosen:self_development` と出ます。権限を広げる設定です: 既定はオフ、起動時に読みます（`gateway-config.json` に書いて再起動。設定画面のルートからは書けません）。発行には、これまでどおりブレーカー NORMAL、`ISSUE` の入力、ホストでの確認が要ります。オンでも、そのグラントの editor は編集禁止の一覧と「あとで実行されるファイル」に書けません（[grants](grants_ja.md#保護されたサブツリーとパス-791)）。真偽値以外は `false` として読みます。 |
+| `autonomy.page_look_unattended` | `false` | ADR 0015 rev 6（S5）: ちょうど `true` のとき、グラントの範囲に `page_look`（と、絞り込んだ `view_image`）を含められます。グラントの反復は**自分のワークスペースのページファイル**を、閉じたブラウザで**承認カードなしに**開きます（ツールの保存済みルールが Never の場合を除き、ルールに関係なく）。権限を広げる設定です: 既定はオフ、起動時に読みます（`gateway-config.json` に書いて再起動）。そのグラントの発行には、これまでどおりホストで確認する `ISSUE` の入力が要ります。オンでも、`page_look` が登録されていない（ブラウザが見つからない）、範囲に `file_read` がない、`file_read` のルールが Always でない、軸の検査が通らない場合は、発行も各ラウンドも拒否します（[grants](grants_ja.md#グラントのページツールadr-0015-rev-6-s5)）。真偽値以外は `false` として読みます。 |
 | `autonomy.run_checks_unattended` | `true` | グラントの範囲に `run_checks` を含めてよいか。効くのは**検証済みの `os_sandbox` のホストだけ**（ADR 0019）: `limits_only` ではこの値に関係なくそのグラントを拒否します。真偽値以外は `false` として読みます。 |
 
 
@@ -303,6 +314,22 @@ macOS では自己テストの後に生成した `sandbox-exec` の設定の中�
 
 ```json
 {"task_models": {"tool_summary": "global.anthropic.claude-haiku-4-5-20251001-v1:0"}}
+```
+
+`visual_review` だけは例外で、未設定は会話のモデルではなく**オフ**です（下記）。
+
+### `visual_review` セクション（ADR 0015 rev 6、#774）
+
+`page_review` のレビュー用モデルの予算です。`daily_tokens`: 人が決める正の整数で、レビュー用モデルの
+入力＋出力トークンの 1 日（UTC）あたりの上限。**既定値はありません**: 無い・`{}`・それ以外の値なら、
+`page_review` の呼び出しはすべて `review_budget` で拒否します。数はメモリだけに持ちます（再起動すると
+その日の数え直し）。プロバイダが使用量を返さない呼び出しには概算（800 ＋ 画像 1 枚につき 1,600）を
+計上します。手で編集し、起動時に読みます。`task_models.visual_review`（または
+`STIRA_TASK_MODEL_VISUAL_REVIEW`）が vision モデルを指していなければ、このセクションは何もしません。
+[task-models_ja.md](task-models_ja.md) と [verification_ja.md](verification_ja.md) を参照。
+
+```json
+{"task_models": {"visual_review": "ollama:llama3.2-vision:11b"}, "visual_review": {"daily_tokens": 200000}}
 ```
 
 ### `token_prices` セクション（#451）
@@ -352,10 +379,10 @@ macOS では自己テストの後に生成した `sandbox-exec` の設定の中�
 | `distiller_base_url` | `null` | LLM 蒸留器のエンドポイント。 |
 | `distiller_api_key_env` | `null` | LLM 蒸留器のキー変数名。 |
 | `harvest_stage_auto` | `true` | Harvest で自動帯（0.4〜0.7）も人間のレビュー待ち（staging）に入れる（レビュー UI #193 まで）。`false`（非推奨）にすると、自動帯は人間のレビューなしで `semantic/knowledge/` に直接書かれる（#293）。 |
-| `memory_retention` | `{}` | ストアごとの保持上限。`stira memory retention` だけが読む（#294）。空 = 上限なし（`memory_plans` を除く。下記）。`--apply` なしでは何も消えず、`--apply` で消したものは退避される（取り消し: `stira memory restore <id>`）。キー: `episodic`（`max_age_days`、`max_entries`、`keep_unharvested` = `true`、`honour_expires_at` = `false`）、`turns` / `tool_payloads` / `checkpoints`（`max_age_days`。checkpoints は `max_per_thread` も）、`memory_plans`（`max_age_days`、既定 `90`: 記憶ジョブの計画ファイル。既定で上限があるのはこれだけ）、`staging`（`warn_after_days`）、`scheduler_log` / `archive`（`warn_bytes`）— 最後の 3 つは報告のみ。整数 1〜1000000（`*_bytes` は 10^15 まで）。[memory-maintenance_ja.md](memory-maintenance_ja.md#保持期限削除要求出所タグ294) 参照。 |
+| `memory_retention` | `{}` | ストアごとの保持上限。`stira memory retention` だけが読む（#294）。設定画面の「記憶の保持期限」で編集できる（#474: 値の編集と、件数だけを出す読み取り専用のドライラン。適用 `--apply` は CLI のまま）。空 = 上限なし（`memory_plans` を除く。下記）。`--apply` なしでは何も消えず、`--apply` で消したものは退避される（取り消し: `stira memory restore <id>`）。キー: `episodic`（`max_age_days`、`max_entries`、`keep_unharvested` = `true`、`honour_expires_at` = `false`）、`turns` / `tool_payloads` / `checkpoints`（`max_age_days`。checkpoints は `max_per_thread` も）、`memory_plans`（`max_age_days`、既定 `90`: 記憶ジョブの計画ファイル。既定で上限があるのはこれだけ）、`staging`（`warn_after_days`）、`scheduler_log` / `archive`（`warn_bytes`）— 最後の 3 つは報告のみ。整数 1〜1000000（`*_bytes` は 10^15 まで）。[memory-maintenance_ja.md](memory-maintenance_ja.md#保持期限削除要求出所タグ294) 参照。 |
 | `harvest_job_max_episodes` | `100` | スケジュールされた `memory_harvest` の 1 回で採点するエピソード数（1〜100000）。新しい順で、残りは次回へ（#251）。rule 蒸留器のみ（`"llm"`/`"jev"` ではジョブを作成も実行もできない。`distillation_cli` を使う）。出力は `harvest_stage_auto` に関係なく常に staging。 |
 | `episodic_emotion_snapshot` | `true` | 新しいエピソードごとに保存時の感情スナップショット（6次元・カテゴリ・強度・ブレーカー・ターン）を `memory/…/emotion/` に記録する。床の中で、エージェントは読めず、prompt にも記憶ツールにも入らない（#364、[episodic-emotion_ja.md](episodic-emotion_ja.md)）。`false` でオプトアウト: 新しいエピソードは `episodic-summary/v1` のまま。既存の記録は削除するまで残る（`emotion_cli orphans --apply` が消すのは孤児だけ）。`STIRA_EPISODIC_EMOTION` が優先。 |
-| `episode_labels` | `{}` | チャットサーバーが書くエピソードの話者ラベル（#653）: `{"user": "User", "agent": "Resolver"}` で `User: … → Resolver: …` と保存する。空、またはキーが無い側 = 従来のラベル（`マスター` / `リゾルバ`）。既定は UI やペルソナの言語に追従しない: 英語ラベルにするには `episode_labels` を設定する。ラベルには文字か数字が 1 つ以上必要。相手側のラベルと同じ（片側だけ設定して相手側の既定と同じ場合も含む）なら両方とも既定に戻す。ラベルは 1〜24 文字の文字・数字・空白・`_ - . ・` だけ。それ以外（コロン、矢印、改行、制御文字、括弧、2 つが同じ）は無視して既定のラベルを使う（警告にはキー名だけを出し、値は出さない）。変わるのは新しく書くエピソードだけで、保存済みのエピソードは書き換えない。連想想起は旧ラベルと現行ラベルの両方を除く。起動時に読む。 |
+| `episode_labels` | `{}` | チャットサーバーが書くエピソードの話者ラベル（#653）: `{"user": "User", "agent": "Resolver"}` で `User: … → Resolver: …` と保存する。空、またはキーが無い側 = 従来のラベル（`マスター` / `リゾルバ`）。既定は UI やペルソナの言語に追従しない: 英語ラベルにするには `episode_labels` を設定する。ラベルには文字か数字が 1 つ以上必要。相手側のラベルと同じ（片側だけ設定して相手側の既定と同じ場合も含む）なら両方とも既定に戻す。ラベルは 1〜24 文字の文字・数字・空白・`_ - . ・` だけ。それ以外（コロン、矢印、改行、制御文字、括弧、2 つが同じ）は無視して既定のラベルを使う（警告にはキー名だけを出し、値は出さない）。変わるのは新しく書くエピソードだけで、保存済みのエピソードは書き換えない。連想想起は旧ラベルと現行ラベルの両方を除く。起動時に読む。 `placeholders`(`"ja"` 既定 / `"en"`)で、行の中の固定語(空・ツール出力の省略・コードの省略)の言語を選べます。 |
 | `associative_recall` | `{}` | オプトインの連想想起（#170）: `{"enabled": true}` で、発話に合う過去のエピソードを最大 `max_items`（3、1〜5）件・`max_chars`（600、100〜2000）文字以内で差し出す。新しい `window`（200、1〜1000）行の索引から Neural State で重み付けして選ぶ（読み取りのみ）。モデル呼び出しなし。`memory.injected` を記録する。空 = OFF。チャットサーバーは起動時に読む。`STIRA_ASSOCIATIVE_RECALL` が `enabled` より優先。`"emotion_proximity": true`（既定 `false`）で感情近接シグナルを足す（#364、ADR 0017。`STIRA_RECALL_EMOTION_PROXIMITY` が優先）。[associative-recall_ja.md](associative-recall_ja.md) |
 | `memory_autonomy` | `{}` | ADR 0018 の**フェーズ 0（観測のみ）**。`{}` / 無し = OFF（`memory_rate` ツールなし、記憶ジョブの種類なし、何も束縛しない）。`{"phase": 0}` で ON: `in_turn_rating`（既定 `true`）で `memory_rate` を出す（エージェントがそのターンのエピソードを採点。保存するだけで、まだ何にも使わない）。`jobs`（`memory_rate_backfill` / `memory_consolidate` / `memory_tidy`、各既定 `false`）で、人がそのスケジューラのジョブを作れるようになる（書くのは計画ファイルだけ。モデルを呼ぶ種類はハートビートが正常なときだけ開始、ADR 0021 §8）。`daily_token_budget`（100000、0〜100000）は記憶ジョブ全体の上限。`undo_window_days`（30、フェーズ 2 用に保存のみ）。受け付けるのはフェーズ `0` だけ。起動時に読む。`STIRA_MEMORY_AUTONOMY=0` で強制 OFF。[memory-autonomy_ja.md](memory-autonomy_ja.md) |
 | `containment` | `{}` | ADR 0023 の**フェーズ 0（観測のみ）**。`{}` / 無し = OFF。`{"phase": 0}` で、隔離のシグナル（ゲートがすでに出している拒否と保留: 秘密パスの読み取り、床への書込み、自分のダッシュボードへの呼び出し、外部送信の保留、連続実行、範囲外への読み書き。文面の手がかりは重み 0）を時間窓で数え、そのセッションが**仮に入るはずの**段階（`open` / `restricted` / `closed` / `quarantine`）を記録する。何も強制しない（ツールを外さない、カードを足さない、水準を動かさない）。`window_seconds`（600、60〜3600）。受け付けるのはフェーズ `0` だけ。起動時に読む。`STIRA_CONTAINMENT_OBSERVE=0` で強制 OFF。[containment_ja.md](containment_ja.md) |
@@ -475,12 +502,13 @@ macOS では自己テストの後に生成した `sandbox-exec` の設定の中�
 | `authority-epoch` | `stira_server`（権限サービス、ADR 0011 §5、[authority-service](authority-service_ja.md)） | 権限エポック: 最新 16 件の記録 `seq`・`epoch`・前の記録のハッシュ・自身のハッシュ（インカーネーションは書かない）。`0600`、耐久的に書く（flush → rename → ディレクトリの flush） | あり | 不可 | 編集しない: 読めない・安全でない・合わないファイルはサーバーを不健全にする（許可証を出さず、YOLO は何も自動承認しない）。修理はエポックのファイル自体が壊れたときだけ（ラッチストアの修理は `reset-latches`）: サーバーを止めて写しを取り、消し、`stira authority reset-latches`、起動、解除。 |
 | `authority-latches` | `stira_server`（権限サービス、ADR 0011 W2、[authority-service](authority-service_ja.md)） | 停止のラッチ `kill`・`unhealthy`・`halted:<理由>` と停止 ID（インカーネーション、エポック）。最新 64 件の記録を鎖でつなぐ（`seq`、前のハッシュ）。`0600`、耐久的に書く | あり | 不可 | 編集も削除もしない: ラッチを解除するのはサーバーを止めての `stira authority unlatch` だけ。読めない・安全でない・合わない・無い・巻き戻されたファイル（`authority-epoch` のコミットメントとライフサイクルのログで確かめる）は、すべてのラッチが立っているもの（停止・不健全）として扱う。修理: `stira authority reset-latches`（すべて立てる）、その後 `unlatch`。 |
 | `authority-lifecycle.jsonl`, `authority-lifecycle.1.jsonl` | 権限サービス（W2） | ハッシュの鎖でつないだ `lifecycle_event` の行: コードと ID のみ（対象、from、to、理由コード、インカーネーション、エポック、時刻）。`0600`、1 行ずつ flush。追記で 1 MiB を超えるときに `.1` に移す（古い `.1` は消える） | あり | 不可 | 残す（停止の記録。起動時にラッチストアとも突き合わせる）。壊れたファイルはサーバーを不健全にする。修理: authority-service_ja.md の「修理」。 |
+| `grant-rounds.jsonl`, `grant-rounds.1.jsonl` | グラントの反復の実行部（ADR 0028 §5、[grants_ja](grants_ja.md)） | ラウンド台帳: 終わったグラントの反復ごとに、ハッシュの鎖でつないだ許可リストのレコードを 1 件。コードと数のみ（目標、モデルの文、パス、URL、秘密は入らない）。`0600`、1 行ずつ flush。追記で 1 MiB を超えるときに `.1` に移す（古い `.1` は消える） | あり | 不可 | 観測だけで、サーバーを不健全にはしない。壊れた・安全でないファイルは再起動まで台帳を使えなくする: グラントのハートビートでの開始は見送り（`tick_skipped(ledger_unhealthy)`）、押下は動く。壊れたファイルをどかす前に写しを取る。 |
 | `authority-outbox.json` | 権限サービス（W2） | 通知（対象 + インカーネーション + エポック + to ごとに 1 件、最大 256 件、古い未読はまとめる）と未読・既読、通知済みと既読のイベント ID。`0600`、原子的に置き換え | あり | 不可 | 消すとライフサイクルのログから未読として作り直す。壊れたファイルはサーバーを不健全にする。 |
 | `authority-kill-armed`, `authority-kill-fired` | 権限サービス（W2） | 起動時に作る空の印。キルスイッチが名前を変える（空きブロックの要らない第二のキルの記録） | あり | 不可 | `authority-kill-fired` は消さない: 消すのは `stira authority unlatch kill`。キルのラッチの無いまま印が発火していると、次の起動はラッチストアを拒否する。 |
 | `authority-watchdog.json` | 権限ウォッチドッグ（W2） | 最後の一巡の時刻（起動時にそこからの空白を `gateway_down` として記録） `0600` | あり | 不可 | 消すと次の空白の記録が抜けるだけ。壊れたファイルはサーバーを不健全にする。 |
 | `grants.json` | `stira_server`（gateway の `autonomy.stage_c` のときだけ、ADR 0011 W4、[grants](grants_ja.md)） | 目標グラント: 最新 4 件の記録を鎖でつなぐ（`seq`、前のハッシュ）、それぞれ状態全体。**目標の文はここにだけある**。生きているグラントは常に `revoked(restart)` として書く（active としては書かない）。`0600`、耐久的に書く | あり | 不可 | 編集しない: 安全でない・読めない・形式が違う・変わったファイルはグラントの段を不健全にする（すべて取り消し、発行不可、上書きしない）。修理: サーバーを止めて写しを残し、退避して起動（グラントは消える。新しく発行する）。 |
 | `checkpoints/` | `FileCheckpointStore` | バッチごと: Neural State、会話、保留中のツール呼び出し、エンジン状態（スレッドごとに 20） | あり | 不可 | 消すと、それを必要とする再開は拒否され承認は取り消される。 |
-| `context-stash/` | コンテキスト管理（#258） | 退避したツール結果の原文（マスク済み） | なし（書込み root の中にある必要がある、ADR 0005） | 可 | 可。参照が読めなくなる。古いものは `retention_hours`（24）で消える。 |
+| `context-stash/` | コンテキスト管理（#258） | 退避したツール結果の原文（マスク済み） | なし（退避はサーバー自身が書く。ファイルツールが書けるのは書込み root の中にあるときだけ、ADR 0005、#746） | 可 | 可。参照が読めなくなる。古いものは `retention_hours`（24）で消える。 |
 | `artifacts/` | `WorkspaceArtifacts`（#454、ADR 0020） | `index.db`（版ごとの相対パス・ターン ID・作成/更新・サイズ・SHA-256・種別・時刻、人が付けたラベル）と `blobs/`（小さい版の本文のスナップショット、内容アドレス） | あり | 不可 | 可。成果物の一覧・版・ラベルが消える（作業ディレクトリのファイルは消えない）。 |
 | `turns.db` | `TurnEventStore` | UI のターンイベント（マスク済みプレビュー） | あり | 不可 | 可。UI のターン履歴が消える。 |
 | `events.db` | `SQLiteEventStore` | ハッシュ連鎖の監査イベント（チャットサーバーが書くのは `/new` だけ。ターンのイベントは `turns.db`、#286） | あり | 不可 | `-wal`、`-shm`、`.head` と一緒にだけ。 |
@@ -498,6 +526,29 @@ macOS では自己テストの後に生成した `sandbox-exec` の設定の中�
 
 データディレクトリの外: `.local/stira.out.log` / `.local/stira.err.log`（`stira_ctl.sh` の出力）と `STIRA_CHAT_DATA_DIR`（チャットボット）。
 
+## ブラウザ内の保存（このブラウザだけ） — *検査対象*
+
+画面がブラウザに保存するもの（#481）。サーバーの設定ではありません: 設定ファイル・設定履歴・データディレクトリの
+バックアップには入らず、ブラウザごと（オリジン＝ホストとポートごと）に別々で、サイトデータを消すと既定に戻ります。
+サーバーにはこれらを受け取るルートも項目も無く、cookie も読みません（画面がこの表に無いキーを使うと
+`tests/test_browser_storage_docs.py` が落ちます）。キーはすべて `stira.` で始まります。
+
+<!-- browser-storage:begin -->
+| キー | 保存先 | 値（既定） | 変える場所 | サーバーに送るか | 用途 |
+|---|---|---|---|---|---|
+| `stira.lang` | `localStorage` | `ja` / `en`（`ja`） | 言語の選択（サイドメニュー、設定 →「表示」）。`?lang=en` / `?lang=ja` を付けてページを開いても変わる | いいえ | 全ページと Stage の表示言語。 |
+| `stira.sidebar` | `localStorage` | `expanded` / `collapsed`（`expanded`） | サイドメニューの開閉ボタン（広い画面のとき） | いいえ | サイドメニューの開閉。 |
+| `stira.chat.neuralTrend` | `localStorage` | `expanded` / `collapsed`（`collapsed`） | チャット画面の Neural State の推移の見出し | いいえ | 推移の開閉。 |
+| `stira.settings.showInternal` | `localStorage` | `1` / `0`（`0`） | 設定 →「表示」→「内部名を表示」 | いいえ | ツール名などの内部名を説明の横に表示する。 |
+| `stira.stage.fps` | `localStorage` | 15〜120 の整数（30） | 設定ページの「画面」欄（スライダー。動かすと保存、「既定に戻す」でキーを消す）。Stage は読むだけ。`?fps=N` があればその表示ではそちらが優先 | いいえ | Stage のフレームレートの上限（[stage.md](stage.md) の "Frame rate"）。 |
+| `stira.stage.board_idle` | `localStorage` | `on` / `off`（`off`） | Stage のボードの「待機中はボードに稼働状況を出す」のチェック | いいえ | ターンが無い間、稼働状況のボードを自動で開く。 |
+| `stira.yolo.ack` | `localStorage` | 確認済みの、最後に終わった YOLO の窓の識別子（なし） | 終わった窓の横の OK、またはラッチ解除の成功 | いいえ | 同じ「終了」を繰り返し表示しない。表示の状態で、権限ではない: 窓とラッチはサーバーのもの（ADR 0012）。 |
+| `stira.grant.view.<id>` | `sessionStorage`（このタブ） | ゴールグラントの 1 回限りの閲覧トークン（16 進 32 文字） | 設定ページでのグラントの発行（`autonomy.stage_c` のときだけ） | **はい**: 発行者の「ゴールを表示」の要求の `X-Stira-Goal-View` ヘッダーで 1 回だけ。表示に成功したら消す | 発行者だけが見られるゴール本文の表示（ADR 0011）。設定ではない。 |
+<!-- browser-storage:end -->
+
+`?lang=` と `?fps=` はページのアドレスの一部なので、ページの要求と一緒にサーバーに届きますが、サーバーは読みません。
+`stira.stage.board_idle` がオンのとき、Stage は「稼働状況」ボタンと同じ読み取りの要求をします（値そのものは送りません）。
+
 ## 出力上限と途中で切れたターン
 
 `gateway-config.json` の `max_output_tokens` は 1 回のモデル呼び出しの出力上限（プロバイダの `max_tokens`）。環境変数での上書きはない。
@@ -506,8 +557,11 @@ macOS では自己テストの後に生成した `sandbox-exec` の設定の中�
 - **数値**はそのまま使う。意図して決める天井であり、Stira はモデルの上限との比較をしない。上限を超えるとプロバイダが拒否する。
 - **コスト。** 上限は「購入量」ではなく天井。課金は実際に出力したトークン分だけで、上限はプロンプトに入らないので、プロンプトキャッシュの接頭辞（tools → system → messages）も変わらない。上限を上げて変わるのは 2 点: 暴走した出力が最大で上限まで課金されうること、Bedrock は開始時に `max_tokens` をアカウントの毎分トークン枠に数えるため、とても高い上限は同時に通せるリクエスト数を減らすこと。思考の予備分により、Claude 5.x の呼び出しは開始時に「入力 + 64000」を枠から差し引く（以前は「入力 + 32000」）。使わなかった分は終了時に戻り、課金は出力した分だけ。
 - **思考も同じ上限を使う（#416）。** Claude の拡張/適応思考と OpenAI/Gemini の推論トークンは同じ `max_tokens` に数えられる（#396 の実測: Sonnet 5.5 で上限に達した呼び出しのメッセージは思考ブロックだけ。Opus 5.5 は既定の effort で約 12 分考えて 64000 に達し、返答なし）。Bedrock の適応思考には別枠の予算がない（`thinking.budget_tokens` は拒否される）ので、自動の上限はそうした行に返答用 32000 の上に `thinking_reserve`（32000）を足す: `min(64000, 上限)`。Claude 5.x と 4.x の Sonnet/Haiku は 64000、Opus 4/4.1 は 32000（その上限）。思考のない行は 32000 のまま。
-- **上限が記録されていないモデル（#416）。** 自動の上限はプロバイダ別の既定（`unknown_limit_max_output`）。ホスト型 API（Bedrock、Anthropic、OpenAI と OpenAI 互換サーバ、Gemini、LiteLLM など）は、モデル自身の上限を超える値のリクエストを拒否するので `8192`（大きく推測すると毎ターン API エラーになる）。ローカルの `llamacpp` / `ollama` はサーバが大きな値を受け付け（生成はコンテキスト窓で終わる）、課金もないので `32000`。設定画面は自動のときにもそう表示する（「推論モデルは思考だけでこれを使い切ることがあります。モデルの上限が分かっていれば数値で設定してください」）。
-- **上限に達したターン**は `stop: "max_tokens"` で終わり、チャットと Stage に理由つきで表示される（「出力の上限に達して途中で切れました。上限を上げるか、分けて依頼してください」）。Strands のイベントループはツールを実行する前に例外を出すので、引数の途中で切れたツール呼び出し（書きかけの `file_write`）は、ツールのルールが Always でも**実行されない**。途中までのメッセージは履歴に残るが、ツール呼び出しは注記に置き換わり、次のメッセージは通常どおり動く。切れた呼び出しが返答もツール呼び出しも始めていなかった（メッセージが思考ブロックだけ、または空）ときは、理由をそう表示する（「返答を書き始める前に出力の上限（N トークン）に達しました。思考も上限に含まれるモデルでは、思考だけで使い切ることがあります。上限を上げてください。」）。SSE の `error` に `cut: "before_reply"` と `limit`、`turn.completed` に `cut` が入る（#416）（`tests/test_max_output_tokens.py`、`tests/test_headless_file_tools_e2e.py`）。
+- **上限が記録されていないモデル（#416）。** 自動の上限はプロバイダ別の既定（`unknown_limit_max_output`）。ホスト型 API（Bedrock、Anthropic、OpenAI と OpenAI 互換サーバ、Gemini、LiteLLM など）は、モデル自身の上限を超える値のリクエストを拒否するので `16384`（#745 以前は `8192`）（大きく推測すると毎ターン API エラーになる）。ローカルの `llamacpp` / `ollama` はサーバが大きな値を受け付け（生成はコンテキスト窓で終わる）、課金もないので `32000`。設定画面は自動のときにもそう表示する（「推論モデルは思考だけでこれを使い切ることがあります。モデルの上限が分かっていれば数値で設定してください」）。
+- **ローカルの OpenAI 互換 endpoint（#745）。** プロバイダが `openai` / `openai_responses` で、モデルの上限が記録されておらず、`base_url` のホストが `localhost`、ループバック（`127.0.0.0/8`、`::1`）、RFC 1918 のアドレス（`10/8`、`172.16/12`、`192.168/16`）のいずれかなら、自動の上限は `llamacpp` / `ollama` と同じ `32000`。同じ種類のサーバ（`/v1` の後ろの llama.cpp 系）で、大きな値を受け付け、課金もないため。旧 `8192` では数百行の `file_write` 1 回が毎回途中で切れた。ホストは URL の文字列だけで判定する（DNS は引かない）。公開名はプライベートアドレスに解決されても `16384` のままなので、その場合は `max_output_tokens` を設定する。上限が記録されているモデルと、他のプロバイダの規則は変わらない。（`is_local_endpoint`、`tests/test_local_output_cap.py`）
+- **ホスト型の既定は `16384`（オーナー決定 2026-11-13）。** `8192` はコード生成には低かった（数百行の `file_write` が途中で切れる）。現在のホスト型モデルの多くが受け付ける。拒否するモデルはプロバイダのメッセージで失敗するので、その場合は `max_output_tokens` を設定する（または機能表にそのモデルの上限を記録する）。
+- **使われている上限の確認。** `GET /api/gateway/status` は `max_output_tokens: {value, source}` を返す（エージェントが上限を報告しないときは `null`）。`source` は `"setting"`（数値を設定した）、`"model_table"`（モデルの記録された上限）、`"unknown_limit_default"`（上限の記録なし・ホスト型: `16384`）、`"local_default"`（上限の記録なし・ローカルのサーバ: `32000`）。数値とコードだけで、endpoint も鍵も含まない。source は動作中の値から読み戻すので、自動の値と同じ数値を設定した場合は自動の source になる（動作は同じ）。
+- **上限に達したターン**は `stop: "max_tokens"` で終わり、チャットと Stage に理由つきで表示される（「出力の上限に達して途中で切れました。上限を上げるか、分けて依頼してください」）。Strands のイベントループはツールを実行する前に例外を出すので、引数の途中で切れたツール呼び出し（書きかけの `file_write`）は、ツールのルールが Always でも**実行されない**。途中までのメッセージは履歴に残るが、ツール呼び出しは注記に置き換わり、次のメッセージは通常どおり動く。切れた呼び出しが返答もツール呼び出しも始めていなかった（メッセージが思考ブロックだけ、または空）ときは、理由をそう表示する（「返答を書き始める前に出力の上限（N トークン）に達しました。思考も上限に含まれるモデルでは、思考だけで使い切ることがあります。上限を上げてください。」）#745 から、SSE の `error` は `limit_source`（上のコード）も持ち、上限が自動の既定のときはメッセージの末尾に「（自動の既定 16384。設定の `max_output_tokens` で変更できます）」が付く。切れたツール呼び出しを置き換える注記は、モデルに原因と対処を伝える: SDK の 1 文の後に、出力上限（N トークン）で切れたこと、実行されていないこと、小さく分けてやり直すこと（長いファイルは短い呼び出し数回に分ける）を固定の文で書く。注記はその文と数値だけで、切れた引数の内容は含まない。。SSE の `error` に `cut: "before_reply"` と `limit`、`turn.completed` に `cut` が入る（#416）（`tests/test_max_output_tokens.py`、`tests/test_headless_file_tools_e2e.py`）。
 - **失敗した呼び出しの usage。** `max_tokens` で終わった呼び出しも Bedrock は課金する。その `metadata.usage` を `turn.completed.usage` とセッション合計に記録する。数が取れない場合は、素の `null` ではなく `usage_reason` が付く: `E_USAGE_NOT_REPORTED`（プロバイダが報告前に失敗した）、`E_USAGE_CANCELLED`（先に **■ 止める** / `POST /api/chat/cancel` で止めた）、`E_USAGE_INTERRUPTED`（先にサーバーが停止・再起動した）。`GET /api/turns` は `usage` の隣に `stop` と `usage_reason` を返す。
 
 ## ターンはページより長く生きる（#452）
@@ -519,11 +573,12 @@ macOS では自己テストの後に生成した `sandbox-exec` の設定の中�
 | `stop` | いつ | `error` |
 |---|---|---|
 | `completed` | ターンが終わった（見ているページの有無に関係なく） | `false` |
-| `cancelled` | 明示の停止**だけ**: チャット画面の **■ 止める**（`POST /api/chat/cancel`）。SDK は次の区切り（モデルのストリーム中・ツールの前・ツールの後）で止まり、そのターンの人の判断待ちのカードは却下される（押した後に出たカードも、ターンが終わるまで却下する。`hitl_timeout_sec` を待たない）。それまでの出力は履歴に残る（`stop: "cancelled"`） | `true` |
+| `cancelled` | 明示の停止: チャット画面の **■ 止める** と Stage の **■ ターンを止める**（`POST /api/chat/cancel`）、または下の自動停止（固定の `reason` つき）。SDK は次の区切り（モデルのストリーム中・ツールの前・ツールの後）で止まり、そのターンの人の判断待ちのカードは却下される（押した後に出たカードも、ターンが終わるまで却下する。`hitl_timeout_sec` を待たない）。それまでの出力は履歴に残る（`stop: "cancelled"`） | `true` |
 | `interrupted` | ターンの実行中にサーバーが停止した（`reason: "server_stopped"`）、または次の起動時に終わりの記録がないターンが見つかった＝クラッシュや強制終了（`reason: "server_restarted"`）。このターンの返答は失われる（再起動をまたぐ再開は #240） | `true` |
 | `error` / `max_tokens` | 従来どおり | `true` |
 
 - **承認待ちは画面ではなく期限まで待つ。** ページが開いていない間に出たカードは `hitl_timeout_sec`（既定 120 秒、最大 24 時間）まで保留される。再接続後にどのページ（または `/approvals`）で承認しても、ターンは続く。期限切れとサーバー停止は従来どおり却下（フェイルクローズ）。
-- **同時に動くターンは 1 つ**（従来どおり）。ターンのロックは送信からターンの終わりまで持ち、失敗した場合も含めどの経路でも解放する。実行中の 2 本目の送信には、ストリームの `error` イベント「処理中です / Agent is busy」（`code: "turn_running"`）を返す。`/new` は `turn_running` で断る。YOLO の停止・`/new`・ツール実行中の拒否は従来どおり。YOLO の停止は窓を終える（以降のツール呼び出しはカードになる）が、ターン自体は止めない。止めるのは **■ 止める**。
-- Stage の **■ 表示を止める** は、その名前どおりページの読み込みだけを止める。ターンは続く。
+- **同時に動くターンは 1 つ**（従来どおり）。ターンのロックは送信からターンの終わりまで持ち、失敗した場合も含めどの経路でも解放する。実行中の 2 本目の送信には、ストリームの `error` イベント「処理中です / Agent is busy」（`code: "turn_running"`）を返す。`/new` は `turn_running` で断る。YOLO の停止・`/new`・ツール実行中の拒否は従来どおり。YOLO の停止は窓を終える（以降のツール呼び出しはカードになる）。実行中のツール呼び出しは取り消さず、窓の下で動いていたターンは次の承認待ちで止まる（下の `yolo_window_ended`）。すぐ止めるのは **■ 止める**。
+- **ターンの自動停止**（#680、[ADR 0034](adr/0034-unattended-chat-turn-stops.md)。固定値で設定項目なし）。どれも **■ 止める** と同じく `stop: "cancelled"` で終わり、固定の `reason` / `stop_reason` を記録する: `yolo_window_ended`（ターンが動いていた YOLO の窓が、次の承認待ちの時点で終わっている。カードは却下）、`approval_unanswered`（そのターンのカードが誰にも答えられず `hitl_timeout_sec` で期限切れ。ページが読んでいても止める）、ページが読んでいない間だけ `unattended_time_limit`（開始から 3600 秒）/ `unattended_token_limit`（モデル呼び出しの入力＋出力 2,000,000 トークン）。ターンの YOLO の窓は最初に見た窓で、後から開いた窓には乗り換えない。自動停止で却下したカードはサーバーの却下として記録する（`resolver: "system"`、`resolution_reason_code: turn_auto_stopped`）。
+- Stage の **■ 表示を止める** は、その名前どおりページの読み込みだけを止める。ターンは続く。**■ ターンを止める** はチャット画面の **■ 止める** と同じ（同じルート、ターン ID 指定）。
 - **戻ってきたとき。** ターンの実行中に開いた（再読み込みした）チャット画面は、そのことを表示し（「前のターンがサーバーで続いています…」）、そのターンの **■ 止める** を出す（ターン ID を指定するので、その間に始まった別のターンを止めることはない）。終わったら履歴を読み直す。`GET /api/turns` は実行中のチャットのターンに `stoppable: true` を付ける。チャットが動かしていないターン（承認後に再開したターン）は実行中と表示するが、**■ 止める** は出さない。

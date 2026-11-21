@@ -181,7 +181,7 @@ STANDARD = [
         "blocked:identity",
         False,
     ),
-    ("std-warning-write", "warning", "notes/x.md", None, "halt", "filtered", False),
+    ("std-warning-write", "warning", "notes/x.md", None, "halt", "blocked:breaker", False),
     ("std-critical-halt-nohuman", "critical", "notes/x.md", None, "halt", "blocked:hitl", False),
     ("std-critical-halt-approved", "critical", "notes/x.md", "approve", "halt", "executed", True),
     (
@@ -193,7 +193,17 @@ STANDARD = [
         "blocked:identity",
         False,  # #243: the HITL gate shares the path decision; no futile prompt
     ),
-    ("std-critical-readonly", "critical", "notes/x.md", None, "readonly", "filtered", False),
+    ("std-critical-readonly", "critical", "notes/x.md", None, "readonly", "blocked:breaker", False),
+    # #259: an approver connected does not lift the breaker's refusal (no card is shown).
+    (
+        "std-warning-approver",
+        "warning",
+        "notes/x.md",
+        "approve",
+        "halt",
+        "blocked:breaker",
+        False,
+    ),
 ]
 
 
@@ -218,6 +228,9 @@ def test_standard_path(monkeypatch, tmp_path, case, level, target, hitl, action,
         assert not (tmp_path / target).exists()
     if expected.startswith("blocked"):
         assert outcome["result_status"] == "error"
+    if expected == "blocked:breaker":
+        # #259: offered (fixed tool list) and refused with the fixed reason code.
+        assert outcome["offered"] and "breaker_write_refused" in outcome["message"]
 
 
 # --- MCP tools (register_mcp_tools; unknown names default to WRITE) ---------
@@ -226,7 +239,7 @@ MCP = [
     ("mcp-normal-write", "normal", "put_object", "notes/x.md", None, "executed"),
     # Fixed in #145: IdentityGuard now treats live WRITE_TOOLS (incl. MCP) as writes.
     ("mcp-normal-soul", "normal", "put_object", "SOUL.md", None, "blocked:identity"),
-    ("mcp-warning-write", "warning", "put_object", "notes/x.md", None, "filtered"),
+    ("mcp-warning-write", "warning", "put_object", "notes/x.md", None, "blocked:breaker"),
     ("mcp-critical-nohuman", "critical", "put_object", "notes/x.md", None, "blocked:hitl"),
     ("mcp-critical-approved", "critical", "put_object", "notes/x.md", "approve", "executed"),
     ("mcp-critical-declared-read", "critical", "get_object", "notes/x.md", None, "executed"),
@@ -251,6 +264,33 @@ def test_mcp_path(tmp_path, case, level, name, target, hitl, expected):
     outcome = _outcome(agent, model, calls, name, callback)
     _record(case, "mcp", level, outcome, expected)
     assert outcome["verdict"] == expected, outcome
+    if expected == "blocked:breaker":
+        assert outcome["offered"] and "breaker_write_refused" in outcome["message"]
+
+
+def test_mcp_write_refused_at_critical_readonly(tmp_path):
+    """#259: CRITICAL read-only refuses an MCP write at the call; the read still runs."""
+    calls: list = []
+    provider = FakeMcp([RecordingTool("put_object", calls), RecordingTool("get_object", calls)])
+    tool_registry.register_mcp_tools(provider, read_tool_names={"get_object"})
+    try:
+        for name, expected in (("put_object", "blocked:breaker"), ("get_object", "executed")):
+            calls.clear()
+            agent, model = _run(
+                "critical",
+                tool_registry.get_tools(),
+                name,
+                tmp_path / f"{name}.md",
+                critical_action="readonly",
+            )
+            outcome = _outcome(agent, model, calls, name, None)
+            _record(f"mcp-critical-readonly-{name}", "mcp", "critical", outcome, expected)
+            assert outcome["verdict"] == expected, outcome
+            assert outcome["offered"]
+            if expected == "blocked:breaker":
+                assert "breaker_write_refused" in outcome["message"]
+    finally:
+        tool_registry.close_mcp_tools(provider)
 
 
 # --- Delegation (register_subagent_tool: child has its own engine/breaker) ---
@@ -262,6 +302,8 @@ DELEGATION = [
     ("deleg-child-warning", "normal", "warning", "notes/x.md", "blocked:breaker"),
     ("deleg-child-critical", "normal", "critical", "notes/x.md", "blocked:halted-child"),
     ("deleg-parent-critical", "critical", "normal", "notes/x.md", "blocked:hitl"),
+    # #259: the parent still offers the delegate at WARNING; the call is refused by name.
+    ("deleg-parent-warning", "warning", "normal", "notes/x.md", "blocked:breaker"),
 ]
 
 
@@ -315,7 +357,7 @@ def test_delegation_path(tmp_path, case, parent_level, child_level, target, expe
         verdict = "blocked:hitl"
     elif "read-only" in child_text:
         verdict = "blocked:identity"
-    elif "confirmation" in child_text or "circuit breaker" in child_text:
+    elif "breaker_write_refused" in child_text or "breaker_write_refused" in delegate_text:
         verdict = "blocked:breaker"
     else:
         verdict = f"other:{delegate_text[:40]}|{child_text[:40]}"
@@ -324,6 +366,8 @@ def test_delegation_path(tmp_path, case, parent_level, child_level, target, expe
     assert verdict == expected, outcome
     if expected != "executed":
         assert not path.exists()
+    if parent_level == "warning":
+        assert "worker" in model.requests[0]["tool_names"]  # offered, then refused
 
 
 # --- Unknown / unclassified tools -------------------------------------------
@@ -450,6 +494,7 @@ WRITE_INVENTORY = {
     "rss": "network + local persistence",
     "diagram": "writes image files",
     "page_check": "runs the agent's page in a closed browser, writes a screenshot (ADR 0015)",
+    "page_look": "page_check for workspace files only, writes a screenshot (ADR 0015 rev 6, S3)",
     "run_checks": "runs the project's checks in a throwaway copy (ADR 0019; opt-in)",
     "speak": "audio subprocess / Polly network",
     "lsp_diagnostics": "over-block: read-only analysis (pyright/ruff subprocess)",

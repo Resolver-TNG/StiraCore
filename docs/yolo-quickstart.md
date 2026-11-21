@@ -49,7 +49,7 @@ saved in `gateway-config.json` under `"yolo"`; an environment variable wins over
 then shows the value as fixed by that variable). The limits on that page apply from the next
 window without a restart.
 
-Pick any free port (`STIRA_PORT`). Add `STIRA_STAGE=1` for the Stage page. `external`
+Pick any free port (`STIRA_PORT`). The Stage page is on by default (`/stage/`). `external`
 instead of `internal` also offers "External allowed" in the dialog. The start-up log says
 `YOLO allowance: internal (...)` (with the default: one line `YOLO: the Start YOLO button is
 offered (default; ...)`). YOLO needs a platform whose clocks were measured (macOS and

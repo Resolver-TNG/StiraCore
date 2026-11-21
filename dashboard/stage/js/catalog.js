@@ -47,7 +47,10 @@ const TRIGGER_VALUE_RE = /^[a-z][a-z0-9-]{0,15}$/; // `is`: run only while the c
 // Derived numbers an idle entry may use as its playback rate (state sets the tempo only).
 export const RATE_SOURCES = ['breathRate'];
 export const POSE_CONDITIONS = { eyes: ENUM_CHANNELS.eyes, emotion: ['calm', 'curious', 'joy', 'worried', 'tense'] };
-const CURVES = ['const', 'sine', 'pulse', 'keys'];
+const CURVES = ['const', 'sine', 'pulse', 'noise', 'keys'];
+// `noise` (seeded value noise, never repeats) is for idle life signs only: a state or a
+// gesture is an event with a start and an end, and the room's ambient entries stay periodic.
+const NOISE_SCOPES = ['idle'];
 const EASES = ['linear', 'smooth', 'step'];
 const ID_RE = /^[a-z][a-z0-9._-]{0,47}$/;
 const MAX_KEYS = 32;
@@ -67,6 +70,8 @@ function validCurve(channel, c) {
   if (isEnum && c.fn !== 'keys') return null;
   if (c.fn === 'sine') return { fn: 'sine', amp: num(c.amp, -span, span, 0), period: num(c.period, 0.05, 60, 1), phase: num(c.phase, 0, 1, 0), offset: num(c.offset, lo, hi, 0) };
   if (c.fn === 'pulse') return { fn: 'pulse', amp: num(c.amp, -span, span, 0), period: num(c.period, 0.05, 60, 1), duty: num(c.duty, 0.01, 1, 0.5) };
+  // scale: seconds between two turning points of the slowest octave; seed: which curve
+  if (c.fn === 'noise') return { fn: 'noise', amp: num(c.amp, -span, span, 0), scale: num(c.scale, 0.25, 60, 1), seed: Math.round(num(c.seed, 0, 0x7fffffff, 0)), octaves: Math.round(num(c.octaves, 1, 3, 1)), offset: num(c.offset, lo, hi, 0) };
   if (!Array.isArray(c.keys) || c.keys.length === 0 || c.keys.length > MAX_KEYS) return null;
   const keys = [];
   for (const k of c.keys) {
@@ -105,6 +110,7 @@ export function validateEntry(raw) {
     if (!SCOPE_CHANNELS[raw.scope].includes(ch)) return null;
     const c = validCurve(ch, curve);
     if (!c) return null;
+    if (c.fn === 'noise' && !NOISE_SCOPES.includes(raw.scope)) return null;
     channels[ch] = c;
   }
   if (Object.keys(channels).length === 0) return null;
@@ -136,6 +142,13 @@ export function validateEntry(raw) {
   const onlyIf = validCondition(raw.onlyIf);
   if (onlyIf === null) return null;
   if (raw.rateFrom !== undefined && !(RATE_SOURCES.includes(raw.rateFrom) && trigger && trigger.always)) return null;
+  // rateJitter: the tempo of an always-on idle entry drifts by ±amp (seeded noise, slow)
+  let rateJitter = null;
+  if (raw.rateJitter !== undefined) {
+    const j = raw.rateJitter;
+    if (!j || typeof j !== 'object' || Array.isArray(j) || raw.scope !== 'idle' || !(trigger && trigger.always)) return null;
+    rateJitter = { amp: num(j.amp, 0, 0.3, 0), scale: num(j.scale, 2, 60, 8), seed: Math.round(num(j.seed, 0, 0x7fffffff, 0)) };
+  }
   const entry = {
     id: raw.id,
     scope: raw.scope,
@@ -148,6 +161,7 @@ export function validateEntry(raw) {
     trigger,
     onlyIf,
     rateFrom: raw.rateFrom || null,
+    rateJitter,
   };
   return deepFreeze(entry);
 }
@@ -171,9 +185,11 @@ export function buildCatalog(entries) {
 // Built-in catalog. Adding an animation = adding one more object here (or, in stage 3, in a
 // human-approved pack). See docs/stage.md "Adding an animation as data".
 export const CATALOG = [
-  // idle: always-on life signs, they do not encode any state
-  { id: 'idle.breath', scope: 'idle', trigger: { always: true }, rateFrom: 'breathRate', loop: true, duration: 4.2, channels: { 'body.breath': { fn: 'sine', amp: 1, period: 4.2 } }, description: 'Chest and shoulders rise by one pixel.' },
-  { id: 'idle.hair', scope: 'idle', trigger: { always: true }, loop: true, duration: 5.3, channels: { 'hair.sway': { fn: 'sine', amp: 1, period: 5.3, phase: 0.2 } }, description: 'Hair tips sway.' },
+  // idle: always-on life signs, they do not encode any state. No fixed period (#669): the
+  // breath rises for 40 % of a cycle, falls for 48 %, rests, and its tempo drifts by ±15 %
+  // around the state's breathRate; the hair sways on seeded noise instead of a sine.
+  { id: 'idle.breath', scope: 'idle', trigger: { always: true }, rateFrom: 'breathRate', rateJitter: { amp: 0.15, scale: 9, seed: 669 }, loop: true, duration: 4.2, channels: { 'body.breath': { fn: 'keys', keys: [[0, -1], [1.68, 1], [3.7, -1], [4.2, -1]], ease: 'smooth' } }, description: 'Chest and shoulders rise by one pixel.' },
+  { id: 'idle.hair', scope: 'idle', trigger: { always: true }, loop: true, duration: 5.3, channels: { 'hair.sway': { fn: 'noise', amp: 1.4, scale: 2.6, seed: 341, octaves: 2 } }, description: 'Hair tips sway.' },
   { id: 'idle.blink', scope: 'idle', trigger: { every: [2.4, 5.6] }, duration: 0.16, onlyIf: { eyes: ['open', 'wide', 'up', 'half', 'down'] }, channels: { eyes: { fn: 'keys', keys: [[0, 'closed']] } }, description: 'Blink.' },
   { id: 'idle.ear-twitch', scope: 'idle', trigger: { every: [5, 11] }, duration: 0.45, channels: { 'ear.r': { fn: 'keys', keys: [[0, 0], [0.08, 2], [0.2, -1], [0.45, 0]], ease: 'smooth' } }, description: 'Right ear flicks.' },
   // state: run only while the derived state is on (fed by real events)

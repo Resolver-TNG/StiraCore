@@ -247,7 +247,8 @@ def test_values_that_are_not_codes_are_dropped():
         assert key not in out
     assert out["iteration"] == {"run": "other"}
     assert out["cards"] == 0 and out["card"] is False
-    assert out["outcomes"] == [{"what": "other", "tools": ["other", "editor"] + ["other"] * 6}]
+    # at most 10 names (#784: nine scope tools, each once)
+    assert out["outcomes"] == [{"what": "other", "tools": ["other", "editor"] + ["other"] * 8}]
     assert MARKER not in text
 
 
@@ -446,13 +447,31 @@ def _get_while_held(app, lock):
         holder.join(5)
 
 
+def _grant_when_free(app, wait=10.0):
+    """The ``grant`` block of the first answer that is not ``grant_busy``.
+
+    The board never waits for a lock: while any thread holds one on the read path — the
+    test's holder, but also a background pass of the running server — that answer is
+    ``grant_busy`` by design. A single read after the holder's release can meet such a
+    pass (#674: ``KeyError: 'live'`` on a slow runner), so this reads again; ``wait`` only
+    bounds the loop.
+    """
+    deadline = time.monotonic() + wait
+    while True:
+        grant = app.test_client().get("/api/activity").get_json()["grant"]
+        if grant != {"error": "grant_busy"} or time.monotonic() >= deadline:
+            return grant
+        time.sleep(0.02)
+
+
 def test_a_held_service_lock_never_holds_the_activity_answer(stage_c_exec):
     app, _data, ws = stage_c_exec
     _issue(app.test_client(), ws)
     took, body = _get_while_held(app, app.extensions["grants"]._lock)
     assert took < 0.4, took
     assert body["grant"] == {"error": "grant_busy"} and body["state"]["code"] == "idle"
-    assert app.test_client().get("/api/activity").get_json()["grant"]["live"] is True
+    grant = _grant_when_free(app)
+    assert grant.get("live") is True, grant
 
 
 def test_a_held_iteration_lock_never_holds_the_activity_answer(stage_c_exec):
@@ -474,7 +493,7 @@ def test_a_held_iteration_lock_never_holds_the_activity_answer(stage_c_exec):
             took, body = _get_while_held(app, lock)
             assert took < 0.4, took
             assert body["grant"] == {"error": "grant_busy"}
-        assert client.get("/api/activity").get_json()["grant"]["iteration"]["run"] == "running"
+        assert _grant_when_free(app)["iteration"]["run"] == "running"
     finally:
         hold.set()
     assert executor.wait_idle(20)

@@ -84,6 +84,8 @@ KNOWN_TOOLS = frozenset(
         "memory_write",
         "oauth_api_call",
         "page_check",
+        "page_look",
+        "page_review",
         "perplexity_search",
         "propose_procedure",
         "rss",

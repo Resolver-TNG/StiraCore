@@ -16,7 +16,7 @@ from threading import RLock
 from typing import Any
 
 from . import tool_registry as registry
-from .tool_policy import rule_policy
+from .tool_policy import ORIGIN_BOUND_ALWAYS_TOOLS, rule_policy
 
 DEFAULT_PATH = Path(".local/stira/tool-config.json")
 ALL_BLOCKED = {"critical", "emergency", "halt", "halted"}
@@ -763,6 +763,10 @@ class ToolConfig:
                 }
             try:
                 config = cls(**data, path=path)
+                if "enabled_tools" not in data:
+                    # The default names every registered tool; the legacy file named none
+                    # of them, so it does not name an origin-bound Always (read as Ask).
+                    config.enabled_tools -= ORIGIN_BOUND_ALWAYS_TOOLS
                 if record:
                     config.save()  # migrate once: later rollbacks are detected
             except (OSError, ValueError, TypeError):

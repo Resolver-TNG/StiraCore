@@ -328,8 +328,13 @@ def test_the_sequences_reach_every_outcome():
     catch-all ``executor_refused`` needs a failing collaborator)."""
     seen = set().union(*(_run(seed) for seed in range(40)))
     # (the stamp's own reasons — a narrowing, a scheduler stop — and a missing executor are
-    # driven through the real executor in test_grants_tick_interleavings.py)
+    # driven through the real executor in test_grants_tick_interleavings.py; the round
+    # ledger's, the last clause, in test_grants_round_ledger_exec.py)
     others = {"executor_refused", "executor_unavailable", "narrowed", "scheduler_stopped"}
+    others |= {"ledger_unhealthy"}
+    # (#784: the axis refusals come from the executor's round boundary of a grant that
+    # names a page tool — test_grants_page_look.py)
+    others |= {r for r in grant_tick.SKIP_REASONS if r.startswith("axis_")}
     wanted = (set(grant_tick.SKIP_REASONS) - others) | {"started"}
     assert seen >= wanted, wanted - seen
     assert math.isfinite(SPACING)

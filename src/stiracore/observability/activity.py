@@ -451,6 +451,53 @@ def tick_view(tick: Any, board: Any) -> dict[str, Any]:
     return out
 
 
+_ROUND_COUNTS = (
+    "round",
+    "of_max",
+    "wall_ms",
+    "model_calls",
+    "writes",
+    "files_changed",
+    "tokens_in",
+    "tokens_out",
+)
+
+
+def rounds_view(board: Mapping) -> tuple[list[dict[str, Any]], str] | None:
+    """ADR 0028 §5: the board's last rounds of the round ledger and the ledger's state —
+    an allow-list again (the ledger's own is the first): numbers, and codes that are
+    members of the ledger's fixed lists (else ``other``); the state is ``ok`` or a fixed
+    ``round_ledger_*`` code (else ``other``). None: the read carries no rounds."""
+    from stiracore.grants import round_ledger
+
+    rounds = board.get("rounds")
+    if not isinstance(rounds, list):
+        return None
+    rows = []
+    for item in rounds[-GRANT_OUTCOMES:]:
+        if not isinstance(item, Mapping):
+            continue
+        row: dict[str, Any] = {}
+        for key in _ROUND_COUNTS:
+            value = _count(item.get(key))
+            if value is not None:
+                row[key] = value
+        for key, allowed in (
+            ("origin", round_ledger.ORIGINS),
+            ("end_code", round_ledger.END_CODES),
+            ("progress", round_ledger.PROGRESS),
+        ):
+            value = item.get(key)
+            row[key] = value if type(value) is str and value in allowed else "other"
+        stop = item.get("stop")
+        if stop is not None:
+            row["stop"] = stop if type(stop) is str and stop in round_ledger.STOP_CODES else "other"
+        rows.append(row)
+    state = board.get("ledger")
+    known = type(state) is str and (state == "ok" or state in round_ledger.UNHEALTHY_REASONS)
+    return rows, state if known else "other"
+
+
 def grant_view(
     view: Mapping | None,
     board: Mapping | None = None,
@@ -555,13 +602,18 @@ def grant_view(
             detail = _member(item.get("detail"), "detail")
             if detail:
                 row["detail"] = detail
-            row["tools"] = _codes(item.get("tools"), 8)
+            row["tools"] = _codes(item.get("tools"), 10)  # every scope tool, each once
             rows.append(row)
         out["outcomes"] = rows
+        rounds = rounds_view(board)
+        if rounds is not None:
+            out["rounds"], out["ledger"] = rounds  # ADR 0028 §5 (absent before a round)
     else:
         out["card"] = cards > 0
     if view.get("heartbeat_start") is True and tick is not None:
         out["tick"] = tick_view(tick, board)  # W6d: only a flagged grant (switch on)
+    if view.get("self_development") is True:
+        out["self_development"] = True  # #791: only a self-development grant (a flag)
     return out
 
 

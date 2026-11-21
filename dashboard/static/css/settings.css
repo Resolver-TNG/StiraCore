@@ -123,6 +123,16 @@ label.option-card input[type="radio"] { flex-shrink: 0; accent-color: var(--colo
 }
 .custom-model .custom-option { flex: 0 0 auto; }
 .custom-model input[type="text"] { flex: 1; }
+.field-row input[aria-invalid="true"] { border-color: var(--crit-border); }
+/* Token usage card (#195): read-only numbers; "unknown" is text, never 0. */
+.usage-scroll { overflow-x: auto; }
+.usage-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
+.usage-table th, .usage-table td {
+  padding: 7px 10px; border-bottom: 1px solid var(--color-border-subtle);
+  text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.usage-table th:first-child { text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.usage-table tbody tr:first-child > * { font-weight: 600; }
 .endpoint-details { margin: .8rem 0; }
 .endpoint-details summary { cursor: pointer; color: var(--color-text-muted); }
 .save-row { flex-wrap: wrap; }
@@ -386,6 +396,15 @@ input[aria-invalid="true"] { outline: 2px solid var(--crit-border); outline-offs
 }
 .delegation-field .field-error { margin: 0; }
 .delegation-field input:disabled { opacity: .65; cursor: not-allowed; }
+/* #474: memory retention limits (one fieldset per store, built from the schema) and the dry run */
+.ret-store { border: 0; padding: 0; margin: var(--space-3) 0 0; min-width: 0; }
+.ret-store legend { font-weight: 600; padding: 0; }
+.ret-store .delegation-fields { margin-top: var(--space-1); }
+.ret-store .switch-row { margin-top: var(--space-1); }
+.ret-dry { margin-top: var(--space-3); border-top: 1px solid var(--color-border); padding-top: var(--space-2); }
+.ret-dry h3 { font-size: var(--font-size-sm); margin: 0 0 var(--space-1); }
+.ret-dry .facts { max-width: 28rem; }
+#sec-memory-retention .notice { margin: var(--space-2) 0; }
 .yset-field select:disabled, .yset-field input:disabled { opacity: .65; cursor: not-allowed; }
 .yset-field .hint, .yset-field .field-error { margin: 0; }
 .yset-field .switch-row { margin-top: 0; }

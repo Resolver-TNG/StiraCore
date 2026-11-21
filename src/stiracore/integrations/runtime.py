@@ -17,6 +17,8 @@ from stiracore.tools.episodic_emotion import capture_emotion_snapshot, emotion_s
 from stiracore.tools.episodic_formatter import record_episode
 
 DIMENSIONS = ("trust", "curiosity", "vigilance", "attachment", "stability", "satisfaction")
+# #137: vigilance stays in the state and in ``status()`` but is not shown to people.
+DISPLAY_DIMENSIONS = tuple(name for name in DIMENSIONS if name != "vigilance")
 ICONS = {"normal": "🟢", "warning": "🟡", "critical": "🔴", "coherence": "🟡"}
 ERROR_TEXT = "Unable to complete this turn. Check the bot service logs and breaker status."
 logger = logging.getLogger(__name__)

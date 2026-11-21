@@ -137,6 +137,8 @@ def test_every_registered_tool_is_in_exactly_one_class():
         ("diagram", EXEC),
         # Runs the agent's own JavaScript in a browser: a card in every window (ADR 0015 Q2).
         ("page_check", EXEC),
+        # The file-only page tool (ADR 0015 rev 6, S3): a card in every window too.
+        ("page_look", EXEC),
         # Stages a procedural rule for review: a card in every window (#463).
         ("propose_procedure", EXEC),
         # Unclassified = external: MCP / new / odd names, and anything not a str.
@@ -165,6 +167,8 @@ def test_the_class_table(name, expected):
         ("diagram", "external", False),
         ("page_check", "internal", False),
         ("page_check", "external", False),
+        ("page_look", "internal", False),
+        ("page_look", "external", False),
         ("propose_procedure", "internal", False),
         ("propose_procedure", "external", False),
         ("mcp_anything", "external", False),
@@ -176,6 +180,18 @@ def test_what_is_approved_automatically(yolo, human, tool, tier, approved):
     assert (grant is not None) is approved, code
     if not approved:
         assert code == "tier_not_covered"
+
+
+def test_page_look_is_person_only(yolo, human):
+    """ADR 0015 rev 6 (S3): page_look is in PERSON_TOOLS; no window of either tier answers
+    its card, and it is never internal or external."""
+    assert "page_look" in PERSON_TOOLS
+    assert "page_look" not in INTERNAL_TOOLS and "page_look" not in EXTERNAL_TOOLS
+    assert tool_class("page_look") == EXEC
+    # The widest tier (the internal tier is in the table above): no window answers it.
+    _open(yolo, "external")
+    grant, code = _approve(yolo, "page_look")
+    assert grant is None and code == "tier_not_covered"
 
 
 # --- scope: only inside the workspace / write roots (PR #435 review M1) --------------------

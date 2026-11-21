@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{# Stage (#341, #350), served by the chat server only with STIRA_STAGE=1, inside the dashboard shell (side
+{# Stage (#341, #350), served by the chat server unless the Stage is turned off (STIRA_STAGE=0 or the Screens switch), inside the dashboard shell (side
    menu). The scene DOM is the one of dashboard/stage/index.html (the standalone demo) plus the
    composer and the log in the text window; data-stage="live" makes the page read Stira's APIs.
    No inline script or handler; the catalog is base.html's JSON data block. #}
@@ -85,6 +85,8 @@
         </form>
         <div id="stage-images" class="img-chips" aria-label="添付画像" data-i18n-aria-label="chat.attachments" hidden></div>
         <p id="stage-note" class="composer-note" role="status"></p>
+        {# #680: stops the running turn on the server (POST /api/chat/cancel); stage-stop only stops this page's display #}
+        <button id="stage-stop-turn" class="mini stop-turn" type="button" hidden aria-label="実行中のターンをサーバーで止める" data-i18n="stage.stop_turn" data-i18n-aria-label="stage.stop_turn_label">■ ターンを止める</button>
         <button id="stage-history-reload" class="mini" type="button" hidden data-i18n="chat.new_history_reload">再読み込み</button>
         <div id="stage-unsettled" class="unsettled" role="alert" hidden>
           <span id="stage-unsettled-text" class="unsettled-text"></span>
@@ -101,6 +103,8 @@
             <button id="btn-activity" class="mini" type="button" aria-pressed="false" aria-controls="board" data-i18n="stage.act_toggle">稼働状況</button>
             <button id="btn-log" class="mini" type="button" aria-expanded="false" aria-controls="backlog" data-i18n="stage.log_toggle">ログ</button>
             <button id="btn-raw" class="mini" type="button" aria-pressed="false" aria-controls="raw">{{ ja('stage.raw_toggle') if ja is defined else 'Raw' }}</button>
+            {# #809: where the Stage is turned on / off, made the start page and its fps set #}
+            <a id="stage-settings" class="mini" href="/settings#sec-screens" data-i18n="stage.settings_link">設定 › 画面</a>
           </span>
         </div>
       </section>

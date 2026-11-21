@@ -19,7 +19,8 @@ NAV_ITEMS: dict[str, tuple[str, str]] = {
     "artifacts": ("/artifacts", "base.artifacts"),  # #454
     "observability": ("/observability", "base.observability"),
     "settings": ("/settings", "base.settings"),
-    # Opt-in (STIRA_STAGE=1, #341): the chat server adds it to its nav only when enabled.
+    # On by default (#341, #477): the chat server leaves it out of its nav when the Stage is
+    # off (gateway ``stage_enabled: false`` or STIRA_STAGE=0).
     "stage": ("/stage/", "base.stage"),
 }
 # Tool permissions live in the settings hub (#227); /tools redirects there.

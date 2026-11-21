@@ -135,6 +135,25 @@ test('"Run again" uses the existing POST route only and re-renders; nothing else
   assert.equal(h.els.checksBox.hidden, false);
 });
 
+test('the page guard row shows fixed codes and seconds only, and nothing without the value', async () => {
+  let h = harness({ reply: report() });
+  await h.tab.refresh();
+  assert.equal(h.els.facts.children.length, 4);
+  const guard = { guard: 'verified', guard_code: 'guard_verified', axis: 'not_run', measured_age_s: 12 };
+  h = harness({ reply: report({ page_guard: guard }) });
+  await h.tab.refresh();
+  let row = h.els.facts.children[4];
+  assert.equal(row.children[0].textContent, catalog['diagnostics.tab_page_guard']);
+  const age = catalog['diagnostics.tab_page_guard_age'].replace('{seconds}', '12');
+  for (const part of ['verified', 'guard_verified', 'not_run', age]) assert.ok(row.children[1].textContent.includes(part), part);
+  h = harness({ reply: report({ page_guard: { guard: 'unmeasured', guard_code: '/etc/hosts', axis: '<b>x</b>', measured_age_s: -3 } }) });
+  await h.tab.refresh();
+  row = h.els.facts.children[4];
+  assert.equal(row.children[1].textContent.includes('/etc/hosts'), false);
+  assert.equal(row.children[1].textContent.includes('<b>'), false);
+  assert.ok(row.children[1].textContent.includes(catalog['diagnostics.tab_page_guard_no_age']));
+});
+
 test('the script writes no setting: no storage, no other URL, no write verb', () => {
   assert.equal(/localStorage|sessionStorage|\/api\/config|\/api\/tools|method:\s*"(PUT|PATCH|DELETE)"/.test(source), false);
   const urls = [...source.matchAll(/"(\/api\/[^"]*)"/g)].map(m => m[1]);

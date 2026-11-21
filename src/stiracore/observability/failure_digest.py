@@ -23,6 +23,9 @@ Two sources:
   ``tick_skipped_*``. They have no ``turn_id``; the representative is ``event_id`` /
   ``subject_id`` (the grant id).
 
+Each pattern also carries a ``scope`` (#730): one of :data:`SCOPES`, read from the fixed
+tables below. An adaptation of Harness2's invariant / domain split; not verified here.
+
 **Counts are a lower bound.** An event that could not be recorded was dropped
 (``TurnEventRecorder.drop_counts``, #705: integers of the running process); a rotated
 lifecycle segment is gone; ``tick_skipped_*`` is written once per grant and reason in a
@@ -48,13 +51,19 @@ __all__ = [
     "GRANT_FAILURE_REASONS",
     "GRANT_SUBJECTS",
     "LIFECYCLE_FIELDS",
+    "SCOPES",
+    "SCOPE_BY_DENY_CODE",
+    "SCOPE_BY_ERROR_CLASS",
+    "SCOPE_BY_REASON_CODE",
     "SOURCE_PROBLEMS",
     "TOOL_FAILURE_STATUSES",
     "TOOL_FIELDS",
     "UNCLASSIFIED",
     "build",
+    "reason_scope",
     "to_markdown",
     "tool_row",
+    "tool_scope",
 ]
 
 # The only fields read from a ``tool_call.updated`` event (top level, then ``data``).
@@ -75,6 +84,104 @@ GRANT_FAILURE_REASONS = (lifecycle_events.ITERATION_REASONS - _ITERATION_NOT_FAI
 # Why a source gave no rows, as fixed codes (the reader's; plus the lifecycle log's own).
 SOURCE_PROBLEMS = frozenset({"turns_db_missing", "turns_db_unreadable", "lifecycle_log_unreadable"})
 _SOURCE_CODES = SOURCE_PROBLEMS | lifecycle_events.UNHEALTHY_REASONS
+
+# #730: a scope per failure code, as a fixed table (no model reads anything). An adaptation
+# of the invariant / domain split of Harness2's diagnosis, not that method, and whether
+# the split helps an operator here is not verified.
+#   invariant  a fault of procedure that does not depend on the task's subject: the call
+#              itself was wrong (no such tool, bad arguments, a tool a rule forbids), the
+#              agent repeated itself or did nothing
+#   domain     the call or the step was well formed and the task's own subject stopped it:
+#              the tool answered with an error, an input or a decision is missing
+#   unknown    the code does not say which (a raised exception, a time or budget limit, a
+#              failed verification), or it is neither (the harness's own state: breaker,
+#              stores, clock, operator pauses)
+SCOPE_INVARIANT = "invariant"
+SCOPE_DOMAIN = "domain"
+SCOPE_UNKNOWN = "unknown"
+SCOPES = (SCOPE_INVARIANT, SCOPE_DOMAIN, SCOPE_UNKNOWN)
+SCOPE_BY_ERROR_CLASS = {
+    "unknown_tool": SCOPE_INVARIANT,
+    "invalid_input": SCOPE_INVARIANT,
+    "refused": SCOPE_UNKNOWN,  # its deny code decides (``tool_scope``)
+    "tool_failed": SCOPE_DOMAIN,
+    "exception": SCOPE_UNKNOWN,
+}
+SCOPE_BY_DENY_CODE = {
+    "rule_never": SCOPE_INVARIANT,
+    "declared": SCOPE_UNKNOWN,  # a checkpoint; as a failure it only appears on an odd row
+    "other": SCOPE_UNKNOWN,
+}
+SCOPE_BY_REASON_CODE = {
+    **dict.fromkeys(
+        ("iteration_tool_refused", "iteration_no_action", "blocked_loop_detected"),
+        SCOPE_INVARIANT,
+    ),
+    **dict.fromkeys(
+        ("blocked_needs_decision", "blocked_out_of_scope", "blocked_missing_input"),
+        SCOPE_DOMAIN,
+    ),
+    **dict.fromkeys(
+        (
+            "iteration_reported_blocked",  # the goal's ``blocked_*`` event names the blocker
+            "iteration_budget_refused",
+            "iteration_token_count_unavailable",
+            "iteration_approval_timeout",
+            "iteration_run_checks_unavailable",
+            "iteration_timeout",
+            "iteration_model_error",
+            "iteration_failed",
+            "iteration_workspace_changed",
+            "iteration_page_tools_unavailable",
+            "halted_breaker_warning",
+            "halted_breaker_critical",
+            "blocked_no_progress",
+            "blocked_max_iterations",
+            "blocked_same_blocker",
+            "blocked_approval_timeout",
+            "blocked_verification",
+            "blocked_run_checks_unavailable",
+            "blocked_iteration_timeout",
+            "blocked_workspace_changed",
+            "blocked_axis_failed",
+            "tick_skipped_grant_state",
+            "tick_skipped_goal_state",
+            "tick_skipped_awaiting_verification",
+            "tick_skipped_heartbeat_unhealthy",
+            "tick_skipped_breaker",
+            "tick_skipped_kill",
+            "tick_skipped_authority_unhealthy",
+            "tick_skipped_store_unhealthy",
+            "tick_skipped_clock",
+            "tick_skipped_ttl",
+            "tick_skipped_max_iterations",
+            "tick_skipped_budget",
+            "tick_skipped_no_action",
+            "tick_skipped_repeated_failure",
+            "tick_skipped_executor_unavailable",
+        ),
+        SCOPE_UNKNOWN,
+    ),
+}
+
+
+def _scope(table: Mapping[str, str], code: Any) -> str:
+    return table.get(code, SCOPE_UNKNOWN) if type(code) is str else SCOPE_UNKNOWN
+
+
+def tool_scope(error_class: Any, deny_code: Any) -> str:
+    """One of :data:`SCOPES` for a failed tool call. A refusal (and a row without a
+    class) is decided by its ``deny_code``; any other class by itself. A value outside
+    the tables is ``unknown``."""
+    if error_class is None or error_class == "refused":
+        return _scope(SCOPE_BY_DENY_CODE, deny_code)
+    return _scope(SCOPE_BY_ERROR_CLASS, error_class)
+
+
+def reason_scope(reason_code: Any) -> str:
+    """One of :data:`SCOPES` for a lifecycle ``reason_code`` (``unknown`` outside the table)."""
+    return _scope(SCOPE_BY_REASON_CODE, reason_code)
+
 
 _HEX32 = re.compile(r"[0-9a-f]{32}")
 _MAX_TS = 1e11  # as the lifecycle contract: far beyond any real wall clock
@@ -197,9 +304,12 @@ def build(
     skipped = 0
     declared = 0
 
-    def add(label: str, source: str, codes: dict[str, str], ts: float, example: dict) -> None:
+    def add(
+        label: str, source: str, codes: dict[str, str], scope: str, ts: float, example: dict
+    ) -> None:
         group = groups.setdefault(
-            label, {"pattern": label, "source": source, **codes, "count": 0, "rows": []}
+            label,
+            {"pattern": label, "source": source, **codes, "scope": scope, "count": 0, "rows": []},
         )
         group["count"] += 1
         # a total order (two rows equal in all three print the same example)
@@ -223,6 +333,7 @@ def build(
             "tool:" + ":".join(codes.values()),
             "tool",
             codes,
+            tool_scope(row["error_class"], row["deny_code"]),
             row["ts"],
             {"event_id": row["event_id"], "turn_id": row["turn_id"]},
         )
@@ -238,6 +349,7 @@ def build(
             "grant:" + ":".join(codes.values()),
             "grant",
             codes,
+            reason_scope(row["reason_code"]),
             row["ts"],
             {"event_id": row["event_id"], "subject_id": row["subject_id"]},
         )
@@ -316,14 +428,18 @@ def to_markdown(digest: Mapping[str, Any]) -> str:
     ]
     if digest["patterns"]:
         lines += [
-            "| # | Pattern | Count | Share | First (UTC) | Last (UTC) | Representative events |",
-            "|---|---|---|---|---|---|---|",
+            (
+                "| # | Pattern | Count | Share | Scope | First (UTC) | Last (UTC)"
+                " | Representative events |"
+            ),
+            "|---|---|---|---|---|---|---|---|",
         ]
         for rank, pattern in enumerate(digest["patterns"], 1):
             shown = "<br>".join(_example(example) for example in pattern["examples"]) or "-"
             lines.append(
                 f"| {rank} | `{pattern['pattern']}` | {pattern['count']} |"
-                f" {_percent(pattern['share'])} | {_iso(pattern['first_ts'])} |"
+                f" {_percent(pattern['share'])} | {pattern['scope']} |"
+                f" {_iso(pattern['first_ts'])} |"
                 f" {_iso(pattern['last_ts'])} | {shown} |"
             )
     else:
@@ -337,6 +453,11 @@ def to_markdown(digest: Mapping[str, Any]) -> str:
     lines.append(
         "- One incident can appear as more than one pattern (an iteration's end and its"
         " goal's block)."
+    )
+    lines.append(
+        "- Scope is a fixed table from the codes (no model): `invariant` a fault of"
+        " procedure, `domain` the task's own subject, `unknown` not decided by the code."
+        " Whether the split helps is not verified."
     )
     dropped = digest["dropped_events"]
     if dropped is None:

@@ -42,7 +42,7 @@ OBSERVER_PAGES = {
 }
 # stira pages (stage-1 pages are re-checked here with the stricter rules): path -> same tuple
 STIRA_PAGES = {
-    "/memory": ("forest.html", ("js/forest.js",), "css/forest.css"),
+    "/memory": ("forest.html", ("js/forest.js", "js/memory_table.js"), "css/forest.css"),  # #652
     "/chat": ("chat.html", ("js/chat.js",), "css/chat.css"),
     "/settings": ("settings.html", ("js/settings.js", "js/settings_hub.js"), "css/settings.css"),
     "/artifacts": ("artifacts.html", ("js/artifacts.js",), "css/artifacts.css"),  # #454
@@ -234,6 +234,7 @@ def test_stira_nav_and_status(stira):
         "/artifacts",  # #454
         "/observability",
         "/settings",
+        "/stage/",  # on by default (#477); last while ui.home is "chat"
     ]
     assert 'data-status-url="/api/gateway/status"' in html
     # The pending-approvals chip links to the approvals page (#189).
@@ -345,3 +346,65 @@ def test_dimension_and_stimulus_labels_exist():
             assert f"dim.{dim}" in catalog
         for stimulus in EMOTION_MATRIX:
             assert f"stimulus.{stimulus}" in catalog, stimulus
+
+
+# --- #652: the key / importance / retention table on /memory ---------------------------
+
+
+def test_memory_page_has_the_entry_table_and_keeps_the_review_panel(stira):
+    page, html = _nav_of(stira, "/memory")
+    assert {"memory-table", "memtable", "memtable-body", "memtable-status"} <= page.ids
+    for column in ("col_layer", "col_key", "col_importance", "col_retention"):
+        assert f'data-i18n="memtable.{column}"' in html
+    # The forest and the procedural review panel (#463) stay on the page.
+    assert {"refresh", "procedural-review"} <= page.ids
+    # Link to the retention limits (#819); the settings section links back.
+    assert 'href="/settings#sec-memory-retention"' in html
+    _, settings = _nav_of(stira, "/settings")
+    assert 'id="sec-memory-retention"' in settings
+    assert 'href="/memory#memory-table"' in settings
+
+
+def test_settings_has_no_memory_link_where_memory_is_not_served(observer):
+    _, settings = _nav_of(observer, "/settings")
+    assert observer.test_client().get("/memory").status_code == 404
+    assert 'href="/memory' not in settings
+
+
+def test_memory_table_route_of_the_chat_server_sends_no_entry_text(stira, tmp_path):
+    from stiracore.tools.memory_store import MemoryLayer, MemoryStore
+
+    body = "BODY-TEXT-must-never-leave-the-store"
+    MemoryStore(tmp_path / "data" / "memory", "stira").write(
+        MemoryLayer.SEMANTIC, "knowledge/rule", body, {"importance": 0.8, "note": "FREE-TEXT"}
+    )
+    client = stira.test_client()
+    response = client.get("/api/memory/entries?layer=semantic")
+    assert response.status_code == 200
+    text = response.get_data(as_text=True)
+    assert body not in text and "FREE-TEXT" not in text
+    (row,) = response.get_json()["entries"]
+    assert set(row) == {"key", "importance", "importance_state", "retention"}
+    assert row["key"] == "knowledge/rule"
+    assert set(row["retention"]) == {"kind", "half_life_days", "state"}
+    # The page itself is static markup: the rows come from the route above.
+    assert body not in client.get("/memory").get_data(as_text=True)
+    assert client.post("/api/memory/entries?layer=semantic").status_code == 405
+
+
+def test_memory_table_node_tests():
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not found on PATH")
+    proc = subprocess.run(
+        [node, "--test", str(ROOT / "tests" / "memory_table_test.cjs")],
+        capture_output=True,
+        text=True,
+        cwd=str(ROOT),
+        timeout=120,
+        check=False,
+    )
+    assert proc.returncode == 0, (proc.stdout + proc.stderr)[-6000:]

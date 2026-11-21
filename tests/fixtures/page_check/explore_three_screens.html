@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>three screens</title>
+<style>
+  body { margin: 0; font: 16px/1.5 sans-serif; color: #111; background: #fff; }
+  main { padding: 24px; min-height: 720px; }
+  button { font-size: 16px; padding: 8px 16px; }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>
+  // Three screens, one button each: Start -> Middle -> The End -> (back to) Start.
+  var screens = [
+    { title: "Tea Shop", body: "Welcome to the shop.", button: "Start" },
+    { title: "Brewing", body: "The kettle is on.", button: "Serve" },
+    { title: "The End", body: "Thank you for playing.", button: "Play again" }
+  ];
+  var at = 0;
+  function show() {
+    var s = screens[at];
+    document.getElementById("app").innerHTML =
+      "<h1>" + s.title + "</h1><p>" + s.body + "</p><button id=\"go\">" + s.button + "</button>";
+    document.getElementById("go").addEventListener("click", function () {
+      at = (at + 1) % screens.length;
+      show();
+    });
+  }
+  show();
+</script>
+</body>
+</html>

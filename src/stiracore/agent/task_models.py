@@ -1,7 +1,9 @@
 """Per-task model routing (#258, #585): which model a side task such as a summary uses.
 
 Every side task Stira runs on a model is named in :data:`TASKS`. Each one uses the chat
-model (``inherit``) unless the operator routes it, in this order:
+model (``inherit``) unless the operator routes it — except a task whose default is ``off``
+(``visual_review``): unset, it has no model at all and its feature is not registered. In
+this order:
 
 1. the environment variable ``STIRA_TASK_MODEL_<TASK>`` (upper case, e.g.
    ``STIRA_TASK_MODEL_TOOL_SUMMARY``),
@@ -43,8 +45,11 @@ from stiracore.providers.spec import ModelSpec, normalize_provider
 logger = logging.getLogger(__name__)
 
 INHERIT = "inherit"
+# The default of a task that is **off until a person routes it** (``visual_review``, ADR
+# 0015 rev 6): unset = no route, nothing built, nothing sent. Never a value a person writes.
+OFF = "off"
 ENV_PREFIX = "STIRA_TASK_MODEL_"
-SOURCES = ("env", "config", "inherit")
+SOURCES = ("env", "config", "inherit", "off")
 _TASK_NAME = re.compile(r"\A[a-z][a-z0-9_]{0,40}\Z")
 _MAX_REF = 200
 
@@ -60,6 +65,11 @@ class TaskInfo:
     # Record (and fail closed on) the call also when it inherits the chat model: a new task
     # whose cost must be visible either way. False keeps an existing caller as it was.
     audit_inherit: bool = False
+    # The call carries images: the model's capability row must say ``vision`` (``inherit``:
+    # the chat model's row), else the start is refused ``no_vision``.
+    vision: bool = False
+    # A cap on the output tokens of a model built for this task (None: the provider's).
+    max_output_tokens: int | None = None
 
 
 TASKS: Mapping[str, TaskInfo] = MappingProxyType(
@@ -76,6 +86,15 @@ TASKS: Mapping[str, TaskInfo] = MappingProxyType(
                 "context_summary",
                 "The conversation summary of context management (#258, opt-in). No tools.",
             ),
+            TaskInfo(
+                "visual_review",
+                "Remarks on page_review's screenshots (ADR 0015 rev 6). Off unless set; "
+                "needs a vision model; no tools; the images go to this model's provider.",
+                default=OFF,
+                audit_inherit=True,
+                vision=True,
+                max_output_tokens=800,
+            ),
         )
     }
 )
@@ -89,7 +108,10 @@ CODES = (
     "credentials_not_configured",
     "tools_not_allowed",
     "model_failed",
+    "no_vision",
 )
+# Extra integer fields of a call's record (see ``TaskModelRouter._add``).
+CALL_FACTS = ("images", "bytes", "rubric_version")
 
 
 class TaskModelError(ValueError):
@@ -121,23 +143,28 @@ def check_config(value: Any) -> dict[str, str]:
 
 @dataclass(frozen=True)
 class TaskRoute:
-    """Where one task's calls go. ``spec`` is None for ``inherit``."""
+    """Where one task's calls go. ``spec`` is None for ``inherit`` — and for a task that
+    is off (``off``: no model at all, never the chat model)."""
 
     task: str
     source: str
     spec: ModelSpec | None
+    off: bool = False
 
     @property
     def inherit(self) -> bool:
+        """No routed model. Also true for an ``off`` route (read ``off`` first): callers
+        that print or build a routed model keep skipping it."""
         return self.spec is None
 
     def describe(self, main: ModelSpec | None) -> dict[str, Any]:
-        spec = self.spec or main
+        spec = None if self.off else (self.spec or main)
         return {
             "task": self.task,
             "description": TASKS[self.task].description,
             "source": self.source,
-            "inherit": self.inherit,
+            "inherit": self.inherit and not self.off,
+            "off": self.off,
             "provider": spec.provider if spec else None,
             "model_id": spec.model_id if spec else None,
             "env": env_name(self.task),
@@ -209,11 +236,16 @@ def _route(
         source, ref = "env", raw
     elif task in config:
         source, ref = "config", config[task]
+    elif TASKS[task].default == OFF:
+        return TaskRoute(task, "off", None, off=True)  # unset = off: nothing to check or build
     else:
         source, ref = "inherit", TASKS[task].default
     spec = parse_ref(task, ref, main, region)
     if spec is not None and check:
         _check_route(task, spec, main, env)
+    if check and TASKS[task].vision and not capabilities_for(spec or main).vision:
+        # ``inherit`` written out: the chat model's row; a routed model: its own row.
+        raise TaskModelError("no_vision", task, "the model has no vision capability")
     return TaskRoute(task, source, spec)
 
 
@@ -257,7 +289,10 @@ def describe_routes(
     rows = []
     for task in TASKS:
         try:
-            row = _route(task, config, env, main, region, True).describe(main)
+            route = _route(task, config, env, main, region, True)
+            if route.off:
+                continue  # an unset off-by-default task has no row (nothing runs)
+            row = route.describe(main)
         except (TaskModelError, ValueError) as error:
             row = TaskRoute(task, "inherit", None).describe(main)
             row.update(error=getattr(error, "code", "invalid_value"), provider=None, model_id=None)
@@ -283,6 +318,9 @@ class RoutedModel(Model):
     :class:`TaskModelError` (no fallback); ``inherit`` (``record`` None) passes the chat
     model's events and errors through unchanged."""
 
+    # Set on a per-call copy (``for_call``): whether the call's own record is still wanted.
+    keep: Callable[[], bool] | None = None
+
     def __init__(
         self, task: str, inner: Model, provider: str | None, model_id: str | None, record
     ) -> None:
@@ -291,6 +329,17 @@ class RoutedModel(Model):
         self.provider = provider
         self.model_id = model_id
         self._record = record
+
+    def for_call(self, facts: Mapping[str, Any]) -> RoutedModel:
+        """A copy for one call with its own ``call_facts`` (and ``keep``): a call that
+        still runs behind never shares them with the next one."""
+        call = RoutedModel(self.task, self.inner, self.provider, self.model_id, self._record)
+        call.call_facts = dict(facts)
+        return call
+
+    def _write(self, status: str, usage: Any, reason: str | None, started: Any = None) -> None:
+        if self.keep is None or self.keep():
+            self._record(self, status, usage, reason, started)
 
     @property
     def stateful(self) -> bool:
@@ -332,9 +381,9 @@ class RoutedModel(Model):
         if reason is not None:
             # Raised outside the handler: no __cause__ / __context__, so the provider's
             # message (it can hold a key, a signed URL, page text) never reaches a traceback.
-            self._record(self, "error", usage, reason, started)
+            self._write("error", usage, reason, started)
             raise TaskModelError("model_failed", self.task, reason=reason)
-        self._record(self, "success", usage, None, started)
+        self._write("success", usage, None, started)
 
 
 class TaskModelRouter:
@@ -360,6 +409,8 @@ class TaskModelRouter:
         if task not in TASKS:
             raise TaskModelError("unknown_task", None)
         route = self.routes.get(task)
+        if TASKS[task].default == OFF and (route is None or route.off):
+            return None  # off: no model, and never the chat model in its place
         if route is None or route.spec is None:
             # inherit: the chat model behind the same boundary (no tools for a task that takes
             # none), passed through otherwise: the same request, its own errors, no record —
@@ -376,7 +427,7 @@ class TaskModelRouter:
         if model is None:
             failed = False
             try:
-                inner = self._build(route.spec) if self._build else _default_build(route.spec)
+                inner = self._build(route.spec) if self._build else _default_build(route.spec, task)
             except Exception:  # noqa: BLE001 - no fallback to another model
                 failed = True
             if failed:  # raised outside the handler: the build error never chains
@@ -398,6 +449,14 @@ class TaskModelRouter:
             record["reason"] = reason
         if started is not None:
             record["duration_ms"] = int((time.monotonic() - started) * 1000)
+        # Facts of the call the caller set on the model (``visual_review``: image count,
+        # total bytes, rubric version). Allow-listed integers only; never text.
+        facts = getattr(model, "call_facts", None)
+        if isinstance(facts, Mapping):
+            for name in CALL_FACTS:
+                value = _count(facts.get(name))
+                if value is not None:
+                    record[name] = value
         self.records = [*self.records[-49:], record]
         logger.info(
             "task model call: task=%s provider=%s model=%s status=%s in=%s out=%s",
@@ -414,28 +473,52 @@ class TaskModelRouter:
             except Exception:  # noqa: BLE001 - telemetry never breaks the task
                 logger.warning("task model record dropped")
 
+    def note(self, model: RoutedModel, status: str, reason: str | None, started=None) -> None:
+        """A record for a call the model's own stream could not write (cancelled at the
+        caller's time limit): same row, no usage."""
+        self._add(model, status, None, reason, started)
+
     def describe(self) -> list[dict[str, Any]]:
-        return [self.routes[task].describe(self.main) for task in TASKS if task in self.routes]
+        """The settings rows; a task that is off has none (nothing runs for it)."""
+        return [
+            self.routes[task].describe(self.main)
+            for task in TASKS
+            if task in self.routes and not self.routes[task].off
+        ]
 
     def routed(self) -> bool:
         return any(route.spec is not None for route in self.routes.values())
 
 
-def _default_build(spec: ModelSpec) -> Model:
+def _default_build(spec: ModelSpec, task: str | None = None) -> Model:
     from stiracore.providers import create_model, resolve_max_output_tokens
 
-    return create_model(spec, max_tokens=resolve_max_output_tokens(None, spec))
+    tokens = resolve_max_output_tokens(None, spec)
+    cap = TASKS[task].max_output_tokens if task in TASKS else None
+    if cap is not None:
+        tokens = cap if tokens is None else min(tokens, cap)
+    return create_model(spec, max_tokens=tokens)
 
 
 def inherit_router(main: ModelSpec | None = None) -> TaskModelRouter:
-    """Every task on the chat model (nothing configured)."""
-    return TaskModelRouter({t: TaskRoute(t, "inherit", None) for t in TASKS}, main)
+    """Every task on the chat model (nothing configured); a task that is off stays off."""
+    return TaskModelRouter(
+        {
+            t: TaskRoute(t, "off", None, off=True)
+            if info.default == OFF
+            else TaskRoute(t, "inherit", None)
+            for t, info in TASKS.items()
+        },
+        main,
+    )
 
 
 __all__ = [
+    "CALL_FACTS",
     "CODES",
     "ENV_PREFIX",
     "INHERIT",
+    "OFF",
     "SOURCES",
     "TASKS",
     "RoutedModel",

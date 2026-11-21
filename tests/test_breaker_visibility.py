@@ -16,7 +16,7 @@ import pytest
 
 from stiracore.agent import nxp_agent
 from stiracore.agent.context_assembler import ContextAssembler
-from stiracore.core import BreakLevel, NeuralState, StiraConfig, StiraEngine
+from stiracore.core import BreakLevel, BreakResult, NeuralState, StiraConfig, StiraEngine
 from stiracore.tools.memory_store import MemoryStore
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -186,9 +186,16 @@ def test_prompt_breaker_matches_enforced_tools_each_turn(wired):
         writes_restricted = bool(
             {"BLOCK_WRITES", "REQUIRE_CONFIRMATION"} & set(snapshot["actions"])
         )
-        # What the prompt tells the model is exactly what the router enforced.
-        assert ("file_write" in tool_names) is (not writes_restricted)
-        assert "file_read" in tool_names
+        # #259: the list is fixed at every level; what the prompt tells the model is
+        # what the call-time guard enforces (the guard reads this turn's snapshot).
+        assert tool_names == {"file_read", "file_write"}
+        engine = agent.engine
+        engine._current_break_result = BreakResult(level=level, actions=engine._actions_for(level))
+        try:
+            refused = not agent.identity_guard.check_tool_call("file_write", {}).allowed
+        finally:
+            engine._current_break_result = None
+        assert refused is writes_restricted
 
         # Identity: only NXPAgent's live notice, never a second static copy.
         assert "## Identity Anchors" not in prompt

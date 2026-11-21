@@ -13,6 +13,37 @@ route a task to another model, for example a smaller one of the same provider.
 |---|---|---|
 | `tool_summary` | `web_fetch(url, summarize=True, focus=…)` (#585, [tools/web-fetch.md](tools/web-fetch.md)). The output is untrusted data. Recorded also when it inherits the chat model. | none |
 | `context_summary` | The conversation summary of context management (#258, opt-in `context_management`). | none |
+| `visual_review` | `page_review(run)` (ADR 0015 rev 6, #774, [verification.md](verification.md)): remarks on one page run's screenshots. **Unset = off** (see below). Needs a `vision` model. The output is untrusted data. Recorded also when it inherits the chat model. | none |
+
+### `visual_review`: off unless you set it
+
+Unlike the other tasks, an unset `visual_review` is **off, not `inherit`**: no model is
+built, the tool `page_review` is not registered (the tool definitions the chat model gets are
+byte-identical), nothing is sent, and the task has no row on the settings page.
+
+* To use the chat model as the reviewer, write `inherit` out. It is accepted only when the
+  chat model's capability row says `vision`. If you switch the chat model on the settings
+  page while the server runs, a review follows the new model only when it is of the same
+  provider and has `vision` (a capability override in `agent-config.json` counts only for
+  the model the server started with); otherwise `page_review` is refused
+  `reviewer_changed` and nothing is sent until you switch back or restart.
+* A routed model must have `vision` too. Otherwise the start is refused (`no_vision`).
+* **Where the pixels go:** to this model's provider and nowhere else. A local model (e.g.
+  `ollama:llama3.2-vision:11b`, or `inherit` with a local vision chat model) keeps them on
+  the machine. A remote one receives whatever the page drew, which can include workspace
+  text; pixels cannot be masked.
+* It also needs a budget: `visual_review.daily_tokens` in `gateway-config.json` (a positive
+  integer; **no default**). Without it every `page_review` call is refused `review_budget`.
+* The model built for this task is capped at 800 output tokens. With `inherit` the chat
+  model keeps its own token cap. In both cases Stira closes the answer's stream once it
+  passes 3,200 characters (`review_unparsable`).
+* No fallback: a reviewer that fails, times out (60 s; Stira stops waiting then, whatever
+  the provider does) or answers outside the schema gives
+  `review: {status: "error", code}`. The chat model is never asked instead.
+
+```json
+{"task_models": {"visual_review": "ollama:llama3.2-vision:11b"}, "visual_review": {"daily_tokens": 200000}}
+```
 
 Not routed (they keep their own settings or need the chat model):
 
@@ -52,8 +83,9 @@ Values:
 * At start-up, the server refuses to start (exit 2, a fixed code and the task name, never the
   value) when: the task or the `STIRA_TASK_MODEL_*` variable names an unknown task
   (`unknown_task`), the model is not in the capability table (`unknown_model`), the provider's
-  SDK is missing (`provider_unavailable`), or the credentials are not set up
-  (`credentials_not_configured`).
+  SDK is missing (`provider_unavailable`), the credentials are not set up
+  (`credentials_not_configured`), or `visual_review` names a model without `vision`
+  (`no_vision`; with `inherit`, the chat model).
 * When a routed model fails at call time the **task** fails (`model_failed` with a reason
   code). Stira never retries on the chat model or another model: the cost and the
   destination of the data do not change without you knowing. For `context_summary` this is
@@ -74,7 +106,9 @@ Values:
 Each routed call — and each `tool_summary` call also when it inherits — adds one turn event
 `task_model.call` (shown on `/observability`), one audit row `audit.task_model.call` and one
 log line: the task, provider, model id, input and output tokens, the status (`success` /
-`error` / `refused`) and a reason code. Never the text, never a URL.
+`error` / `refused`) and a reason code. Never the text, never a URL. A `visual_review` call
+(recorded also on `inherit`) adds three numbers: `images`, `bytes` (their total size) and
+`rubric_version`. Never the pixels or a note.
 
 ## Settings page
 

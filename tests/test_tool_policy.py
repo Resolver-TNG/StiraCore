@@ -83,6 +83,7 @@ def test_trust_all_migrates_to_always_except_exec_class(tmp_path):
     config = ToolConfig(mode="trust_all", path=tmp_path / "t.json")
     for name in _names():
         held = tool_registry.is_exec_tool(name) or name in tp.NO_ALWAYS_TOOLS  # ADR 0015
+        held = held or tp.always_capped(name, config)  # a conditional Always, capped here
         expected = "ask" if held else "always"
         assert config.policy_of(name) == expected, name
     for name in tool_registry.EXEC_TOOL_NAMES:
@@ -623,6 +624,32 @@ def test_a_saved_always_for_page_check_is_read_as_ask_and_asks(tmp_path, caplog,
     agent("go")
     assert reject.called and reject.call_args.args[0].tool_name == "page_check"
     assert calls == []
+
+
+def test_page_look_saved_always_reads_as_ask(tmp_path, monkeypatch):
+    """ADR 0015 rev 6 (S4): page_look has a conditional Always. A saved Always whose
+    conditions do not hold (here: no axis result, no turn) is read as Ask by the server's
+    rule reader; the settings row keeps the saved rule and names the cap. The effective
+    cases and the save are in ``tests/test_page_look_always.py``."""
+    from dashboard.stira_server import _tool_policy_reader
+
+    tool_registry.WRITE_TOOLS["page_look"] = RecordingTool("page_look", [])
+    assert tp.always_allowed("page_look") is True
+    assert "page_look" in tp.CONDITIONAL_ALWAYS_TOOLS
+    assert "page_look" not in tp.NO_ALWAYS_TOOLS
+    store = _custom_store(tmp_path, enabled={"page_look"})  # a saved Always
+    assert tp.warn_saved_always(store.load_tools()) == []
+    assert tp.always_capped("page_look", store.load_tools()) is True
+    assert _tool_policy_reader(store)("page_look")[0] == "ask"
+    assert ToolConfig(mode="trust_all").policy_of("page_look") == "ask"
+    assert tp.required_ask({"page_look"}, set()) == set()
+    rows = _client(store).get("/api/config/hub").get_json()["tools"]
+    (row,) = [r for r in rows if r["name"] == "page_look"]
+    assert (row["policy"], row["always_allowed"], row["grant"]) == ("always", True, None)
+    from stiracore.tools.page_look import CAP_CODES
+
+    assert row["always_capped"] is True and row["always_cap_reason"] in CAP_CODES
+    assert row["stack"]["rule"] == {"decision": "prompt", "reason": "rule_always_capped"}
 
 
 def test_stira_breaker_transition_keeps_never_tools_out(tmp_path, monkeypatch):

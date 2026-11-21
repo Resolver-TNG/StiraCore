@@ -70,6 +70,64 @@ _CHECKS_KINDS = frozenset({"pytest", "unittest", "node_test", "ruff", "compileal
 _CHECKS_COUNTS = frozenset({"passed", "failed", "errors", "skipped", "findings"})
 _CHECKS_CONTAINMENT = frozenset({"os_sandbox", "limits_only"})
 _CHECKS_TARGET = re.compile(r"workspace:[0-9a-f]{64}")
+# ADR 0015 Addendum rev 6 ("Records (allow-list)"): one row per page tool call that no
+# person's card answered. Codes, counts and hashes only; a field outside PAGE_FIELDS is
+# refused (nothing written), as the round ledger refuses an unknown key.
+PAGE_TOOLS = frozenset({"page_look", "page_review", "view_image"})
+PAGE_STATUSES = frozenset({"ok", "truncated", "refused", "error"})
+PAGE_ANSWERED_BY = frozenset({"rule_always", "grant", "person", "yolo"})
+PAGE_ORIGINS = frozenset({"chat_person", "yolo_window", "grant"})
+PAGE_COUNTS = frozenset(
+    {
+        "steps",
+        "page_errors",
+        "console_errors",
+        "missing_files",
+        "network_blocked",
+        "outside_workspace",
+        "shots",
+        "elapsed_ms",
+    }
+)
+PAGE_FIELDS = frozenset(
+    {
+        "reason",
+        "answered_by",
+        "grant",
+        "round",
+        "origin",
+        "window",
+        "axis",
+        "guard",
+        "target",
+        "actions",
+        "counts",
+        "shots",
+    }
+)
+_PAGE_WINDOW = re.compile(r"[0-9a-f]{32}")  # the open YOLO window's id (S4), never a name
+_PAGE_TARGET = re.compile(r"page:[0-9a-f]{64}")
+_PAGE_GRANT = re.compile(r"[0-9a-f]{32}")
+_PAGE_SHOTS_MAX = 4
+# "review only" (S6): numbers, the reviewer's provider and model id, issue counts by
+# severity. Accepted for ``page_review`` rows only. Never a note, pixels or a path.
+PAGE_REVIEW_FIELDS = frozenset(
+    {
+        "images",
+        "bytes",
+        "rubric_version",
+        "provider",
+        "model",
+        "input_tokens",
+        "output_tokens",
+        "issues",
+    }
+)
+_PAGE_SEVERITIES = frozenset({"high", "medium", "low"})
+# The reviewer's name in a ``page_review`` row (and on its card): a provider word and a
+# model id — never a URL (``scheme://``). ``page_review`` checks both before it sends.
+PAGE_REVIEWER_PROVIDER = re.compile(r"[a-z][a-z0-9_]{0,40}")
+PAGE_REVIEWER_MODEL = re.compile(r"(?!.*://)[A-Za-z0-9][A-Za-z0-9._:/@-]{0,199}")
 # #457: a file tool's refused read (the read floor, read roots, the secret-path floor).
 READ_REFUSAL_CODES = frozenset({"E_READ_FLOOR", "E_READ_OUTSIDE_ROOTS", "E_READ_SECRET_PATH"})
 # #536: a file_write / editor refused on the secret-path floor.
@@ -367,9 +425,14 @@ class AuditChain:
         output_tokens: Any = None,
         reason: Any = None,
         duration_ms: Any = None,
+        images: Any = None,
+        bytes: Any = None,
+        rubric_version: Any = None,
     ) -> str:
         """One ``audit.task_model.call`` row: the side task, its provider and model id, the
-        tokens, the status and a reason code — never a prompt, a summary or a URL."""
+        tokens, the status and a reason code — never a prompt, a summary or a URL. A
+        ``visual_review`` call adds the image count, their total bytes and the rubric
+        version (numbers; never pixels)."""
 
         def code(value, pattern):
             return value if isinstance(value, str) and pattern.fullmatch(value) else None
@@ -386,6 +449,9 @@ class AuditChain:
             "output_tokens": count(output_tokens),
             "reason": code(reason, _REASON),
             "duration_ms": count(duration_ms),
+            "images": count(images),
+            "bytes": count(bytes),
+            "rubric_version": count(rubric_version),
         }
         return self._emit("task_model", "call", attributes)
 
@@ -444,6 +510,94 @@ class AuditChain:
         if target is not None and attributes["target"] is None:
             attributes["target"] = "invalid"
         return self._emit("checks", outcome, attributes)
+
+    def record_page(self, tool: str, status: str, **fields: Any) -> str:
+        """One ``audit.page.<tool>.<status>`` row (ADR 0015 Addendum rev 6, "Records"):
+        a page tool call that no person's card answered (``page_review``: every call, a
+        person's card included). Only the fields of
+        :data:`PAGE_FIELDS`; another field, or a value outside its fixed form, raises
+        ``ValueError`` and nothing is written. Never page text, a title, a selector, typed
+        text, pixels, a path, a URL, a host or a port."""
+        from stiracore.tools.page_check import ACTION_KINDS, AXIS_CODES, GUARD_STATES
+
+        if tool not in PAGE_TOOLS:
+            raise ValueError(f"unknown page tool {tool!r}")
+        if status not in PAGE_STATUSES:
+            raise ValueError(f"unknown page status {status!r}")
+        extra = sorted(
+            set(fields) - PAGE_FIELDS - (PAGE_REVIEW_FIELDS if tool == "page_review" else set())
+        )
+        if extra:
+            raise ValueError(f"fields outside the page record allow-list: {extra}")
+
+        def member(name: str, allowed: Any) -> Any:
+            value = fields.get(name)
+            if value is not None and value not in allowed:
+                raise ValueError(f"page record field {name} is outside its allow-list")
+            return value
+
+        def shaped(name: str, pattern: re.Pattern[str]) -> Any:
+            value = fields.get(name)
+            if value is not None and not (isinstance(value, str) and pattern.fullmatch(value)):
+                raise ValueError(f"page record field {name} has the wrong form")
+            return value
+
+        def numbers(name: str, keys: Any) -> dict[str, int] | None:
+            value = fields.get(name)
+            if value is None:
+                return None
+            if not isinstance(value, dict) or not all(
+                k in keys and type(v) is int and 0 <= v <= 10**9 for k, v in value.items()
+            ):
+                raise ValueError(f"page record field {name} is outside its allow-list")
+            return dict(sorted(value.items()))
+
+        reason = fields.get("reason")
+        if reason is not None and not (isinstance(reason, str) and _REASON.fullmatch(reason)):
+            reason = "unknown"  # e.g. an exception's type name: never kept
+        round_number = fields.get("round")
+        if round_number is not None and not (type(round_number) is int and round_number >= 0):
+            raise ValueError("page record field round has the wrong form")
+        shots = fields.get("shots")
+        if shots is not None and not (
+            isinstance(shots, list)
+            and len(shots) <= _PAGE_SHOTS_MAX
+            and all(isinstance(s, str) and _DIGEST.fullmatch(s) for s in shots)
+        ):
+            raise ValueError("page record field shots has the wrong form")
+        attributes = {
+            "reason": reason,
+            "answered_by": member("answered_by", PAGE_ANSWERED_BY),
+            "grant": shaped("grant", _PAGE_GRANT),
+            "round": round_number,
+            "origin": member("origin", PAGE_ORIGINS),
+            "window": shaped("window", _PAGE_WINDOW),
+            "axis": member("axis", AXIS_CODES),
+            "guard": member("guard", GUARD_STATES),
+            "target": shaped("target", _PAGE_TARGET),
+            "actions": numbers("actions", {*ACTION_KINDS, "invalid"}),
+            "counts": numbers("counts", PAGE_COUNTS),
+            "shots": shots,
+        }
+
+        def number(name: str, most: int = 10**12) -> int | None:
+            value = fields.get(name)
+            if value is not None and not (type(value) is int and 0 <= value <= most):
+                raise ValueError(f"page record field {name} has the wrong form")
+            return value
+
+        if tool == "page_review":
+            attributes.update(
+                images=number("images", _PAGE_SHOTS_MAX),
+                bytes=number("bytes"),
+                rubric_version=number("rubric_version"),
+                provider=shaped("provider", PAGE_REVIEWER_PROVIDER),
+                model=shaped("model", PAGE_REVIEWER_MODEL),
+                input_tokens=number("input_tokens"),
+                output_tokens=number("output_tokens"),
+                issues=numbers("issues", _PAGE_SEVERITIES),
+            )
+        return self._emit("page", f"{tool}.{status}", attributes, tool_name=tool)
 
     def record_artifact(
         self,

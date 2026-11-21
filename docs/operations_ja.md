@@ -28,7 +28,7 @@ curl -s http://127.0.0.1:5555/api/gateway/status
 
 ## 2. オプトイン機能
 
-すべて既定 OFF で、起動時に読みます（変えたら再起動）。
+Stage ページ（最後の行。既定で有効、無効にできる）以外はすべて既定 OFF で、どれも起動時に読みます（変えたら再起動）。
 
 | 機能 | 有効にする | 確認 | ドキュメント |
 |---|---|---|---|
@@ -37,11 +37,11 @@ curl -s http://127.0.0.1:5555/api/gateway/status
 | プロンプトキャッシュ（Bedrock Claude） | `"prompt_cache": true` または `STIRA_PROMPT_CACHE=1` | `/api/gateway/status` → `prompt_cache.active` | [prompt-cache.md](prompt-cache.md) |
 | コンテキスト管理 | `"context_management": true` または `STIRA_CONTEXT_MANAGEMENT=1` | `/api/gateway/status` → `context_management.mode` | [context-management.md](context-management.md) |
 | 実行系ツール | `STIRA_ENABLE_EXEC_TOOLS=1`（呼び出しは毎回確認） | `/settings#sec-tools` | [ADR 0010](adr/0010-tool-policy-gate-stack.md) |
-| Stage ページ（読み取り専用の表示。承認は既存 API 経由） | `STIRA_STAGE=1` | `/stage/`（ナビに「ステージ」） | [stage.md](stage.md) |
+| Stage ページ（読み取り専用の表示。承認は既存 API 経由） | 既定で有効。`"stage_enabled": false`（設定 → 画面）または `STIRA_STAGE=0` で無効 | `/stage/`（ナビに「ステージ」） | [stage.md](stage.md) |
 
 `STIRA_HEARTBEAT`、`STIRA_PROMPT_CACHE`、`STIRA_CONTEXT_MANAGEMENT` に `0`（またはそれ以外の空でない値）を入れると、設定ファイルの `true` を OFF にします。
 
-どれも記憶の蒸留・レビュー・忘却はしません。記憶の整理は手動のコマンドで、OS のタイマーから実行することもできます: [memory-maintenance_ja.md](memory-maintenance_ja.md)。
+どれも記憶の蒸留・レビュー・忘却はしません。ただし、スケジューラがオンのとき人が作った `memory_harvest` ジョブだけは蒸留します（rule 蒸留器、staging のみ。[guide-scheduler-heartbeat_ja.md](guide-scheduler-heartbeat_ja.md)）。ジョブの作成・再開には確認済みの `scheduler_loosen` 操作が要ります。記憶の整理は手動のコマンドで、OS のタイマーから実行することもできます: [memory-maintenance_ja.md](memory-maintenance_ja.md)。
 
 ## 3. `stira doctor`
 
@@ -96,6 +96,8 @@ stira doctor --root ~/work --no-write-test
 ハッシュ連鎖の観測ストアは権限を何も生みません。連鎖が壊れても記録が止まるだけです（ターンは動き続ける）。`/api/gateway/status` には出ないので、コピーに対して `SQLiteEventStore(path).verify_chain()` / `chain_status()` で確認します。新しい連鎖から始めるには、サーバーを止めて `events.db`、`events.db-wal`、`events.db-shm`、`events.db.head` を一緒に退避します。クラッシュ後の復旧イベント（`chain.recovered`）は想定どおりで、最後のトランザクションが欠けている可能性を記録したものです。詳細: [ADR 0009](adr/0009-eventstore-chain.md)。
 
 **ターンのイベントの置き場。** チャットサーバーでは `turns.db`（`TurnEventRecorder` が書く）がターンのイベント（ターン・ツール呼び出し・承認・ブレーカー遷移）の唯一の正本です。`/chat`、`/api/turns`、`/api/turns/<id>/events`、Stage、`/observability`（`/api/observability/events` と `/api/observability/snapshot`）はすべてこれを読むので、件数は一致します。ハッシュ連鎖の `events.db` はそのコピーではなく、チャットサーバーが書くのは監査記録（`/new`、#350）だけです。汎用の `create_sse_blueprint` は連鎖ストアを書くアプリ用で、今はどのアプリも使っていません（チャットサーバーは `turns.db` を読み、観測ダッシュボードはストリームを配信しません）。チャットサーバーの `/observability` はターンごとのトークンとモデルを表示します。モデルの料金は設定されていないので、費用は無料ではなく未算出（`*` 付き）と表示されます（#286）。観測ダッシュボード（`dashboard/app.py`）はイベントを配信しないので、その `/observability` は接続せずにその旨を表示します（#278）。
+
+**再起動・言語切替のあとにチャットページが出すもの（#655）。** `/chat` の会話はサーバープロセスが持つ会話（`GET /api/chat/history`）で、ページのものではありません。再読み込みや言語切替（`?lang=en|ja`）では、同じ会話がもう一方の言語のラベルで出ます。再起動は `/new` と同じく新しい会話を始めます。以前の会話は引き継がれない（再起動後に送ったメッセージは以前のターンなしでモデルに渡る。復元された承認カードから再開するターンだけが自分のチェックポイントを再生する）ので、ページにも会話として並べません。`turns.db` に以前のターンがあるとき、空のページは「メッセージを送信してください」だけでなく、その理由（「サーバーが再起動したので、新しい会話です…」）を出します。ターンの記録は `/observability` に残り、記憶・Neural State・承認ストアも残ります。チャットサーバーの `/observability` の Neural State の軌跡（`GET /api/state/history`）はプロセスが持つ 500 件のバッファで、再起動で最初からになります（6 次元の値そのものは `neural-state.json` から戻ります）。`/chat` では、背の高い承認キューはチャットパネルの中でスクロールし、「今回のみ承認」「拒否」は読んでいるカードの下端に残ります。
 
 ## 8. バックアップと復元
 

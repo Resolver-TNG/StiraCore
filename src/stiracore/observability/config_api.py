@@ -34,10 +34,12 @@ from stiracore.providers.connection_test import (
 )
 from stiracore.providers.credentials import (
     LOCAL_PROVIDERS,
+    ORGANIZATION_PROVIDERS,
     MissingCredentialError,
     credential_status,
     is_loopback_url,
     require_credentials,
+    resolve_named_env,
     validate_base_url,
     validate_env_name,
 )
@@ -283,42 +285,102 @@ _SUGGESTED_MODELS: dict[str, tuple[str, ...]] = {
 _DEFAULT_BASE_URLS = {"ollama": "http://localhost:11434", "llamacpp": "http://localhost:8080"}
 _MODEL_ID_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,199}\Z")
 _ENV_PINS = ("STIRA_PROVIDER", "STIRA_MODEL", "STIRA_BASE_URL", "STIRA_API_KEY_ENV")
-_SELECTION_KEYS = {"provider", "model_id", "base_url", "api_key_env"}
+_SELECTION_KEYS = {"provider", "model_id", "base_url", "api_key_env", "organization_env", "region"}
+# #476: how a selection is saved (not part of the selection itself).
+_SELECTION_SAVE_KEYS = frozenset({"base_version", "validate_only"})
+# The variable that wins over gateway.region (config.resolver.apply_env_overrides).
+_REGION_ENV = "AWS_REGION"
+# An AWS region name ("ap-northeast-1", "us-gov-west-1"); nothing else is saved.
+_REGION_RE = re.compile(r"\A[a-z]{2}(?:-[a-z]{1,12}){1,3}-[0-9]{1,2}\Z")
+# #476: one fixed sentence per code. The page shows its own (translated) text for the
+# code; no message carries a request value or an exception text (#330).
+_SELECTION_MESSAGES = {
+    "invalid_body": "Expected a JSON object with 'model_id'.",
+    "unknown_field": "Unsupported field.",
+    "unknown_model": "Unknown model id.",
+    "invalid_provider": "provider must be one of the listed providers.",
+    "invalid_model_id": "model_id must be 1-200 characters: letters, digits and . _ : / @ + -",
+    "invalid_base_url": "base_url must be an http(s) URL without credentials, query or fragment.",
+    "remote_base_url": (
+        "A non-loopback base_url for an API provider can only be set in "
+        "gateway-config.json, not from the settings page"
+    ),
+    "invalid_env_name": (
+        "Expected the NAME of an environment variable (letters, digits, '_'), not a secret value."
+    ),
+    "invalid_region": "region must be an AWS region name such as ap-northeast-1.",
+    "field_not_used": "This provider does not use this field.",
+    "pinned_by_env": "An environment variable pins this field.",
+    "provider_unavailable": "Provider SDK is not installed.",
+    "missing_credential": "A required environment variable is not set.",
+    "invalid_config": "The selection does not fit the saved configuration.",
+    "conflict": "The model selection changed since this page loaded.",
+    "save_failed": "Could not persist the configuration.",
+}
+
+
+class _SelectionError(ValueError):
+    """A refused model selection (#476): a code, the field and allow-listed facts only."""
+
+    def __init__(self, code: str, field: str | None = None, status: int = 400, **facts) -> None:
+        super().__init__(_SELECTION_MESSAGES[code])
+        self.code = code
+        self.field = field
+        self.status = status
+        self.facts = facts
+
+    def response(self):
+        body = {"error": str(self), "error_code": self.code, **self.facts}
+        if self.field is not None:
+            body["field"] = self.field
+        return jsonify(body), self.status
 
 
 def _validate_model_id(value) -> str:
     """Model ID charset check; the message never echoes the (possibly pasted) input."""
     if not isinstance(value, str) or not _MODEL_ID_RE.fullmatch(value.strip()):
-        raise ValueError("model_id must be 1-200 characters: letters, digits and . _ : / @ + -")
+        raise _SelectionError("invalid_model_id", "model_id")
     return value.strip()
 
 
+def _env_name_or_none(value, field: str) -> str | None:
+    if value in (None, ""):
+        return None
+    try:
+        return validate_env_name(value, field)
+    except ValueError:
+        raise _SelectionError("invalid_env_name", field) from None
+
+
 def _parse_selection(data: dict, fallback: dict | None = None) -> dict:
-    """Validated provider/model/base_url/api_key_env from a request body.
+    """Validated provider/model/base_url/api_key_env/organization_env/region from a body.
 
     Missing fields come from ``fallback`` (the current selection); endpoint and
-    key-name fields are inherited only while the provider stays the same. An
-    empty string clears a field.
+    variable-name fields are inherited only while the provider stays the same. An
+    empty string clears a field. ``region`` is for Bedrock and ``organization_env`` for
+    the OpenAI providers only (#476); a refusal is a ``_SelectionError`` (code + field).
     """
-    unknown = set(data) - _SELECTION_KEYS
-    if unknown:
-        raise ValueError("Unsupported field(s): " + ", ".join(sorted(unknown)))
+    if set(data) - _SELECTION_KEYS:
+        raise _SelectionError("unknown_field")
     fallback = fallback or {}
     try:
         provider = normalize_provider(data.get("provider", fallback.get("provider")))
     except ValueError:
-        raise ValueError("provider must be one of: " + ", ".join(sorted(PROVIDERS))) from None
+        raise _SelectionError("invalid_provider", "provider") from None
     same_provider = provider == fallback.get("provider")
     model_id = _validate_model_id(
         data.get("model_id", fallback.get("model_id") if same_provider else None)
     )
     values = {}
-    for key in ("base_url", "api_key_env"):
+    for key in ("base_url", "api_key_env", "organization_env"):
         value = data[key] if key in data else (fallback.get(key) if same_provider else None)
         values[key] = None if value in (None, "") else value
     base_url = values["base_url"]
     if base_url is not None:
-        base_url = validate_base_url(base_url)
+        try:
+            base_url = validate_base_url(base_url)
+        except ValueError:
+            raise _SelectionError("invalid_base_url", "base_url") from None
     if (
         "base_url" in data
         and base_url is not None
@@ -326,18 +388,26 @@ def _parse_selection(data: dict, fallback: dict | None = None) -> dict:
         and not is_loopback_url(base_url)
     ):
         # A browser must not be able to send a key reference to an arbitrary host.
-        raise ValueError(
-            "A non-loopback base_url for an API provider can only be set in "
-            "gateway-config.json, not from the settings page"
-        )
-    api_key_env = values["api_key_env"]
-    if api_key_env is not None:
-        api_key_env = validate_env_name(api_key_env, "api_key_env")
+        raise _SelectionError("remote_base_url", "base_url")
+    organization_env = _env_name_or_none(values["organization_env"], "organization_env")
+    if provider not in ORGANIZATION_PROVIDERS:
+        if "organization_env" in data and organization_env is not None:
+            raise _SelectionError("field_not_used", "organization_env")
+        organization_env = None
+    region = fallback.get("region")
+    if "region" in data:
+        region = data["region"]
+        if not isinstance(region, str) or not _REGION_RE.fullmatch(region):
+            raise _SelectionError("invalid_region", "region")
+        if provider != "bedrock":
+            raise _SelectionError("field_not_used", "region")
     return {
         "provider": provider,
         "model_id": model_id,
         "base_url": base_url,
-        "api_key_env": api_key_env,
+        "api_key_env": _env_name_or_none(values["api_key_env"], "api_key_env"),
+        "organization_env": organization_env,
+        "region": region,
     }
 
 
@@ -346,12 +416,27 @@ def _env_pins(environ=None) -> list[str]:
     return [name for name in _ENV_PINS if name in env]
 
 
+def _region_pin(environ=None) -> str | None:
+    """The NAME of the variable that wins over the saved region, or None (never a value)."""
+    return _REGION_ENV if _REGION_ENV in (os.environ if environ is None else environ) else None
+
+
 def _current_selection(resolved) -> dict:
     return {
         "provider": resolved.provider,
         "model_id": resolved.model_id,
         "base_url": resolved.base_url,
         "api_key_env": resolved.api_key_env,
+    }
+
+
+def _selection_state(resolved, gateway) -> dict:
+    """What the model section saves (#476): the selection, the organization variable NAME
+    and the region as the file holds it (a variable's value is never taken)."""
+    return {
+        **_current_selection(resolved),
+        "organization_env": resolved.organization_env,
+        "region": gateway.region,
     }
 
 
@@ -393,6 +478,9 @@ def _provider_rows(current: dict) -> list[dict]:
                 "installed": provider_available(name),
                 "extra": info.extra,
                 "local": name in LOCAL_PROVIDERS,
+                # #476: which of the two extra fields this provider reads.
+                "uses_region": name == "bedrock",
+                "uses_organization": name in ORGANIZATION_PROVIDERS,
                 "default_base_url": _DEFAULT_BASE_URLS.get(name),
                 "credentials": _public_credentials(status),
                 "models": [
@@ -679,6 +767,7 @@ def create_config_blueprint(
     on_tool_rules_saved: Callable[[], object] | None = None,
     config_location_provider: Callable[[], dict] | None = None,
     heartbeat_status_provider: Callable[[], dict] | None = None,
+    retention_layout_provider: Callable[[], object] | None = None,
 ) -> Blueprint:
     """Create config routes backed by the injected store and live breaker provider.
 
@@ -698,6 +787,9 @@ def create_config_blueprint(
     hub's read-only location card (#469).
     ``heartbeat_status_provider`` reports the running heartbeat daemon (read-only, #472)
     for the settings page's heartbeat card; nothing here starts, stops or triggers a tick.
+    ``retention_layout_provider`` returns the data directory's ``DataLayout`` for the
+    read-only dry run of ``stira memory retention`` (#474: counts only; without it the dry
+    run is reported as unavailable). Nothing here removes anything.
     """
     blueprint = Blueprint("config_api", __name__)
     # Saved values of the restart fields as the server started with them (#469): a field
@@ -810,7 +902,7 @@ def create_config_blueprint(
             try:
                 gateway, agent = config_store.load()
             except (OSError, ValueError, TypeError) as error:
-                return jsonify(error=f"Config unavailable: {error}"), 503
+                return config_unavailable(error)
             catalog = _model_catalog(gateway, agent)
             return jsonify(
                 models=[{"id": model_id, "roles": _model_roles(model_id)} for model_id in catalog],
@@ -819,14 +911,27 @@ def create_config_blueprint(
                 effective_model_id=agent.model_override or gateway.model_id,
             )
 
+    def selection_facts(resolved, gateway) -> dict:
+        """#476: what the model section shows and compares besides ``current`` — names
+        and the saved region only; ``version`` is the fingerprint a save must match."""
+        state = _selection_state(resolved, gateway)
+        return {
+            "region": state["region"],
+            "region_pinned_by": _region_pin(),
+            "organization_env": state["organization_env"],
+            "version": hub.version_of(state),
+        }
+
     @blueprint.get("/api/config/providers")
     def get_config_providers():
         with config_store.lock:
             try:
-                resolved = config_store.resolved()
+                gateway, agent = config_store.load()
+                resolved = resolve_config(gateway, agent)
             except (OSError, ValueError, TypeError) as error:
-                return jsonify(error=f"Config unavailable: {error}"), 503
+                return config_unavailable(error)
             current = _current_selection(resolved)
+            facts = selection_facts(resolved, gateway)
         return jsonify(
             providers=_provider_rows(current),
             current=current,
@@ -834,6 +939,7 @@ def create_config_blueprint(
             running=running_model(),
             applies="next_turn" if running_model_provider is not None else "next_start",
             connection_test={"timeout_sec": DEFAULT_TIMEOUT_SEC, "max_tokens": PROBE_MAX_TOKENS},
+            **facts,
         )
 
     @blueprint.post("/api/config/models/test")
@@ -842,24 +948,24 @@ def create_config_blueprint(
         if data is None:
             data = {}
         if not isinstance(data, dict):
-            return jsonify(error="Expected a JSON object."), 400
+            return _SelectionError("invalid_body").response()
         try:
-            resolved = config_store.resolved()
+            gateway, agent = config_store.load()
+            resolved = resolve_config(gateway, agent)
         except (OSError, ValueError, TypeError) as error:
-            return jsonify(error=f"Config unavailable: {error}"), 503
+            return config_unavailable(error)
         try:
-            selection = _parse_selection(data, _current_selection(resolved))
-        except ValueError as error:
-            return jsonify(error=str(error)), 400
+            selection = _parse_selection(data, _selection_state(resolved, gateway))
+        except _SelectionError as error:
+            return error.response()
         spec = model_spec_from(
             selection["provider"],
             selection["model_id"],
-            region=resolved.region,
+            # The region in the form, unless the variable wins (as at run time).
+            region=resolved.region if _region_pin() else selection["region"],
             base_url=selection["base_url"],
             api_key_env=selection["api_key_env"],
-            organization_env=(
-                resolved.organization_env if selection["provider"] == resolved.provider else None
-            ),
+            organization_env=selection["organization_env"],
         )
         if not connection_test_lock.acquire(blocking=False):
             result = ConnectionTestResult(False, "busy", spec.provider, spec.model_id)
@@ -878,18 +984,18 @@ def create_config_blueprint(
         if isinstance(data, dict) and "provider" in data:
             return post_provider_selection(data)
         if not isinstance(data, dict) or "model_id" not in data:
-            return jsonify(error="Expected a JSON object with 'model_id'."), 400
+            return _SelectionError("invalid_body").response()
         model_id = data["model_id"]
         if model_id is not None and (not isinstance(model_id, str) or not model_id.strip()):
-            return jsonify(error="model_id must be a nonempty string or null."), 400
+            return _SelectionError("invalid_body").response()
         with config_store.lock:
             try:
                 gateway, agent = config_store.load()
             except (OSError, ValueError, TypeError) as error:
-                return jsonify(error=f"Config unavailable: {error}"), 503
+                return config_unavailable(error)
             catalog = _model_catalog(gateway, agent)
             if model_id is not None and model_id not in catalog:
-                return jsonify(error="Unknown model id.", allowed=catalog), 400
+                return _SelectionError("unknown_model", allowed=catalog).response()
             try:
                 # A catalog pick (or reset) uses the gateway provider (#208).
                 candidate = _clone_agent_config(
@@ -898,51 +1004,43 @@ def create_config_blueprint(
                     provider_override=None,
                     base_url_override=None,
                     api_key_env_override=None,
+                    organization_env_override=None,
                 )
-            except (TypeError, ValueError) as error:
-                return jsonify(error=str(error)), 400
+            except (TypeError, ValueError):
+                return _SelectionError("invalid_config").response()
             try:
                 candidate.save()
             except OSError:
-                return jsonify(error="Could not persist agent configuration."), 500
-            record_model_change(gateway, agent, candidate)
+                return _SelectionError("save_failed", status=500).response()
+            record_model_change(
+                _current_selection(resolve_config(gateway, agent)),
+                _current_selection(resolve_config(gateway, candidate)),
+            )
             return jsonify(
                 agent_override=candidate.model_override,
                 gateway_model_id=gateway.model_id,
                 effective_model_id=candidate.model_override or gateway.model_id,
             )
 
-    def record_model_change(gateway, before_agent, after_agent):
+    def record_model_change(before, after):
         """Append a model switch to the settings history (#195); never fails the save."""
         try:
-            entry = hub.model_history_entry(
-                _current_selection(resolve_config(gateway, before_agent)),
-                _current_selection(resolve_config(gateway, after_agent)),
-            )
-            hub.append_history(config_store.history_path, entry)
+            hub.append_history(config_store.history_path, hub.model_history_entry(before, after))
         except (OSError, ValueError, TypeError):
             pass
 
-    def post_provider_selection(data: dict):
-        if "model_id" not in data:
-            return jsonify(error="Expected 'provider' and 'model_id'."), 400
-        try:
-            current = _current_selection(config_store.resolved())
-        except (OSError, ValueError, TypeError) as error:
-            return jsonify(error=f"Config unavailable: {error}"), 503
-        try:
-            selection = _parse_selection(data, current)
-        except ValueError as error:
-            return jsonify(error=str(error)), 400
+    def checked_selection(body, current, gateway):
+        """#476: the selection a save would write, or the ``_SelectionError`` that refuses
+        it. A variable is only asked whether it is set; no value reaches a response."""
+        selection = _parse_selection(body, current)
+        pin = _region_pin()
+        if pin is not None and selection["region"] != gateway.region:
+            raise _SelectionError("pinned_by_env", "region", 409, env=pin)
         if not provider_available(selection["provider"]):
-            info = PROVIDERS[selection["provider"]]
-            return (
-                jsonify(
-                    error="Provider SDK is not installed.",
-                    reason="provider_unavailable",
-                    extra=info.extra,
-                ),
-                400,
+            raise _SelectionError(
+                "provider_unavailable",
+                reason="provider_unavailable",
+                extra=PROVIDERS[selection["provider"]].extra,
             )
         try:
             require_credentials(
@@ -950,46 +1048,92 @@ def create_config_blueprint(
                 api_key_env=selection["api_key_env"],
                 base_url=selection["base_url"],
             )
+            # The named variable must be set; the lookup lives in providers.credentials
+            # (never a dynamic environ read here) and the value is not kept.
+            resolve_named_env(
+                selection["provider"], selection["organization_env"], "organization_env"
+            )
         except MissingCredentialError as error:
             # Variable NAME only; the value is never read into a response.
-            return (
-                jsonify(error=str(error), reason="missing_credential", env=error.env_name),
-                400,
-            )
+            raise _SelectionError(
+                "missing_credential", reason="missing_credential", env=error.env_name
+            ) from None
+        return selection
+
+    def post_provider_selection(data: dict):
+        body = {key: value for key, value in data.items() if key not in _SELECTION_SAVE_KEYS}
+        base_version = data.get("base_version")
+        validate_only = data.get("validate_only", False)
+        if (
+            "model_id" not in data
+            or not isinstance(base_version, (str, type(None)))
+            or type(validate_only) is not bool
+        ):
+            return _SelectionError("invalid_body").response()
         with config_store.lock:
             try:
                 gateway, agent = config_store.load()
+                resolved = resolve_config(gateway, agent)
             except (OSError, ValueError, TypeError) as error:
-                return jsonify(error=f"Config unavailable: {error}"), 503
-            same_as_gateway = (
-                selection["provider"] == gateway.provider
-                and selection["base_url"] == gateway.base_url
-                and selection["api_key_env"] == gateway.api_key_env
+                return config_unavailable(error)
+            current = _selection_state(resolved, gateway)
+            if base_version is not None and base_version != hub.version_of(current):
+                # Saved in another tab in between: never overwrite silently (#195).
+                return _SelectionError(
+                    "conflict",
+                    status=409,
+                    current=_current_selection(resolved),
+                    **selection_facts(resolved, gateway),
+                ).response()
+            try:
+                selection = checked_selection(body, current, gateway)
+            except _SelectionError as error:
+                return error.response()
+            same_as_gateway = all(
+                selection[key] == getattr(gateway, key)
+                for key in ("provider", "base_url", "api_key_env", "organization_env")
             )
             overrides = {
                 "model_override": selection["model_id"],
                 "provider_override": None if same_as_gateway else selection["provider"],
                 "base_url_override": None if same_as_gateway else selection["base_url"],
                 "api_key_env_override": None if same_as_gateway else selection["api_key_env"],
+                "organization_env_override": (
+                    None if same_as_gateway else selection["organization_env"]
+                ),
             }
             try:
                 candidate = _clone_agent_config(agent, **overrides)
-            except (TypeError, ValueError) as error:
-                return jsonify(error=str(error)), 400
+                new_gateway = (
+                    gateway
+                    if selection["region"] == gateway.region
+                    else _clone_gateway_config(gateway, region=selection["region"])
+                )
+                after = resolve_config(new_gateway, candidate)
+            except (TypeError, ValueError):
+                return _SelectionError("invalid_config").response()
+            after_state = _selection_state(after, new_gateway)
+            diff = hub.model_changes(current, after_state)
+            if validate_only:
+                return jsonify(ok=True, errors=[], diff=diff)
             try:
+                if new_gateway is not gateway:
+                    new_gateway.save()
                 candidate.save()
             except OSError:
-                return jsonify(error="Could not persist agent configuration."), 500
-            record_model_change(gateway, agent, candidate)
-            resolved = resolve_config(gateway, candidate)
+                return _SelectionError("save_failed", status=500).response()
+            record_model_change(current, after_state)
+            facts = selection_facts(after, new_gateway)
         return jsonify(
             saved=selection,
-            current=_current_selection(resolved),
+            current=_current_selection(after),
+            diff=diff,
             agent_override=candidate.model_override,
             gateway_model_id=gateway.model_id,
-            effective_model_id=resolved.model_id,
+            effective_model_id=after.model_id,
             pinned_by_env=_env_pins(),
             applies="next_turn" if running_model_provider is not None else "next_start",
+            **facts,
         )
 
     def config_unavailable(error):
@@ -1506,12 +1650,16 @@ def create_config_blueprint(
                 status["breaker_details"] = {"status": "saved", "applies": "restart"}
         # The Stage reads ui.board_svg when its page loads (#453): saved = in effect on reload.
         status["board"] = {"status": "saved", "applies": "reload"}
+        status["screens"] = screens_apply_status(values, gateway, runtime)
         status.update(cost_status(gateway, resolved, runtime))
         status["heartbeat"] = heartbeat_apply_status(gateway, runtime)
         # ``delegate`` (#486): read from gateway-config at each turn and each call.
         status["delegation"] = {"status": "saved", "applies": "next_turn"}
         # ADR 0021 S2: the Agent-layer executor and its pool are built when the server starts.
         status["agent_jobs"] = {"status": "saved", "applies": "restart"}
+        # #474: read by ``stira memory retention`` each time it runs; the server applies
+        # nothing, so "saved" is all there is to say.
+        status["memory_retention"] = {"status": "saved", "applies": "on_run"}
         status["classifier"]["effective"] = (effective or {}).get("name")
         status["classifier"]["expected"] = expected
         return status
@@ -1606,6 +1754,22 @@ def create_config_blueprint(
             "applies": "restart",
             "running": shown,
         }
+
+    def stage_running() -> bool:
+        """Whether this server registered the Stage page when it started (#477)."""
+        return "stage_page" in current_app.view_functions
+
+    def screens_apply_status(values, gateway, runtime) -> dict:
+        """#477: read once at start-up. Compared with what this server started with: the
+        Stage's route (the switch after ``STIRA_STAGE``) and the page ``/`` opens."""
+        if runtime is None:
+            return {"status": "saved", "applies": "next_start"}
+        wanted_stage = stage_enabled(gateway)
+        home = values["screens"]["home"]
+        wanted_home = "stage" if home == "stage" and wanted_stage else "chat"
+        running_home = current_app.extensions.get("ui_home", "chat")
+        same = stage_running() is wanted_stage and running_home == wanted_home
+        return {"status": "applied" if same else "pending", "applies": "restart"}
 
     def heartbeat_live():
         if heartbeat_status_provider is None:
@@ -1713,9 +1877,13 @@ def create_config_blueprint(
             "version": hub.version_of(values),
             "values": values,
             "defaults": hub.default_values(),
-            # #453: the board section says when the Stage itself is off (STIRA_STAGE)
-            "stage_enabled": stage_enabled(),
+            # #453, #477: whether the next start has the Stage (the saved switch after
+            # STIRA_STAGE), and whether this server registered its page when it started.
+            "stage_enabled": stage_enabled(gateway),
+            "stage_running": stage_running(),
             "constraints": hub.constraints(resolved.stira_config),
+            # #195: JSON Schema of the groups the page builds its form from (#474).
+            "schemas": hub.schemas(),
             "dangers": hub.dangers(values),
             # Effective absolute path of "@workspace" (#243), when known.
             "workspace": _workspace_path(agent),
@@ -1772,7 +1940,9 @@ def create_config_blueprint(
             # #470: what the model allows. Where each cost value comes from, when it applies
             # and which variable pins it: ``surface.fields["gateway.<name>"]`` (#469).
             "cost": {
-                "model": hub.cost_model_info(resolved.provider, resolved.model_id),
+                "model": hub.cost_model_info(
+                    resolved.provider, resolved.model_id, resolved.base_url
+                ),
                 # #368, read-only: the profile the running server started with (null without
                 # a chat server) and the one the next start would use.
                 "context_profile": {
@@ -2201,6 +2371,13 @@ def create_config_blueprint(
                 )
                 gateway.save()
                 saved.append("board")
+            if candidate["screens"] != values["screens"]:
+                # #477: the Stage switch and the page ``/`` opens, read at the next start.
+                gateway = _clone_gateway_config(
+                    gateway, **hub.gateway_overrides_for_screens(candidate["screens"], gateway)
+                )
+                gateway.save()
+                saved.append("screens")
             cost = [g for g in ("output", "cache", "context") if candidate[g] != values[g]]
             if cost:
                 # #470: output cap (next turn), prompt cache and context management (start-up).
@@ -2235,6 +2412,14 @@ def create_config_blueprint(
                 )
                 gateway.save()
                 saved.append("agent_jobs")
+            if candidate["memory_retention"] != values["memory_retention"]:
+                # #474: read by ``stira memory retention`` when it runs (never applied here).
+                agent = _clone_agent_config(
+                    agent,
+                    memory_retention=hub.agent_memory_retention(candidate["memory_retention"]),
+                )
+                agent.save()
+                saved.append("memory_retention")
 
         def guarded(precommit):
             if guard is not None:
@@ -2281,6 +2466,37 @@ def create_config_blueprint(
             failure = tool_rules_saved([group for group in hub.GROUPS if group in saved])
             if failure is not None:
                 return failure
+        return response
+
+    @blueprint.get("/api/config/memory-retention/dry-run")
+    def get_memory_retention_dry_run():
+        """#474: what ``stira memory retention --apply`` would remove under the saved
+        limits, as counts only (no key, path or text). Read only: applying stays on the
+        command line. A failure is a fixed code; its text stays in the log (#330)."""
+
+        def unavailable(reason):
+            response = jsonify(available=False, apply="cli", reason=reason)
+            response.headers["Cache-Control"] = "no-store"
+            return response
+
+        if retention_layout_provider is None:
+            return unavailable("no_data_directory")
+        from stiracore.control.memory_retention import RetentionPolicy, retention_report
+
+        try:
+            with config_store.lock:
+                _gateway, agent = config_store.load()
+            policy = RetentionPolicy.from_options(agent.memory_retention)
+        except (OSError, ValueError, TypeError) as error:
+            current_app.logger.warning("Retention dry run: config (%s)", type(error).__name__)
+            return unavailable("config_unavailable")
+        try:
+            report, _plan = retention_report(retention_layout_provider(), policy)
+        except Exception as error:  # noqa: BLE001 - a read-only view never breaks the page
+            current_app.logger.warning("Retention dry run failed (%s)", type(error).__name__)
+            return unavailable("report_failed")
+        response = jsonify(hub.retention_dry_run(report))
+        response.headers["Cache-Control"] = "no-store"
         return response
 
     @blueprint.get("/api/config/history")

@@ -78,7 +78,7 @@ disables it while a variable pins it and says which one.
 | `STIRA_PROVIDER` | A | partial | restart | `gateway.provider`, `agent.provider_override` | — |
 | `STIRA_BASE_URL` | A | partial | restart | `gateway.base_url` | — |
 | `STIRA_API_KEY_ENV` | A | partial | restart | `gateway.api_key_env` | — |
-| `AWS_REGION` | A | no | restart | `gateway.region` | #476 |
+| `AWS_REGION` | A | partial | restart | `gateway.region` | #476 While set, the region field of the model section is off and names this variable. |
 | `ANTHROPIC_API_KEY` | C | no | next_turn | — | `secret` |
 | `OPENAI_API_KEY` | C | no | next_turn | — | `secret` |
 | `GEMINI_API_KEY` | C | no | next_turn | — | `secret` |
@@ -100,7 +100,7 @@ disables it while a variable pins it and says which one.
 | `STIRA_HEARTBEAT` | A | no | restart | `gateway.hb_enabled` | #472 |
 | `STIRA_SCHEDULER` | B | no | restart | — | #475 No config field yet; #475 adds one and keeps the variable as an override. |
 | `STIRA_ACCESS_LOG_POLLING` | C | no | restart | — | `dev` |
-| `STIRA_STAGE` | A | no | restart | — | #477 No config field yet; #477 adds one and keeps the variable as an override. |
+| `STIRA_STAGE` | A | no | restart | `gateway.stage_enabled` | #477 1 / true / yes / on turns the Stage on, any other value off, whatever stage_enabled says. |
 | `STIRA_PROMPT_CACHE` | A | no | restart | `gateway.prompt_cache` | #470 |
 | `STIRA_PROMPT_CACHE_TTL` | A | no | restart | `gateway.prompt_cache_ttl` | #470 |
 | `STIRA_CONTEXT_MANAGEMENT` | A | no | restart | `gateway.context_management` | #470 |
@@ -109,6 +109,7 @@ disables it while a variable pins it and says which one.
 | `STIRA_HANDOFF_INJECT` | A | no | restart | `gateway.handoff_inject` | Handoff notes (docs/handoff.md): 0 / false / no / off turns the tools and the section off; 1 turns them on. |
 | `STIRA_TASK_MODEL_TOOL_SUMMARY` | A | partial | restart | `gateway.task_models` | #585 Model per task (docs/task-models.md): shown read-only under Output limit and cost. |
 | `STIRA_TASK_MODEL_CONTEXT_SUMMARY` | A | partial | restart | `gateway.task_models` | #258 Model per task (docs/task-models.md): shown read-only under Output limit and cost. |
+| `STIRA_TASK_MODEL_VISUAL_REVIEW` | C | no | restart | `gateway.task_models` | `loosening` #774 The reviewer model of page_review (ADR 0015 rev 6, docs/task-models.md). Unset = off (no tool registered); inherit must be written out; the model needs vision. Screenshots go to this model's provider. |
 | `STIRA_EPISODIC_EMOTION` | A | no | immediate | `agent.episodic_emotion_snapshot` | #473 |
 | `STIRA_ASSOCIATIVE_RECALL` | A | no | restart | `agent.associative_recall` | #473 |
 | `STIRA_RECALL_EMOTION_PROXIMITY` | A | no | restart | `agent.associative_recall` | #364 Overrides associative_recall.emotion_proximity only (ADR 0017); needs associative recall on. |
@@ -171,11 +172,11 @@ disables it while a variable pins it and says which one.
 |---|---|---|---|---|---|
 | `model_id` | A | partial | next_turn | `STIRA_MODEL` | Changed through agent.model_override on the page. |
 | `max_output_tokens` | A | yes | next_turn | — | #470 Output limit and cost section: automatic (recommended) or a number. Resolved again before each turn with the model selection; a new cap rebuilds the model. |
-| `region` | A | no | next_turn | `AWS_REGION` | #476 Part of the model selection taken before each turn. |
+| `region` | A | yes | next_turn | `AWS_REGION` | #476 Model section (Bedrock only): an AWS region name. Part of the model selection taken before each turn; other Bedrock calls (the distiller) use it too. |
 | `provider` | A | partial | next_turn | `STIRA_PROVIDER` | — |
 | `base_url` | A | partial | next_turn | `STIRA_BASE_URL` | Loopback only from the page; a remote API endpoint is a hand edit (it would send the key elsewhere). |
 | `api_key_env` | A | partial | next_turn | `STIRA_API_KEY_ENV` | — |
-| `organization_env` | A | no | next_turn | — | #476 |
+| `organization_env` | A | partial | next_turn | — | #476 Changed through agent.organization_env_override on the page (a variable NAME, OpenAI providers only). |
 | `port` | C | no | restart | `STIRA_PORT` | `bootstrap` |
 | `state_base_path` | C | no | never | `STIRA_STATE_PATH` | `stored_only` |
 | `hb_interval_floor_sec` | A | yes | restart | — | #472 Heartbeat section, in minutes (1 min to 24 h when changed there; floor <= ceil). |
@@ -193,7 +194,8 @@ disables it while a variable pins it and says which one.
 | `jev_enabled` | A | yes | restart | — | — |
 | `jev_classifier` | A | yes | restart | — | — |
 | `notify_targets` | C | no | never | — | `stored_only` |
-| `ui` | A | partial | per_field | — | #477 board_svg is on the page (read on each Stage load; on by default, written only when off); home is #477 (read at start-up, so a saved home waits for a restart). |
+| `ui` | A | yes | per_field | — | #477 board_svg: Board section (read on each Stage load; on by default, written only when off). home: Screens section (read at start-up, so a saved home waits for a restart; "stage" needs the Stage on). |
+| `stage_enabled` | A | yes | restart | `STIRA_STAGE` | #477 Screens section: the Stage page (/stage/ and its menu item). On by default, written only when off. A page, not a permission: no API route is added. |
 | `yolo` | A | yes | per_field | `STIRA_YOLO_ALLOW`, `STIRA_YOLO_MAX_AUTO_APPROVALS`, `STIRA_YOLO_MAX_EXTERNAL`, `STIRA_YOLO_MAX_EXEC`, `STIRA_YOLO_HOST_CONFIRM` | The YOLO section (#444); each value says when it applies and which variable wins. |
 | `progress` | B | no | restart | `STIRA_PROGRESS_REPORTS`, `STIRA_PROGRESS_INTERVAL_MIN`, `STIRA_PROGRESS_CONTINUE_AFTER_MIN`, `STIRA_PROGRESS_MAX_AUTO_CONTINUES`, `STIRA_PROGRESS_COUNT_TOOLS`, `STIRA_PROGRESS_COUNT_TOKENS`, `STIRA_PROGRESS_DECLARED` | Progress reports in a YOLO window (ADR 0014, #451); no Issue yet. B: an automatic continue starts a model turn (cost), so raising it is confirmed. |
 | `run_checks` | C | no | restart | `STIRA_RUN_CHECKS` | `loosening` #167 The verification runner, ADR 0019 phases 0-1: absent or {} = off (no tool registered); {"phase": 1} turns it on at the next start. Its rule is Ask by default; a saved Always is effective only on a verified macOS sandbox host (else read as Ask). stira doctor says how it would be contained. |
@@ -201,7 +203,8 @@ disables it while a variable pins it and says which one.
 | `handoff_inject` | A | no | restart | `STIRA_HANDOFF_INJECT` | Handoff notes (docs/handoff.md): the handoff_write / handoff_read tools and the newest note in the recalled part; on by default, no note = no section. The settings page does not edit it yet. |
 | `handoff_max_tokens` | A | no | restart | — | The largest note shown (100-1500, default 400, a conservative estimate); a larger one is left out whole. |
 | `handoff_max_age_hours` | A | no | restart | — | An older note is not shown (1-720, default 72). |
-| `task_models` | A | partial | restart | `STIRA_TASK_MODEL_TOOL_SUMMARY`, `STIRA_TASK_MODEL_CONTEXT_SUMMARY` | Model per task (docs/task-models.md): shown read-only under Output limit and cost; changed in the file or with STIRA_TASK_MODEL_<TASK>. Empty = every task on the chat model. |
+| `task_models` | A | partial | restart | `STIRA_TASK_MODEL_TOOL_SUMMARY`, `STIRA_TASK_MODEL_CONTEXT_SUMMARY`, `STIRA_TASK_MODEL_VISUAL_REVIEW` | Model per task (docs/task-models.md): shown read-only under Output limit and cost; changed in the file or with STIRA_TASK_MODEL_<TASK>. Empty = every task on the chat model. |
+| `visual_review` | C | no | restart | — | `loosening` #774 The budget of page_review's reviewer (ADR 0015 rev 6): {"daily_tokens": N}, a positive integer a person sets; no default. Absent or anything else = every page_review call is refused review_budget. The count is kept in memory (a restart starts it again). |
 | `token_prices` | A | no | restart | — | #451 Token unit prices per model id (USD per million tokens; input and output required, cache_read / cache_write optional). Read at start-up; only a model with an entry gets an estimated cost on the activity board and the chat page. Stira ships no price data. The settings page does not edit it yet. |
 | `delegation` | A | yes | next_turn | — | Sub-agents (delegate), ADR 0016 phase 1 (#486): on / off and three caps; read at every turn and every call. Each call is still a person's card. |
 | `agent_jobs` | A | yes | restart | — | Scheduled agent jobs, ADR 0021 S2 (#239): on / off (default off) and the daily token pool agent_daily_token_budget (50,000). Read at start; jobs come up paused after every start. |
@@ -223,6 +226,7 @@ disables it while a variable pins it and says which one.
 | `provider_override` | A | yes | next_turn | `STIRA_PROVIDER` | — |
 | `base_url_override` | A | yes | next_turn | — | — |
 | `api_key_env_override` | A | yes | next_turn | — | — |
+| `organization_env_override` | A | yes | next_turn | — | #476 Model section (OpenAI providers only): the NAME of the organization variable; the value is never saved or shown. |
 | `distiller_mode` | B | no | on_run | — | #473 |
 | `distiller_model_id` | A | no | on_run | — | #473 |
 | `distiller_provider` | A | no | on_run | — | #473 |
@@ -230,7 +234,7 @@ disables it while a variable pins it and says which one.
 | `distiller_api_key_env` | A | no | on_run | — | #473 |
 | `harvest_stage_auto` | B | no | on_run | — | #473 |
 | `harvest_job_max_episodes` | A | no | on_run | — | #473 |
-| `memory_retention` | A | no | on_run | — | #474 Values and the dry run only; --apply stays on the command line. |
+| `memory_retention` | A | yes | on_run | — | #474 Values and the dry run (counts only); --apply stays on the command line. |
 | `episodic_emotion_snapshot` | A | no | immediate | `STIRA_EPISODIC_EMOTION` | #473 |
 | `episode_labels` | A | no | restart | — | #653 Speaker labels of newly written episodes (user / agent); stored episodes are not rewritten. |
 | `associative_recall` | A | no | restart | `STIRA_ASSOCIATIVE_RECALL`, `STIRA_RECALL_EMOTION_PROXIMITY` | #473 |

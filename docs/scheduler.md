@@ -110,6 +110,11 @@ confirmed update are also a confirmed operation (`scheduler_loosen`, ADR 0012 §
 request answers 428 `host_confirmation_required`; after **a person** confirmed it (e.g.
 `stira approvals decide <short>` with `STIRA_YOLO_HOST_CONFIRM=command`) the same request is
 sent again with `X-Stira-Host-Operation: <id>`. The `/schedules` page has no create form.
+Client contract (#656): a plain `fetch` receives the 428 and sends the retry with the header
+itself. The dashboard's `stiraFetch` (`api.js`) handles the 428: it shows the confirmation
+(the dialog on the browser channel, a notice on the host channels), waits for the person and
+re-sends once; on a page without the dialog it answers at once with a local 409
+`host_channel_unavailable` and re-sends nothing. A call that nobody answers stays open.
 Steps: [guide-scheduler-heartbeat.md §2.3](guide-scheduler-heartbeat.md#23-create-the-first-job-an-hourly-health-check-model-free).
 
 ### Codes the UI words (#279)

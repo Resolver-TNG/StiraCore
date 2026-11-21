@@ -79,15 +79,25 @@ def test_tool_call_round_trip():
     assert tool_results[0]["content"] == [{"text": "echo:hi"}]
 
 
-def test_write_tools_are_withheld_from_any_provider_under_breaker():
-    model = FakeModel([text_turn("ok")])
+def test_write_tools_are_refused_for_any_provider_under_breaker():
+    # #259: the list stays fixed at every breaker level; the call is refused instead.
+    model = FakeModel([tool_turn("echo", {"text": "hi"}), text_turn("ok")])
     state = NeuralState(stability=0.1)
     agent = make_agent(model, tools=[echo], state=state)
     agent.config.blocked_tool_names = frozenset({"echo"})
 
     agent("hello")
 
-    assert model.requests[0]["tool_names"] == []
+    assert model.requests[0]["tool_names"] == ["echo"]
+    tool_results = [
+        block["toolResult"]
+        for message in model.requests[1]["messages"]
+        for block in message["content"]
+        if "toolResult" in block
+    ]
+    assert tool_results[0]["status"] == "error"
+    assert "breaker_write_refused" in json.dumps(tool_results[0]["content"])
+    assert "echo:hi" not in json.dumps(tool_results[0]["content"])
 
 
 def test_streaming_deltas_arrive_in_order():

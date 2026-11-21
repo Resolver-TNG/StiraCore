@@ -2,11 +2,13 @@
 
 The chat server records turn events (turn / tool call / approval / breaker) with
 ``TurnEventRecorder`` into ``turns.db``; that is the one source of truth for them. This
-module serves the two endpoints the observability page reads, backed by that store:
+module serves the endpoints the observability page reads, backed by that store:
 
 - ``GET /api/observability/events``: SSE replay of ``ui_events`` rows in the page's event
   contract (see ``dashboard/static/js/observability.js``); the event id is the row id.
 - ``GET /api/observability/snapshot``: counts, the latest cursor, recent events, recent turns.
+- ``GET /api/observability/usage``: token totals and the per-model breakdown for the
+  settings page (#195; a count nobody reported is ``null``, never 0).
 
 Nothing here writes. The hash-chained ``SQLiteEventStore`` (ADR 0009, ``events.db``) is not
 a second copy of the turns: the chat server only writes its ``/new`` audit records there, and
@@ -38,6 +40,7 @@ from ..core import breaker_reasons, hitl_reasons
 from ..core.engine import BreakLevel, HITLAction
 from ..providers.failure import REASONS as _FAILURE_REASONS
 from .activity import TOKEN_PRICES_EXTENSION, turn_cost
+from .turn_autostop import AUTO_STOP_REASONS
 from .turn_events import (
     EVENT_TYPES,
     INTERRUPT_REASONS,
@@ -215,7 +218,7 @@ def page_event(row_id: int, event: Mapping, prices: Any = None) -> dict[str, Any
         # ``error`` is a flag on a streamed turn and the exception type on a resumed one.
         reason = [
             _one_of(data.get("stop"), _STOPS),
-            _one_of(data.get("reason"), INTERRUPT_REASONS),
+            _one_of(data.get("reason"), INTERRUPT_REASONS | AUTO_STOP_REASONS),
             _one_of(data.get("failure"), frozenset(_FAILURE_REASONS)),
             _text(error) if isinstance(error, str) else "",
         ]
@@ -362,6 +365,51 @@ def _turn_item(item: Mapping) -> dict[str, Any]:
     }
 
 
+USAGE_COUNTS = ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")
+# The most ``turn.completed`` rows one usage summary reads; at the limit it says ``truncated``.
+USAGE_TURN_LIMIT = 100_000
+
+
+def usage_summary(completed: Any, limit: int = USAGE_TURN_LIMIT) -> dict[str, Any]:
+    """Token totals and the per-model breakdown of ``turn.completed`` data (#195).
+
+    A count is the sum of what the turns reported, and ``None`` when no turn reported it
+    (a provider that returns no usage is "unknown" on the page, never 0);
+    ``turns_without_usage`` counts the turns that reported neither input nor output.
+    Only numbers and a checked model id leave (``model`` is ``None`` for anything else).
+    ``truncated``: the reader's ``limit`` was reached, so older turns may be missing.
+    """
+
+    def empty() -> dict[str, Any]:
+        return {"turns": 0, "turns_without_usage": 0, **dict.fromkeys(USAGE_COUNTS)}
+
+    total = empty()
+    rows: dict[str | None, dict[str, Any]] = {}
+    seen = 0
+    for data in completed:
+        seen += 1
+        if not isinstance(data, Mapping):
+            continue
+        name = data.get("model")
+        model = name if isinstance(name, str) and _MODEL.fullmatch(name) else None
+        row = rows.setdefault(model, empty())
+        usage = data.get("usage")
+        usage = usage if isinstance(usage, Mapping) else {}
+        counts = {key: _non_negative_int(usage.get(key)) for key in USAGE_COUNTS}
+        unknown = counts["input_tokens"] is None and counts["output_tokens"] is None
+        for target in (total, row):
+            target["turns"] += 1
+            target["turns_without_usage"] += 1 if unknown else 0
+            for key, count in counts.items():
+                if count is not None:
+                    target[key] = (target[key] or 0) + count
+    by_model = [
+        {"model": model, **rows[model]}
+        for model in sorted(rows, key=lambda name: (name is None, name or ""))
+    ]
+    return {"total": total, "by_model": by_model, "truncated": seen >= limit}
+
+
 def create_turns_observability_blueprint(turn_store: TurnEventStore) -> Blueprint:
     """The observability endpoints for an app whose turn events live in ``turns.db``.
 
@@ -446,7 +494,16 @@ def create_turns_observability_blueprint(turn_store: TurnEventStore) -> Blueprin
         response.headers["Cache-Control"] = "no-store"
         return response
 
+    @blueprint.get("/api/observability/usage")
+    def usage() -> Response:
+        # #195: read on request for the settings page's usage card; nothing is cached and
+        # nothing here reaches a prompt or a tool definition.
+        completed = turn_store.completed_since(0.0, USAGE_TURN_LIMIT)
+        response = jsonify({"source": "turns.db", **usage_summary(completed)})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     return blueprint
 
 
-__all__ = ["create_turns_observability_blueprint", "page_event"]
+__all__ = ["create_turns_observability_blueprint", "page_event", "usage_summary"]

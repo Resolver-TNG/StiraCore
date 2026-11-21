@@ -435,6 +435,31 @@ def test_server_reason_codes_for_the_host_bound_and_optional_tools(tmp_path, mon
     assert _listed(text)["run_checks"] == (ta.UNSUPPORTED_HOST,)
 
 
+@pytest.mark.parametrize(
+    ("code", "reason"),
+    [
+        ("page_check_no_browser", ta.DEPENDENCY_MISSING),
+        ("page_check_root", ta.UNSUPPORTED_HOST),
+        ("page_check_platform", ta.UNSUPPORTED_HOST),
+    ],
+)
+def test_server_reason_code_for_page_look_without_a_browser(tmp_path, monkeypatch, code, reason):
+    """ADR 0015 rev 6 (S3): page_look is absent for the same reason as page_check."""
+    from dashboard import stira_server
+
+    store = ConfigStore(tmp_path / "g.json", tmp_path / "a.json", tmp_path / "t.json")
+    monkeypatch.delitem(tool_registry.WRITE_TOOLS, "page_check", raising=False)
+    monkeypatch.delitem(tool_registry.WRITE_TOOLS, "page_look", raising=False)
+    monkeypatch.setattr(tool_registry, "PAGE_CHECK_STATUS", SimpleNamespace(code=code))
+    text = stira_server._tool_availability_provider(
+        store, {"config": None}, memory_rate_bound=True
+    )()
+    listed = _listed(text)
+    assert listed["page_look"] == (reason,) == listed["page_check"]
+    if reason == ta.DEPENDENCY_MISSING:
+        assert "page_look" in text and "STIRA_BROWSER_PATH" in text
+
+
 def test_a_broken_build_leaves_the_prompt_without_the_section(tmp_path, monkeypatch):
     from dashboard import stira_server
 

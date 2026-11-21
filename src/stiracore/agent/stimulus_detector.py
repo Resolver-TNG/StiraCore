@@ -56,6 +56,12 @@ _SUCCESS = re.compile(
 _JOY = re.compile(r"\b(happy|excited|glad|delighted|joy|fun|lol|haha)\b", re.IGNORECASE)
 _LOSS = re.compile(r"\b(sad|sorry to hear|lost|miss(ed)?|regret|unfortunate(ly)?)\b", re.IGNORECASE)
 
+# Japanese minimal set (#654). ``\b`` does not separate Japanese words, so these
+# are separate, literal patterns; they fire the same rules as the English ones.
+_GRATITUDE_JA = re.compile(r"ありがと|有難う|有り難う|感謝|助かった|助かりました|助かります")
+# A polite question ending at the end of the message ("…ですか", "…ますか。").
+_QUESTION_JA = re.compile(r"(?:ですか|ますか|でしょうか)[。.\s]*$")
+
 # A stimulus is (EMOTION_MATRIX category key, intensity).
 Stimulus = tuple[str, float]
 # An explained stimulus adds the name of the rule that fired (never message text).
@@ -107,7 +113,7 @@ def detect_stimulus_explained(
     resp = agent_response or ""
     combined = f"{msg}\n{resp}"
 
-    if _GRATITUDE.search(msg):
+    if _GRATITUDE.search(msg) or _GRATITUDE_JA.search(msg):
         return (CONNECTION, cap(0.5), "gratitude keyword")
     if _JOY.search(combined):
         return (JOY, cap(0.4), "joy keyword")
@@ -116,7 +122,9 @@ def detect_stimulus_explained(
     if _GREETING.search(msg):
         return (CONNECTION, cap(0.2), "greeting")
 
-    is_question = "?" in msg or bool(_QUESTION.search(msg))
+    is_question = (
+        "?" in msg or "？" in msg or bool(_QUESTION.search(msg)) or bool(_QUESTION_JA.search(msg))
+    )
     is_long = len(resp) > 800
 
     if is_question and is_long:

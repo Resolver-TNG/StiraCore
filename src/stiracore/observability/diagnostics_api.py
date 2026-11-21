@@ -22,6 +22,28 @@ from stiracore.diagnostics.write_errors import WriteFailureBoard
 _CARD_ID = re.compile(r"^[0-9a-f]{16}$")
 _RETRY_STATUS = {"ok": 200, "not_found": 404, "not_retryable": 409, "already_retried": 409}
 _NO_STORE = {"Cache-Control": "no-store"}
+_GUARD_CODE = re.compile(r"^[a-z_]{1,40}$")
+_GUARD_UNREADABLE = {
+    "guard": "unverified",
+    "guard_code": "guard_unreadable",
+    "axis": "axis_unreadable",
+    "measured_age_s": None,
+}
+
+
+def _page_guard_row(read: Callable[[], Any]) -> dict[str, Any]:
+    """Three fixed codes and whole seconds, read now from memory; anything else (free
+    text, a path, an error) is shown as unreadable (fail closed)."""
+    try:
+        row = read()
+        codes = {key: row[key] for key in ("guard", "guard_code", "axis")}
+        if not all(isinstance(v, str) and _GUARD_CODE.match(v) for v in codes.values()):
+            return dict(_GUARD_UNREADABLE)
+        age = row.get("measured_age_s")
+        ok = isinstance(age, int) and not isinstance(age, bool) and age >= 0
+        return {**codes, "measured_age_s": age if ok else None}
+    except Exception:  # noqa: BLE001 - the row never fails the report
+        return dict(_GUARD_UNREADABLE)
 
 
 def create_diagnostics_blueprint(
@@ -29,8 +51,17 @@ def create_diagnostics_blueprint(
     *,
     doctor_report: Callable[[], dict[str, Any] | None],
     run_doctor: Callable[[], dict[str, Any]],
+    page_guard: Callable[[], Any] | None = None,
 ) -> Blueprint:
+    """``page_guard`` (ADR 0015 Addendum rev 6, S1): a reader of the page tools' guard
+    state. Its row is added to the doctor report as ``page_guard`` — read-only, display
+    only; no route here accepts a value for it."""
     bp = Blueprint("diagnostics", __name__)
+
+    def shown(report: dict[str, Any]) -> dict[str, Any]:
+        if page_guard is None or not isinstance(report, dict):
+            return report
+        return {**report, "page_guard": _page_guard_row(page_guard)}
 
     @bp.get("/api/diagnostics/write-failures")
     def write_failures():
@@ -56,10 +87,10 @@ def create_diagnostics_blueprint(
         report = doctor_report()
         if report is None:
             return jsonify(error="the doctor has not run", code="not_run"), 404
-        return jsonify(report), 200, _NO_STORE
+        return jsonify(shown(report)), 200, _NO_STORE
 
     @bp.post("/api/diagnostics/doctor")
     def doctor_rerun():
-        return jsonify(run_doctor()), 200, _NO_STORE
+        return jsonify(shown(run_doctor())), 200, _NO_STORE
 
     return bp

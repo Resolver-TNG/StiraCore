@@ -25,9 +25,10 @@ provider call, no person's turn arriving or holding the turn lock, the minimum s
 (``autonomy.tick_min_spacing_sec``) since the grant's issue, since the previous
 iteration's end (any origin) and since the grant's last resume (#644 U3), the
 **no-action gate** (two consecutive ``iteration_no_action`` ends since the last person's
-press or resume: ticks stay skipped until a person presses or resumes) and, on an
+press or resume: ticks stay skipped until a person presses or resumes), on an
 event-driven wake only, the **flood guard** (at most :data:`FLOOD_STARTS` heartbeat starts
-in :data:`FLOOD_WINDOW_SEC`).
+in :data:`FLOOD_WINDOW_SEC`) and, last, a **round ledger that can record** (ADR 0028 §5:
+``ledger_unhealthy`` otherwise, until a person has looked and the server is restarted).
 
 **A skip is recorded, never deferred**: ``tick_skipped(<reason>)`` (:data:`SKIP_REASONS`)
 counted per grant; there is no queue, no backlog, no catch-up and no replay — a wake after
@@ -103,6 +104,18 @@ SKIP_REASONS = (
     "scheduler_stopped",
     "shutdown",
     "repeated_failure",
+    # ADR 0028 §5 (Q12): the round ledger cannot record — a run nobody can observe is not
+    # started by the heartbeat (a person's press still runs). Counted and shown as the last
+    # reason; it posts no lifecycle event (the ledger is not an authority subject).
+    "ledger_unhealthy",
+    # ADR 0015 rev 6 (S5): the round boundary's axis check of a grant that names a page
+    # tool failed with a non-sticky code — the press is refused with the same code, the
+    # goal is not blocked, and the next wake measures again. (A sticky failure blocks the
+    # goal: that wake is ``goal_state``, as ``workspace_changed``.)
+    "axis_guard_pending",
+    "axis_breaker_not_normal",
+    "axis_rules_changed",
+    "axis_stale",
 )
 #: The skips that last until a state changes: one lifecycle event per (grant, reason).
 STATE_SKIPS = frozenset(
@@ -300,6 +313,10 @@ class GrantTicker:
             return code, grant, None
         if event and self._flooded(facts.get("now")):
             return "flood", grant, None
+        if facts.get("ledger") is not None:
+            # ADR 0028 §5 (Q12), the last clause: every earlier reason and its order are
+            # as before; only a wake that would have started is skipped.
+            return "ledger_unhealthy", grant, None
         stamp = WakeStamp(self, grant, epoch, seq, heartbeat_healthy, run_token, facts.get("now"))
         code = stamp.live()  # nothing moved while the clauses were read
         return code, grant, (None if code else stamp)
@@ -407,6 +424,8 @@ class GrantTicker:
             reason = error.extra.get("reason")
             if reason in SKIP_REASONS:
                 return reason
+            if type(reason) is str and reason.startswith("axis_"):
+                return "goal_state"  # a sticky axis failure: the goal is blocked now
             return _REFUSALS.get(reason, "executor_refused")
         now = stamp.now
         with self._lock:

@@ -8,15 +8,33 @@ writes go through two existing routes with their existing protections: approval 
 (`/api/hitl/<id>/decision`) and chat messages (`POST /api/chat`, CSRF + `Idempotency-Key`,
 the chat page's own code; see "Conversation" below).
 
+## Where do I find it (#809)
+
+| What | URL | How to turn it on | What you see |
+|---|---|---|---|
+| The Stage | `/stage/` (menu item "Stage"; also `/` with `ui.home: "stage"`) | On by default. To turn it off: Settings → **Screens** (`/settings#sec-screens`) → "Use the Stage" off, save, restart the chat server. Or start it with `STIRA_STAGE=0` (the variable wins over the switch, `STIRA_STAGE=1` too) | the scene, the text window with the composer, the choice window for approvals, the whiteboard |
+| Activity (the whiteboard's mode) | `/stage/` → the **Activity** button | comes with the Stage | what runs now, the recent tools and results |
+| Goal grant panel | `/stage/` → **Activity** | the Stage and gateway `autonomy.stage_c` ([autonomy.md](autonomy.md)) | the newest grant, read-only: state, iteration n / max, time and budget left, the cues; links to Settings → Goal grants and to the approvals page |
+| Screens settings | `/settings#sec-screens` (from the Stage: the "Settings › Screens" link in the text window's button row) | always there | the Stage switch, the page `/` opens (both wait for a restart), the frame rate (this browser only) |
+| Board pictures | `/settings#sec-board` | always there | the whiteboard's ```` ```svg ```` pictures on / off |
+| Goal grants | `/settings#sec-grants` | gateway `autonomy.stage_c` | issue / pause / resume / revoke / verify; "See it on the Stage" while the Stage is on |
+| Approvals | `/approvals` (menu item) | always there | the waiting cards and the history; "See it on the Stage" while the Stage is on |
+
+The links add no route and no permission: they are plain same-origin links between pages
+that already exist, and each is shown only when its target exists on this server.
+
 Two ways to open it:
 
-- **Live (stage 2), opt-in:** start the chat server with `STIRA_STAGE=1` and open
-  `http://127.0.0.1:<port>/stage/` (a "Stage" item appears in the sidebar; the page sits in
-  the dashboard shell, right of the side menu). The page reads Stira's own APIs and shows
+- **Live (stage 2), on by default:** open
+  `http://127.0.0.1:<port>/stage/` (a "Stage" item is in the sidebar; the page sits in
+  the dashboard shell, right of the side menu). To turn it off, use Settings → Screens
+  (gateway `stage_enabled: false`, read at start-up) or start the chat server with
+  `STIRA_STAGE=0`. The page reads Stira's own APIs and shows
   real turns, tools, approvals, Neural State and the breaker, and the text window holds the
-  composer (#350). Without `STIRA_STAGE=1` there is no `/stage` route and no nav item.
-  Gateway `ui.home: "stage"` (default `"chat"`) makes `/` open the Stage and lists it first
-  in the menu; it needs `STIRA_STAGE=1` (otherwise `/` stays the chat). `/chat` always stays.
+  composer (#350). While it is off there is no `/stage` route and no nav item.
+  Gateway `ui.home: "stage"` (default `"chat"`; same settings section) makes `/` open the
+  Stage and lists it first in the menu; it needs the Stage on (otherwise `/` stays the
+  chat). `/chat` always stays.
   A reply's ```` ```svg ```` block is drawn on the whiteboard as a picture rebuilt from an
   allow-list (`js/svg_safe.js`: no script, link, outside resource or animation; #453) — **on
   by default** since the ADR 0012 addendum of 2026-10-24; Settings → "Board (Stage)" turns it
@@ -32,8 +50,9 @@ Two ways to open it:
   line, `Enter` while an IME is converting never sends, `↑` in an empty composer opens the
   log, `Esc` closes it. `Esc` also closes the raw view (it covers the text window) and rolls the
   whiteboard up (when the log is not open). Demo only: `Enter`
-  next step, `1`–`9` jump to a demo state, letters `c t y u s r g m k h x a n` jump to the
-  gadget demo states (see "Gadgets"), `0` autoplay.
+  next step, `1`–`9` jump to a demo state, letters `c t y u s r g m f k h x a n` jump to the
+  gadget demo states (see "Gadgets"), `G` (capital) plays the goal grant's life one state per
+  press (see "The goal grant on the board"), `0` autoplay.
 - URL parameters (for screenshots): `?lang=ja|en&raw=1&debug=1&layers=1&seed=N`, demo:
   `&state=<id>&instant=1`; `&frames=N` (fixed 1/60 s steps, frozen after N frames: the same
   state gives the same picture), `&ambient=0` (room ambient off), `&sky=night|dawn|rain|auto`
@@ -426,9 +445,9 @@ approval slip, a warning beacon, an hourglass, an archive box. The same rules ho
 | `monitor` | `gadget.laptop` | as `laptop`, while her motion is `typing_back` / `watch_back` | the same laptop on the room's desk, screen toward her (and us), code running on it; she sits at it, to its left, its screen and keys beside her (desk shot) |
 | `stacklight_back` | `gadget.laptop` | as `stacklight`, with the back view | the lamp next to it |
 | `drones` | `gadget.drones` | `subagent` tool start / end | one fox-eared drone per subagent (six drawn, then "+N"); flies out from beside her and hovers while running; on done flies back beside her on its own side (`docks` [left, right], split at her centre `centerX`: never across her face or over her chest and hands), shows a check and dissolves; on failure stays, sinks, blinks red with "!" until the next turn |
-| `beacon` | `gadget.beacon` | breaker `WARNING` / `CRITICAL` | beacon on the pipe: slow violet glow at WARNING, turning red beams at CRITICAL |
+| `beacon` | `gadget.beacon` | breaker `WARNING` / `CRITICAL` | beacon on the pipe (a sprite stack: base, wire-guarded dome, a reflector paddle baked at 16 angles; the paddle angle is the `beacon.spin` phase): slow violet glow at WARNING, turning red beams and a turning paddle at CRITICAL |
 | `magnifier` | `gadget.magnifier` | `web` tool running (or failed) | magnifier with dithered glass scanning the window |
-| `folder` | `gadget.folder` | `memory` / `file` read running (or failed) | binder slides out of the book row |
+| `folder` | `gadget.folder` | `memory` / `file` read running (or failed) | binder slides out of the book row; a sprite stack: 1–3 binders for that many reads running at once (the value of `gadget.folder`, capped at 3), swung out as it slides |
 | `note` | `gadget.note` | `memory` / `file` write running (or failed) | sticky note pressed onto the shelf; a named `layer` holds the shelf light on its row (procedural top, semantic, episodic) |
 | `stamp` | `gadget.stamp` | `approval.resolved` with `decision` | slip pinned on the wall; the stamper comes down once and leaves 可 (approve, vermilion) or 否 (deny, grey) for the rest of the turn |
 | `hourglass` | `gadget.hourglass` | `job.start` … `job.end` | hourglass on the window sill, sand runs |
@@ -1200,12 +1219,13 @@ like code. The agent cannot add entries or run code (stage 3: human-approved pac
 ## Animation catalog (extension = data, never agent code)
 
 Animations are JSON-like entries interpreted by `anim.js`. An entry names the channels it
-moves, one whitelisted curve per channel (`const`, `sine`, `pulse`, `keys` with `linear`,
+moves, one whitelisted curve per channel (`const`, `sine`, `pulse`, `noise`, `keys` with `linear`,
 `smooth` or `step` easing), a duration, and what starts it. Scopes:
 
 - `idle` — always on (`trigger: { always: true }`) or at random intervals
   (`trigger: { every: [min, max] }`); only body/hair/ear/camera/eye channels. An always-on
-  entry may take its tempo from a derived number (`rateFrom: "breathRate"`, whitelisted).
+  entry may take its tempo from a derived number (`rateFrom: "breathRate"`, whitelisted) and
+  let it drift (`rateJitter: { amp, scale, seed }`: ±`amp` ≤ 0.3, changing over `scale` s).
 - `state` — runs only while a derived state is on (`trigger: { state: "steam" }`); the only
   scope that may drive steam, prop lights, neon flicker and shake.
 - `gesture` — the only scope the agent may select, by id (head, ears, arm, hair, eyes,
@@ -1215,6 +1235,24 @@ moves, one whitelisted curve per channel (`const`, `sine`, `pulse`, `keys` with 
 `validateEntry` drops any entry with a function, an unknown channel or curve, a channel
 outside its scope, a bad id, or enum values outside the sprite list; numbers are clamped to
 the channel range; accepted entries are frozen. Nothing is ever evaluated as code.
+
+**Idle motion has no fixed period (#669).** Two sines with fixed periods come back to the same
+picture at a fixed interval, which reads as a machine. So:
+
+- `noise` (`{ fn: "noise", amp, scale, seed, octaves }`, idle scope only) is smooth value
+  noise: a pure function of the time since the entry started and the `seed`, turning about
+  every `scale` seconds, 1–3 octaves, within ±`amp`. It ignores `loop` / `duration`, so it
+  never wraps. `idle.hair` uses it (`amp` 1.4: the shared sway stays one whole pixel either
+  way, with the hysteresis of the hair rig).
+- `idle.breath` is uneven: the chest rises for 40 % of a cycle, falls for 48 % and rests for
+  the remaining 12 % (plain `keys`), and `rateJitter` lets the cycle drift by ±15 % around
+  the tempo the state gives (`breathRate`). The drawing is unchanged: one pixel, up or down.
+
+Both are deterministic (same seed and same sequence of frame times, same picture: `?frames=N`
+captures stay reproducible) and driven by dt (`?fps=` changes how often a frame is drawn, not
+how much she moves). `tests/stage_idle_test.cjs` checks this, and that the sway does not come
+back onto itself for any shift of 2–40 s. The idea (noise instead of sines, uneven breath) is
+from the idle of LivLiv Player; no code or numbers are taken from it.
 
 **Safety rule:** Stage is extended with data (entries like the one below) or with a pack of
 entries that a human approved and pinned by hash (stage 3, same propose → approve flow as
@@ -1276,7 +1314,8 @@ No other code changes.
 
 ### Serving
 
-`STIRA_STAGE=1` (off by default; read at start-up) registers three GET page routes in
+Gateway `stage_enabled` (Settings → Screens, #477; on by default) or `STIRA_STAGE=1` / `0` —
+the variable wins both ways; read at start-up — registers three GET page routes in
 The chat server (`src/stiracore/observability/stage.py`):
 
 | Route | Serves |
@@ -1604,8 +1643,9 @@ page draws no extra element, adds no timer and makes no extra request
 
 - **What it shows** (in the activity mode, between *Now* and *Recent*; a region labelled
   「目標グラント <id>」 / "Goal grant <id>"): the newest grant issued since the server started —
-  its headline (the grant's or the goal's state, the higher-priority one, with the reason
-  code), the goal state, iterations n / max and the iteration's run state (idle / running /
+  its headline (the grant's or the goal's state, the higher-priority one, with its reason
+  **in words** — 「取り消し済み (緊急停止スイッチ)」 / "Revoked (the kill switch)"; the reason
+  code itself is not drawn, and a code outside the fixed sets is left out), the goal state, iterations n / max and the iteration's run state (idle / running /
   yielded to your turn / a stopped call still open), the last end in words with its detail
   code, the TTL left (a `<meter>`, counted down between reads from the answer's
   `server_time`) and the budget left (a `<meter>`) with this iteration's tokens / the
@@ -1616,7 +1656,33 @@ page draws no extra element, adds no timer and makes no extra request
   agent's completion claim says it awaits your verification — W6c: with the claim's evidence
   (below). A plain link leads to Settings
   → Goal grants (`/settings#sec-grants`), where Revoke / Pause / Verify / Run one iteration
-  stay: **the board is display only** (no button, no route, no state change).
+  stay, and a second one to the approvals page (`/approvals`; #809 — left out when the cue
+  above already is that link, and in the "unknown" state): **the board is display only**
+  (no button, no route, no state change).
+- **Told by a mark and words, not by colour alone.** The headline is a state chip: a mark
+  and the words, and a tone that only adds the colour (`data-tone`): ▶ active (`go`), ‖
+  paused and ? awaiting your verification (`hold`, amber), ■ halted, ✕ revoked, ◷ expired,
+  ⚠ blocked / out of budget, ✗ unmet (`stop`), ✓ ended / complete (`done`). The iterations
+  line has a `<meter>` (n of max, named 「目標グラントの反復の進み」 / "Goal grant iterations
+  done"). When a tenth or less of the TTL or of the budget is left, the line says 「⚠ 残り
+  わずか」 / "⚠ running low". The waiting cue (an approval card, a claim) is a boxed line with a
+  "!" mark. The marks are `aria-hidden`: the words beside them say the same.
+- **The last rounds** (only when the answer has `grant.rounds`, ADR 0028 §5,
+  `activity.rounds_view`): a strip of at most five cells, oldest first — the round's number,
+  what it brought (● a new outcome / ○ a repeated outcome / – nothing observed / ? unknown;
+  ↯ 「割り込みで中断」 / "interrupted" when it ended for your turn, a stop or a shutdown) and
+  the writes and changed files the server counted (a count that is absent is not drawn; the
+  server sends no tool count, so none is shown). A ledger that is not `ok` adds one line in
+  words that points to Settings. No animation is used, so reduced motion changes nothing.
+- **In the demo** (`js/director.js` `GRANT_STEPS`; no server, no request): `G` plays the
+  grant's life one state per press, `?state=grant-<id>` opens one — `issued`, `running`,
+  `approval` (a card waits), `claim` (awaiting your verification), `complete` (confirmed),
+  `killed` (kill switch), `expired` (TTL), `halted` (breaker), `budget` (out of budget),
+  `blocked` (no progress). Each step carries one dummy `GET /api/activity` answer in the
+  server's shape, drawn by the same `activityModel` / `renderActivity` as a live answer; the
+  board's foot says 「ダミーイベント（デモ）」. The standalone page has the board's DOM for
+  this (hidden until such a step) and reads the colour tokens (`static/ui/tokens.css`). The
+  grant steps are not part of the autoplay.
 - **A completion claim's evidence (W6c).** While the goal awaits your verification, and
   read-only after you confirmed it (the audit trail), a group in the panel shows what the
   harness measured at the claim — codes and observed counts, no percentage, never the model's
@@ -1720,7 +1786,7 @@ page draws no extra element, adds no timer and makes no extra request
   | starts | a reply is on the board (pinned or not) | nothing: never taken, she does not move |
   | starts | the activity is on the board | nothing new (it updates in place) |
   | starts | the board is still rolling up or down | nothing |
-  | starts | the board is closed but **pinned** (the pin is board-level and survives a roll-up) | nothing: her next reply must not find the board held |
+  | starts | the board is closed but **pinned** (the pin belongs to the content and survives a roll-up; an explicit switch to other content clears it, #623) | nothing: her next reply must not find the board held |
   | starts | the person's own turn is open | nothing (her reply takes the board) |
   | starts | the log is open | nothing |
   | starts | the tab is hidden | nothing (on return, the first read decides) |
@@ -1772,10 +1838,11 @@ drawn at once.
   steam, the props, the typewriter and the whiteboard's 270 ms roll all run on that `dt`, so
   the tempo is the same at 15, 30 and 60 fps (`tests/stage_pacer_test.cjs`).
 - **Setting it.** `?fps=N` (an integer, 15 to 120) or the one `localStorage` key
-  `stira.stage.fps` (the same range; the page only reads it). `?fps=` wins when present; a
+  `stira.stage.fps` (the same range; the Stage only reads it — Settings → Screens has a
+  slider that writes it, in this browser only; #477). `?fps=` wins when present; a
   value that is not a plain integer in range (`30.5`, `1e1`, `14`, `121`, empty) means the
   default 30 — not the stored value, so a link always behaves the same. Nothing else: no
-  settings page, no server option. The target cannot exceed the display's rate.
+  server option. The target cannot exceed the display's rate.
 - **Whiteboard.** While the board rolls down or up (270 ms, and she steps aside with it) the
   loop runs at 60 fps if the target is lower (`BOARD_FPS`): at 30 the 270 ms roll is only 8
   frames, and the screen (CSS) and her step aside (canvas) would move in coarse steps; at 60

@@ -1,8 +1,11 @@
 # ADR 0013: Audit event contract, separated from operational observability
 
 **Path:** `docs/adr/0013-audit-event-contract.md`
-**Status:** Proposed (revision 5, after design review round 4; needs an operator decision on
-the points marked **Open** before any implementation; nothing here is implemented)
+**Status:** Accepted in part (operator, 2026-11-15). Open (1)–(4) are decided as recommended:
+(1) the existing `events.db`, (2) drop and count an unknown optional field, (3) keyed HMAC for
+argument hashes, (4) latch the writer when an outcome row fails after its effect. Open (5)–(13)
+are still open. The contract is **not implemented as a whole**; ADR 0012's `audit.yolo.*` rows
+already follow §1a / §1b / §1d. History: Proposed (revision 5, after design review round 4)
 **Issue:** #277. Related: #171 / ADR 0009 (hash-chained EventStore, audit adapters), #240 /
 ADR 0006 (durable approvals), #239 / ADR 0008 (scheduler), #190 / ADR 0010 (tool rules),
 #296 / ADR 0011 (grants, authority epoch, lifecycle events), #365 / ADR 0012 (YOLO window,

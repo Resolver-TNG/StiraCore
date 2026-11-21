@@ -58,7 +58,10 @@ _TOOL_SOURCES: dict[str, str] = {
     **dict.fromkeys(
         ("file_read", "view_image", "image_reader", "lsp_diagnostics", "lsp_hover"), "workspace"
     ),
-    **dict.fromkeys(("page_check", "run_checks", "shell", "batch", "python_repl"), "program"),
+    **dict.fromkeys(
+        ("page_check", "page_look", "page_review", "run_checks", "shell", "batch", "python_repl"),
+        "program",
+    ),
     **dict.fromkeys(("delegate", "use_agent", "swarm", "graph", "think"), "child"),
 }
 # Phase 0 has no trust record on memory or files (phase 1 adds them): both untrusted (Q3).
@@ -67,6 +70,9 @@ _BY_REFERENCE = frozenset({"auth_env_var", "aws_auth"})
 FLOW_CODES = ("secret_in_args", "credential_by_reference", "sensitive_context",
               "untrusted_send", "long_payload")  # fmt: skip
 _SEND_ALWAYS = frozenset({"webhook_send", "speak"})
+# Tools outside the external class that send data out all the same: ``page_review`` sends
+# screenshots to the reviewer model's provider (ADR 0015 rev 6, S6). Counted as a send.
+_LOCAL_SEND_TOOLS = frozenset({"page_review"})
 _READ_METHODS = frozenset({"GET", "HEAD"})
 _LONG = 256
 
@@ -154,8 +160,9 @@ def context_label(
 
 
 def egress_tool(name: Any) -> bool:
-    """§6: the external tools plus every tool the table does not know (MCP, unclassified)."""
-    if type(name) is not str or tool_class(name) == "external":
+    """§6: the external tools plus every tool the table does not know (MCP, unclassified),
+    and the tools of :data:`_LOCAL_SEND_TOOLS`."""
+    if type(name) is not str or tool_class(name) == "external" or name in _LOCAL_SEND_TOOLS:
         return True
     try:
         return bool(mcp_tool(name))
@@ -167,7 +174,7 @@ def is_send(name: Any, tool_input: Any) -> bool:
     """§6 send / fetch, read from the arguments; unreadable arguments are send."""
     if not isinstance(tool_input, Mapping):
         return True
-    if name in _SEND_ALWAYS:
+    if name in _SEND_ALWAYS or name in _LOCAL_SEND_TOOLS:
         return True
     if name in ("http_request", "oauth_api_call"):
         method = str(tool_input.get("method") or "GET").upper()

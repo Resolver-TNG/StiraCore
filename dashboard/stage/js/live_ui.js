@@ -235,6 +235,8 @@ export function startLive(ctx) {
       offline: feed.offline,
       turnOpen: feed.turnOpen,
       turnId: feed.turn ? feed.turn.id : null,
+      // #680: the open turn can be stopped with POST /api/chat/cancel (the server says so)
+      turnStoppable: Boolean(feed.turnOpen && feed.turn.stoppable),
       approval: Boolean(feed.approval && ctx.state().approval),
       // any request in the queue, shown or not (#350: "new conversation" waits for all of them)
       approvalsPending: feed.pendingCount > 0 || Boolean(feed.approval),

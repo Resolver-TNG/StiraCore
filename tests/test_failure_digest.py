@@ -145,6 +145,56 @@ def test_counts_patterns_and_top_share():
     assert "lower bound" in text and "1 declared checkpoint" in text
 
 
+def test_scope_tables_cover_every_code_and_anything_else_is_unknown():
+    """#730: a static table (no model); a new code fails here until it is placed."""
+    fd = failure_digest
+    assert fd.SCOPES == ("invariant", "domain", "unknown")
+    assert set(fd.SCOPE_BY_ERROR_CLASS) == fd.TOOL_ERROR_CLASSES
+    assert set(fd.SCOPE_BY_DENY_CODE) == fd.TOOL_DENY_CODES
+    assert set(fd.SCOPE_BY_REASON_CODE) == fd.GRANT_FAILURE_REASONS
+    for table in (fd.SCOPE_BY_ERROR_CLASS, fd.SCOPE_BY_DENY_CODE, fd.SCOPE_BY_REASON_CODE):
+        assert set(table.values()) <= set(fd.SCOPES)
+    # every scope is used, so the column can tell rows apart
+    used = set(fd.SCOPE_BY_ERROR_CLASS.values()) | set(fd.SCOPE_BY_REASON_CODE.values())
+    assert used == set(fd.SCOPES)
+    assert fd.tool_scope("unknown_tool", None) == "invariant"
+    assert fd.tool_scope("invalid_input", None) == "invariant"
+    assert fd.tool_scope("tool_failed", None) == "domain"
+    assert fd.tool_scope("exception", None) == "unknown"
+    # a refusal is decided by its deny code; without one it is not decided
+    assert fd.tool_scope("refused", "rule_never") == "invariant"
+    assert fd.tool_scope("refused", "other") == "unknown"
+    assert fd.tool_scope("refused", None) == "unknown"
+    assert fd.tool_scope(None, "rule_never") == "invariant"
+    assert fd.tool_scope("tool_failed", "other") == "domain"  # not a refusal: the class decides
+    assert fd.reason_scope("blocked_loop_detected") == "invariant"
+    assert fd.reason_scope("blocked_missing_input") == "domain"
+    assert fd.reason_scope("tick_skipped_clock") == "unknown"
+    for other in (None, "", CANARY, 7, ["exception"], "iteration_done"):
+        assert fd.tool_scope(other, other) == "unknown"
+        assert fd.reason_scope(other) == "unknown"
+
+
+def test_every_pattern_carries_its_scope_and_the_table_has_the_column():
+    tools, lifecycle = _sample()
+    lifecycle.append(_life(8, "goal", "blocked_missing_input"))
+    digest = failure_digest.build(tool_rows=tools, lifecycle_rows=lifecycle)
+    assert {p["pattern"]: p["scope"] for p in digest["patterns"]} == {
+        "tool:error:tool_failed": "domain",
+        "grant:grant_iteration:iteration_timeout": "unknown",
+        "tool:denied:refused:rule_never": "invariant",
+        "grant:goal:blocked_no_progress": "unknown",
+        "grant:goal:blocked_missing_input": "domain",
+        "tool:error:exception": "unknown",
+        "tool:error:unclassified": "unknown",
+    }
+    text = failure_digest.to_markdown(digest)
+    assert "| # | Pattern | Count | Share | Scope | First (UTC) |" in text
+    assert "| 1 | `tool:error:tool_failed` | 4 | 30.8% | domain |" in text
+    assert "| 3 | `tool:denied:refused:rule_never` | 2 | 15.4% | invariant |" in text
+    assert "Scope is a fixed table" in text and "not verified" in text
+
+
 def test_build_is_deterministic_and_independent_of_row_order():
     tools, lifecycle = _sample()
     expected = failure_digest.build(tool_rows=tools, lifecycle_rows=lifecycle)
@@ -333,6 +383,7 @@ def test_output_is_an_allow_list_bodies_previews_and_secrets_never_appear():
         "deny_code",
         "subject_kind",
         "reason_code",
+        "scope",
         "count",
         "share",
         "first_ts",
@@ -341,6 +392,7 @@ def test_output_is_an_allow_list_bodies_previews_and_secrets_never_appear():
     }
     for pattern in digest["patterns"]:
         assert set(pattern) <= allowed
+        assert pattern["scope"] in failure_digest.SCOPES
         for example in pattern["examples"]:
             assert set(example) <= {"event_id", "turn_id", "subject_id"}
     text = failure_digest.to_markdown(digest)

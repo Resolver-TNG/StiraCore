@@ -14,7 +14,7 @@ they are more precise (ADR numbers in brackets).
 |---|---|---|
 | Circuit breaker, `BreakLevel` | ブレーカー | The state-driven safety level computed in `StiraEngine.pre_turn` (ADR 0002, amended). |
 | `NORMAL` | 正常 | No restriction. |
-| `WARNING` | 警告 | `stability < stability_warning` (0.5). Write/exec tools are **withheld** (there is no confirmation route; "requires confirmation" means hidden). Reads are not limited (ADR 0010 §2). Exit above 0.6. |
+| `WARNING` | 警告 | `stability < stability_warning` (0.5). Write/exec tools are **withheld** (there is no confirmation route; "requires confirmation" means their calls are refused with `breaker_write_refused` — since #259 they stay in the tool list). Reads are not limited (ADR 0010 §2). Exit above 0.6. |
 | `CRITICAL` | 危険 | `stability < stability_critical` (0.3). With `critical_action="readonly"` (library default) write/exec tools are withheld; with `"halt"` (chat server) the model still runs, reads continue and every write/exec call needs a human approval. Exit above 0.45 after at least 3 protected turns. |
 | `COHERENCE` | 一貫性低下 | `bc_score < bc_threshold` (0.6); identity is re-injected, tools are not limited. Exit above 0.7. Formula and window: [coherence.md](coherence.md). |
 | `critical_action` | — | `"readonly"` or `"halt"`. `"halt"` is **not** a full stop for `NXPAgent`; only isolated NXP subagents stop before the model call. |

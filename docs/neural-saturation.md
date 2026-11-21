@@ -140,8 +140,13 @@ cause is the classifier, not the coefficients. With the default choice `auto`, t
 uses Sokudan when the optional `sokudan` package is installed and the rule detector
 (`RuleBasedClassifier`) otherwise. The rule detector fires on a few fixed patterns only
 (gratitude, greeting, question, long reply, tool error/success, breaker level), so many
-turns get **no stimulus** and leave Neural State unchanged. A live run measured 7 of 19
-turns with a change on the rule fallback.
+turns get **no stimulus** and leave Neural State unchanged. Its keywords are English, plus
+a minimal Japanese set (#654): gratitude (`ありがとう` / `有難う` / `感謝` / `助かった` /
+`助かりました` / `助かります`) and questions (a full-width `？` anywhere, or a message that
+ends in `ですか` / `ますか` / `でしょうか`). These fire the same two rules with the same
+intensity; other Japanese (joy, loss, greetings, plain-form questions without `？`) still
+gives no stimulus. A live run measured 7 of 19 turns with a change on the rule fallback
+(before the Japanese set).
 
 Where it shows (display only; the classifier, its thresholds, EMOTION_MATRIX and
 NeuralState are not changed):

@@ -16,11 +16,11 @@ Always (measurement).
 
 | # | Where | What it decides | Applies to |
 |---|---|---|---|
-| 1 | `tool_registry.get_tools(level, read_only_paths, protected_dirs, include_exec)` | Exec-class tools hidden unless opted in; WARNING+ drops `WRITE_TOOLS`; wraps `file_write`/`editor` in `IdentityProtectedTool` | standard, MCP (registered into `READ_TOOLS`/`WRITE_TOOLS`) |
+| 1 | `tool_registry.get_tools(level, read_only_paths, protected_dirs, include_exec)` | Exec-class tools hidden unless opted in; WARNING+ drops `WRITE_TOOLS` when a level is passed (unchanged by #259; the chat server's `_stira_tools` no longer passes it, so its list is fixed — except `delegate`, still left out at CRITICAL, see ADR 0010 addendum #259); wraps `file_write`/`editor` in `IdentityProtectedTool` | standard, MCP (registered into `READ_TOOLS`/`WRITE_TOOLS`) |
 | 2 | `tool_registry.register_mcp_tools(provider, read_tool_names=)` | Unknown MCP tools default to WRITE; read/write name collisions rejected | MCP |
-| 3 | `NXPAgent._prepare_turn` | HALT keeps write tools listed so each call reaches the HITL gate (#4; no approver → rejected, the turn continues; only `NXPSubagent` stops before the model call); `REQUIRE_CONFIRMATION` (WARNING) or `BLOCK_WRITES` without HALT drops tools named in `blocked_tool_names` ∪ `WRITE_TOOLS`; unresolvable names are dropped | every NXPAgent / NXPSubagent turn |
+| 3 | `NXPAgent._prepare_turn` | **#259 (ADR 0010 addendum): the breaker no longer removes tools here** — the list is the same at every level, so the cached tool prefix does not change on a transition; the calls are refused by #5 (`breaker_write_refused`) and, in the split prompt-cache mode, the runtime block carries one fixed line saying so. HALT keeps write tools listed so each call reaches the HITL gate (#4; no approver → rejected, the turn continues; only `NXPSubagent` stops before the model call). While `REQUIRE_CONFIRMATION` (WARNING) or `BLOCK_WRITES` without HALT holds, tools whose name cannot be resolved are still dropped (fail closed: #5 decides by name) | every NXPAgent / NXPSubagent turn |
 | 4 | `CheckpointHooks.before_tool` (BeforeToolCall) | At CRITICAL+HALT asks HITL for names in `blocked_tool_names` ∪ `WRITE_TOOLS`; approve/edit/reject/respond. A call `IdentityGuard.path_denial` already denies (floor, outside write roots) is refused **without asking** (#243) | NXPAgent, GuardedDelegate |
-| 5 | `IdentityGuard.check_tool_call` (BeforeToolCall) | Write-capable = name heuristic ∪ `blocked_tool_names` ∪ live `WRITE_TOOLS`. `path_denial`: the floor (identity paths, read-only paths, `protected_dirs`) over all arguments, plus the write roots for the `path` of `file_write`/`editor` — denied at every level (HITL never overrides); BLOCK_WRITES denies unless HITL approved; WARNING denies (no confirmation gateway) | NXPAgent, GuardedDelegate |
+| 5 | `IdentityGuard.check_tool_call` (BeforeToolCall) | Write-capable = name heuristic ∪ `blocked_tool_names` ∪ live `WRITE_TOOLS`. `path_denial`: the floor (identity paths, read-only paths, `protected_dirs`) over all arguments, plus the write roots for the `path` of `file_write`/`editor` — denied at every level (HITL never overrides); #259: at WARNING and at CRITICAL without HALT a call to a name in `blocked_tool_names` ∪ `WRITE_TOOLS` is refused by name, whatever its arguments or approval (`breaker_write_refused`; the names #3 used to remove); BLOCK_WRITES denies unless HITL approved; WARNING denies (no confirmation gateway) | NXPAgent, GuardedDelegate |
 | 6 | `IdentityProtectedTool.stream` | `WritePathPolicy` at the execution boundary: SOUL/IPD basenames, configured read-only paths, `protected_dirs` subtrees (symlink/hard-link/case/NFD aware), write roots; also the directories `makedirs` would create. The tool receives the checked absolute path. `editor` is Stira's (SDK `file_editor` + `StiraWriteSandbox`, #245): no content cache, no `.bak`, and its sandbox re-checks every wrapper's policy and writes only the checked path, only inside an approved step (no final-symlink follow) | `file_write`, `editor` — also inside hook-less inner agents |
 | 7 | `memory_tools.memory_write` | Only the episodic layer may be written by tools | memory tools |
 | 8 | `delegation._register_delegation` / `create_nxp_subagent` | Delegate names join the parent's `blocked_tool_names`; child gets its own engine/breaker, copied policy, inherited `read_only_paths` and write policy (`write_roots=` may narrow, never widen), file tools re-wrapped; `handoff_to_agent`/`subagent` blocked | `register_subagent_tool`, `register_spawn_tool`, Swarm |
@@ -261,22 +261,23 @@ stores and are unchanged.
 
 ## Measured matrix
 
-`filtered` = not offered to the model; `blocked:hitl` = CRITICAL HALT with no human
-(callback absent → reject); `blocked:breaker` = denied by #5.
+`blocked:hitl` = CRITICAL HALT with no human (callback absent → reject);
+`blocked:breaker` = offered to the model, then denied by #5 with `breaker_write_refused`
+(since #259 this replaces `filtered` = not offered, for NXPAgent's own list).
 
 | Path | Case | NORMAL | WARNING | CRITICAL (halt, no human) | CRITICAL (halt, approved) | CRITICAL (readonly) |
 |---|---|---|---|---|---|---|
-| standard `file_write` | ordinary path | executed | filtered | blocked:hitl | executed | filtered |
+| standard `file_write` | ordinary path | executed | blocked:breaker (also with an approver: no card) | blocked:hitl | executed | blocked:breaker |
 | standard `file_write` | `SOUL.md` | blocked:identity | – | – | blocked:identity (HITL not asked since #243) | – |
 | standard `file_write` | `memory/procedural/…` | blocked:identity (#6) | – | – | – | – |
-| MCP unknown (`put_object`) | ordinary path | executed | filtered | blocked:hitl | executed | – |
+| MCP unknown (`put_object`) | ordinary path | executed | blocked:breaker | blocked:hitl | executed | blocked:breaker |
 | MCP unknown | `SOUL.md` | blocked:identity (**fixed in #145**, was executed) | – | – | – | – |
-| MCP declared read | ordinary path | – | – | executed | – | – |
+| MCP declared read | ordinary path | – | – | executed | – | executed |
 | delegation child (`file_write`) | parent NORMAL / child NORMAL | executed | – | – | – | – |
 | delegation child | `SOUL.md` | blocked:identity | – | – | – | – |
 | delegation child | child WARNING | – | blocked:breaker | – | – | – |
 | delegation child | child CRITICAL | – | – | child halted | – | – |
-| delegation tool | parent CRITICAL | – | – | blocked:hitl | – | – |
+| delegation tool | parent WARNING / parent CRITICAL | – | blocked:breaker | blocked:hitl | – | – |
 | write-shaped, unregistered (`notes_append`) | | executed | blocked:breaker (**fixed in #145**, was executed) | blocked:breaker | blocked:breaker, HITL not asked | – |
 | unclassified (`do_thing`) | | executed | executed | **executed** | executed | – |
 
@@ -436,6 +437,8 @@ classified).
 | `use_agent`, `swarm`, `graph`, `think` | tool-using inner agents | justified (exec class) |
 | `http_request`, `web_fetch`, `web_search`, `webhook_send`, `oauth_api_call`, `rss`, `speak`, `memory` | network egress / external side effects (ADR 0012's external class with `perplexity_search`: answered by YOLO only in a window of tier external, under §10 — phase 6) | justified (exfiltration) |
 | `page_check` | runs the agent's own page in a closed browser, sends it a few input events and writes screenshots under the workspace (ADR 0015) | justified (local write; YOLO: a card in every window) |
+| `page_look` | `page_check` for workspace files only (no URL, no port), same browser, limits and screenshots (ADR 0015 rev 6, S3) | justified (local write; Ask / Never / conditional Always, S4; YOLO: a card in every window while capped) |
+| `page_review` | sends one run's own screenshots to the reviewer model a person configured (ADR 0015 rev 6, S6; registered only while `task_models.visual_review` is set) | justified (egress of pixels; Ask / Never; YOLO: a card in every window) |
 | `run_checks` | runs the project's own checks (fixed kinds) on the agent's code in a throwaway copy of a workspace folder (ADR 0019; registered only when gateway `run_checks` is on) | justified (executes code; YOLO: a card in every window) |
 | `propose_procedure` | stages `procedural/staging/<key>` for a person's review (#463; bound by the chat server only) | justified (memory write; Ask or Never only; YOLO: a card in every window) |
 
@@ -469,7 +472,7 @@ Phases 1 and 2, Addendum rev 3 (`type`, `wait_for`, assertions) and rev 4 (phase
 `localhost` origin) (#449). Registered only when a browser is found (`STIRA_BROWSER_PATH`, known
 locations, `PATH`), not on Windows and not as root; `stira doctor` says why it is missing.
 Offered only with the workspace write policy (`get_tools(write_policy=…)`); a write tool
-(hidden at WARNING and above). New installs: **Ask**; an existing `custom` rule file: Never
+(at WARNING and above it stays listed and its call is refused, `breaker_write_refused`, #259). New installs: **Ask**; an existing `custom` rule file: Never
 until a person turns it on. **Ask or Never only in phase 1** (`tool_policy.NO_ALWAYS_TOOLS`):
 the page runs JavaScript the agent wrote, and Always would also run it in turns no person
 watches (jobs, webhooks, bots); the settings page offers no Always, the rule API answers
@@ -483,11 +486,12 @@ measured at every start (phase 2 did not change the rule or the tier).
 | the localhost origin (phase 3) | the proxy forwards only `http://localhost:<port>/…` (origin-form, `Host` set, `Proxy-*` / `Keep-Alive` dropped, `Connection: close`) and `CONNECT localhost:<port>` (WebSocket) to the literal `127.0.0.1:<port>` — no name resolution, no IPv6 — and refuses (403) every other host and port, loopback included; a redirect leaving the origin is the browser's next request and is refused (a main-frame one is also aborted, `navigations`); a dead port → 502. Measured (Addendum rev 4): a LAN canary (TCP + UDP), another loopback port and a listed port that is not the target's got 0 connections / packets over 4 runs, while same-origin `fetch` and WebSocket worked; with the proxy flags removed they got 13 / 4 / 10 / 9 |
 | who adds a port | only `POST /api/tools/page-check-ports` (settings page, CSRF / Origin / Host checked): adding needs the port typed in the confirmation (`confirm`, `confirm_ports`), a NORMAL breaker, no running agent tool call (with YOLO) and, with the YOLO allowance, the host confirmation; one settings-history row (not restorable by a rollback). The tool APIs and the hub keep the recorded ports (not an `as_dict` field); a hand edit that adds one locks the rules (`edited`); a recovery save drops them |
 | network | `--proxy-server` to a listener inside Stira that answers 403 and records only `host[:port]`; `--proxy-bypass-list=<-loopback>` (loopback goes there too); WebRTC direct UDP off; host names never resolved locally. Measured in `tests/test_page_check.py`: fetch, img, iframe, prefetch, beacon, WebSocket and a WebRTC STUN request towards a LAN canary and a loopback canary on another port reach nothing (and do reach them with the proxy switches removed) |
-| reads | `file://` sub-resources inside the workspace only (CDP `Fetch` interception; refused ones counted as `outside_workspace`, no path returned); a directory is refused (its listing would show file names) |
+| reads | `file://` sub-resources inside the workspace only (CDP `Fetch` interception; refused ones counted as `outside_workspace`, no path returned); a directory is refused (its listing would show file names). #766 (ADR 0015 rev 6, S9): an allowed sub-resource (plain `GET`, a regular file ≤ 16 MiB, the read floor of `file_read`, opened the way `file_read` opens one — `open_for_read` under the read floor, then the workspace rule again on the path as it resolves after the open, which must be the opened inode — and read from that descriptor; a path swapped between the check and the open is failed and counted as `outside_workspace`, a missing file is failed and listed in `missing_files`, and after 64 MiB answered in one call, `FULFIL_TOTAL_MAX_BYTES`, nothing more is answered and the call's `reason` is `fulfil_limit`) is answered by Stira over the CDP pipe with a `Content-Type` from a closed table and `Access-Control-Allow-Origin: *`, so ES modules load from a file target — no listener, no port; the page's origin stays opaque. A workspace script that did not load is a page error (`script_load_failed`, no URL) |
 | frames and workers | auto-attached paused (`waitForDebuggerOnStart`); each session runs only after Chrome **confirmed** its `Fetch.enable` and `Target.setAutoAttach`. An error or no answer within 5 s ends the run and the browser (`status: error`, `reason: browser_guard_unverified`, `guard_failed` names the step) — fail closed. A dedicated worker has no `Fetch` domain (measured); its requests pause in the frame that owns it, so it needs the auto-attach only |
 | navigation, popups, downloads, uploads | a document request to the network (navigation away, a network frame) is aborted and counted (`navigations`, host recorded; the page stays where it was, so later steps still act on it); a new page target is closed (counted); downloads denied (counted); file choosers never answered (counted); page loads ≤ 3 (`page_limit`) |
 | input actions (phase 2) | `actions`: at most 20 of `click` (CSS selector or `[x, y]`), `key` (+ `hold_ms`), `key_down`, `key_up`, `move`, `wait_ms`, `screenshot`, `text` (CSS selector), checked **before** a browser starts (anything else, extra keys, a point outside 1280×800, an unknown key → `refused` / `invalid_action`; more than 20 → the first 20 run, `action_limit`). No action runs code: selectors are arguments of Stira's fixed page functions (`Runtime.callFunctionOn`, `silent`), never part of a script. Keys: one printable ASCII character or a named key (Enter, Tab, Escape, Backspace, Delete, Space, arrows, Home, End, PageUp, PageDown, Shift) — no Control / Alt / Meta and no modifiers, and only the Windows key code (a native key code made Chrome on macOS run a browser shortcut that opened a `chrome://help` page: measured, closed and counted as a popup). Real input events (`Input.dispatchMouseEvent` / `dispatchKeyEvent`). One `wait_ms` / `hold_ms` ≤ 10 s (`clamped`) |
 | `type`, `wait_for`, assertions (Addendum rev 3) | `{"type": "…", "into"?: css}`: 1–200 characters with no control / format character, inserted at once with `Input.insertText` into `into` (focused first) or the focused element, only when it is editable (`not_found`, `not_editable`, `not_focused`, `bad_selector` otherwise; nothing inserted). `{"wait_for": {"selector": css, "visible"?: bool} \| {"text": "…"}, "timeout_ms"?: n}`: polled every 100 ms, default 5 s, cut at 10 s (`clamped`), `code: timeout` when not met, `waited_ms`. `{"expect": {"selector": css, <form>}}` with exactly one of `exists`, `visible`, `text_contains`, `text_equals`, `count`: a fixed page function returns the facts (count, visible, text of the first match), **Stira decides pass / fail** in Python (folded whitespace, case-sensitive; malformed facts or a bad selector never pass). Visible = a non-empty box not wholly left of / above the page, `visibility: visible`, no opacity-0 ancestor, `checkVisibility` where present; occlusion and `overflow` clipping are not checked. Each counts toward the 20 actions; the result has `assertions` (`passed`, `failed`, `not_run`, one `{i, form, pass}` per assertion) in Stira's block; a failed assertion does not change `status`. No page text is added: the probe's text stays in Stira |
+| `explore`, `design_lint` (#747) | two more actions, off unless asked for, each at most once per call; the rule (Ask) and the tier are unchanged. `{"explore": {"max_steps"?: 1–200 (default 40), "seed"?: int, "reach_markers"?: [≤ 10 strings]}}`: a seeded walk — each step clicks one visible, uncovered clickable inside the viewport or presses Enter — reported as `explore` (`steps`, `clicks`, `keys`, `distinct_screens`, `unique_lines`, `errors`, `reached` per marker, `reached_any`); the text is hashed in the page and only counts and booleans leave it. `{"design_lint": true}`: `design_lint` with `empty_area_ratio` (bottom / left / right), `min_font_px`, `small_text`, `contrast_failures`, `overflow_clipped`, `overlap_pairs`, `dev_strings` (lines and a count per pattern **id** of Stira's fixed list — never the matched text; the caller cannot supply a pattern), `flags` and `ok`. Usage: [verification.md](verification.md) |
 | steps (phase 2) | one entry per action: `ok`, a `code` when not ok (`not_found`, `not_visible`, `bad_selector`, `screenshot_limit`, …) or `clamped`, `text_changed` (length + hash of the body text before / after, computed in the page; the text itself is not moved), `new_errors` (page + console errors during the step) |
 | page text (phase 2) | `text` (the body after the actions) and `text` steps share **4,096 characters per call** (`output_truncated` when cut). Every string the page controls — title, text, step texts, first messages, missing file names, hosts — reaches the model only in a second content block: a fixed note (data, not instructions) and one `<page-content>` block, each string defanged (NFKC, no invisible characters, every `<` / `>` and look-alike → `&lt;` / `&gt;`, as `delegate`) and secret-masked, so the page can neither close the block nor imitate `<system-reminder>` / `<recalled-memory>`. Stira's JSON (status, codes, counts, steps, screenshot paths, `open_yourself`) is the first block |
 | process | a fresh `--user-data-dir` per call, removed afterwards; Chrome's own sandbox on (`--no-sandbox` is never passed); CDP over `--remote-debugging-pipe` (no debugging port); the process group is killed on every exit; 30 s per call (`time_limit`) |
@@ -504,13 +508,90 @@ sandbox helpers) is not measured yet. Between the `file://` check and Chrome's r
 same-user program could swap a symlink, and a hard link to a file outside the workspace is
 not detectable by path; both need a same-user writer (out of scope, as ADR 0004).
 
+### `page_look` (file targets only, ADR 0015 Addendum rev 6, S3)
+
+`tools/page_look.py`. The same closed browser as `page_check` — it runs through
+`run_page_check`, so the actions, limits (20 actions, 30 s, 4 screenshots), proxy, profile,
+`<page-content>` frame, untrusted label and logs are `page_check`'s — but **only a workspace
+`.html` / `.htm` / `.svg` file**: a web URL of any form (`http://`, `https://`, `http:host`,
+`ws://`, upper case, leading spaces) is refused `localhost_not_allowed` before a browser starts,
+and no localhost port is ever passed on (not from `page_check_ports`, not from the call). The
+tool reads `target`, `actions` and `wait_ms`; any other input is ignored. Registered with
+`page_check` (the same browser discovery; no browser → neither, `stira doctor` says why) and
+offered only with the workspace write policy; a write tool (at WARNING and above listed, its call refused: `breaker_write_refused`, #259).
+
+**Rule: Never / Ask / conditional Always** (S4, `tool_policy.CONDITIONAL_ALWAYS_TOOLS`;
+profiles Never / Ask / Ask, so only a person's save — a loosening with `confirm_always` —
+writes Always; a `trust_all` file reads Ask for it unless `enabled_tools` names it). A saved
+Always is effective only while (1) the cached axis result is a fresh `pass`, (2) the turn's
+origin class is `chat_person` or `yolo_window`, (3) `file_read`'s effective rule is Always
+and (4) a slot of the turn can be reserved: fewer than `CALLS_PER_TURN` (12) rule-answered
+calls in the turn, and fewer than `REPEATED_FAILURE_RUNS` (3) of them failed or still running
+(any reason, a success between them takes nothing back; a window's automatic continues are
+counted per window id too). Otherwise the gate reads Ask (`rule_always_capped`, the card
+says `always: capped:<code>`; codes of (4): `repeated_failure`, `call_limit`) and any
+exception is a cap (`cap_unreadable`). A bot, webhook, job or resume turn (no live mark) caps
+`origin_not_covered`; a live mark of another agent is a card. The gate reserves the slot
+before the rule answers; a call the rule answered checks conditions 1–4 and both saved
+rules (`page_look` itself, `file_read`, read from the file again) in the tool before a
+browser starts (capped → `refused` with the code). A call that neither a person's card nor
+the gate's rule answer stands behind — a caller without `CheckpointHooks`, such as a
+`use_agent` child — is refused `unanswered_call` (its row has no `answered_by`). YOLO: a
+card in every window while capped (`PERSON_TOOLS`; a window never answers
+it). Not given to a `delegate` child (`NOT_FOR_CHILDREN`, by name), not an agent-layer job
+tool, not nameable in a grant scope, not in `ADMIN_UNREACHABLE_TOOLS`. The chat server
+measures the axis for `page_look` at every call (`_wire_page_look_always`), so a saved
+Always runs without a card there while the conditions hold (ADR 0015 "S4 as built", S4b,
+S4c).
+
+**Record.** A call no person's card approved writes one `audit.page.page_look.<status>` row
+(`AuditChain.record_page`): only `reason`, `answered_by` (`rule_always` for a rule answer),
+`window` (the open YOLO window's id), `grant`, `round`, `origin`, `axis`
+(`axis.current()`), `guard`, `target` (`page:` + an HMAC of the workspace-relative path under
+one key per install, `page-look-target.key` beside the event store, mode 0600), `actions`
+(count per kind), `counts` and `shots` (SHA-256 of the PNGs
+written, ≤ 4). Another field or a value outside its form raises and writes nothing. Never page
+text, a title, a selector, typed text, pixels, a path, a URL, a host or a port. A call a
+person's card approved keeps today's rows only.
+
+**R1** (`tools/page_shot_registry.py`, memory only): `run → [(index, sha256, size)]` for every
+PNG `run_page_check` wrote in this process (both tools), at most 64 runs, each for 30 minutes
+on an injected monotonic clock. `page_review` reads it (below); the narrowed `view_image`
+will.
+
+## `page_review` (reviewer model, ADR 0015 Addendum rev 6, S6)
+
+`tools/page_review.py` (#774). **A send**: the PNGs of one run go to the model of the task
+`visual_review` (`agent/task_models.py`). **Off unless set**: with the task unset
+`page_review.reviewer_for` returns `None`, `tool_registry.enable_page_review(None)` registers
+nothing and the tool definitions are byte-identical; the chat server's Tool Availability
+section has no line for it (set, but no browser found: a line with `page_check`'s reason).
+It shares `page_check`'s browser discovery and, as
+C6, is offered only with a write policy. A write-class name (at WARNING and above listed, its call refused: `breaker_write_refused`, #259).
+
+| What | How it is held |
+|---|---|
+| input | `run` only: an id of R1 of this process (`RUN_ID` form). Every other input of a call is ignored |
+| the card | Stira's text only (`CheckpointHooks.input_preparers["page_review"]` = `page_review.prepare_input`, before the gate): `run` (a run id, else `refused:invalid_run`), `sends` (a fixed sentence), `sends_to: {provider, model}` (the route's; `inherit`: the chat model **as it is now**, its provider read from the live model object; `unnamed` when nothing would be sent; never a URL or a key), `images` (what R1 holds, ≤ 4). Every other key a model wrote is dropped |
+| the reviewer, at each send (S6d) | `Reviewer._target` reads where the review goes **now**, never the start-up answer. `inherit`: the chat model a person may have switched on the settings page — it must be a model class of the start-up provider with `vision` (the start-up spec's row for the same id, else the capability table's), else `reviewer_changed` and nothing is sent. The approved card's `sends_to` must equal it (`reviewer_changed`), and the model about to be called must carry the same names (routed and inherited alike). The row, the card and the task-model record therefore name the model the pixels go to |
+| what is sent | `.stira-verify/<run>/<n>.png` for the shots R1 holds (≤ 4), each opened with `O_NOFOLLOW` (the file itself; the directories above it are not checked), a regular file, of the recorded size and SHA-256 (`shot_changed` otherwise; `shot_missing` when the run's directory is no longer on disk — the newest 5 runs are kept; an unknown or expired run: `run_unknown`); the fixed `RUBRIC` as the system prompt; `shot N` labels. No tools, no conversation, no page text, no path. Nothing is sent to a reviewer whose provider / model id is not a plain name (`reviewer_unnamed`: a control character, more than 200 characters, `://`) |
+| who answers the call | a person's card only: `NO_ALWAYS_TOOLS` (Ask / Never; a saved Always or `trust_all` reads Ask), `PERSON_TOOLS` (a card in every YOLO window). The tool itself refuses a call whose id is not in the turn's person-approved set (`unanswered_call`) |
+| who never gets it | a `delegate` child (`NOT_FOR_CHILDREN`), a job (`JOB_READ_ONLY_TOOLS`), a grant (`grants.schema.TOOLS`) |
+| limits | 60 s for the caller whatever the provider does (the call runs in its own thread; at the limit the lock is released and the late answer is never read; at most 2 such calls may still run, else `review_busy` — a reviewer that never returns keeps it so until the server restarts; a call left behind writes no task-model row of its own; a provider that works in a worker thread, as Bedrock's client, can hold the process exit until its call ends); the answer's stream is closed past 3,200 characters; `REVIEWS_PER_TURN` (2) per live turn mark (`review_limit`; no turn: `no_turn`); `visual_review.daily_tokens` per UTC day (`review_budget`; unset = every call refused; memory only; no usage or 0 input tokens reported = the estimate 800 + 1,600 per image) |
+| failure | `review: {status: "error", code}` with `review_failed` / `review_timeout` / `review_unparsable`; never a retry and never the chat model (an off task's `model_for` is `None`, not the default) |
+| what the model reads | Stira's JSON (codes, counts) and one `<visual-review>` block after a fixed note; each `note` through `neutralize_child_markers` then `mask_secrets` |
+| logs | `payload_for_log`: the run id (or `refused:invalid_run`) and Stira's JSON; never a note |
+| record | one `audit.page.page_review.<status>` row for **every** call that reaches the tool, one a person's card approved included (`answered_by: person`; a card the person rejects never reaches the tool and writes no row here — it is in the approval history). Written in the worker that made the call, so a turn stopped mid-send still leaves it. Fields: the `page_look` fields plus `images`, `bytes`, `rubric_version`, `provider`, `model`, `input_tokens`, `output_tokens`, `issues` (by severity); another field raises. The task-model row (`audit.task_model.call`) gains `images`, `bytes`, `rubric_version` |
+
+Not built (S7 and later): a conditional Always, the reviewer's `loopback` / `remote` class
+and the rest of A8 (the endpoint's hash and class; `reviewer_changed` covers the provider, `vision` and the approved card today), `run_other_grant` (R1 has no grant tag). ADR 0015 "S6 as built".
 
 ## `run_checks` (verification runner, ADR 0019)
 
 Phases 0 and 1 (#167, commander decisions 2026-10-21). **Off by default**: registered only
 when `gateway-config.json` says `run_checks: {"phase": 1}` (absent = nothing registered,
 nothing else changes; `STIRA_RUN_CHECKS=0` forces it off), not on Windows and not as root.
-Offered only with the workspace write policy; a write tool (hidden at WARNING and above).
+Offered only with the workspace write policy; a write tool (at WARNING and above listed, its call refused: `breaker_write_refused`, #259).
 New installs with the feature on: **Ask**; an existing `custom` rule file: Never until a
 person turns it on. **YOLO: a card in every window** while the rule is Ask (`PERSON_TOOLS`,
 ADR 0019 Q2; answering it inside a window is a later decision, phase 1b).

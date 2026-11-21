@@ -53,28 +53,91 @@ EXTERNAL_SEND_TOOLS = frozenset({"http_request", "webhook_send", "oauth_api_call
 # Ask, with one warning per process.
 # ``propose_procedure`` (#463): Ask or Never only too — an Always rule would let turns no
 # person watches (jobs, webhooks, bots) stage rules for the review queue unseen.
-NO_ALWAYS_TOOLS = frozenset({"page_check", "propose_procedure"})
+# ``page_review`` (ADR 0015 rev 6, S6): a send (screenshots to the reviewer model). Ask or
+# Never only until S7 gives a loopback reviewer its conditional Always.
+NO_ALWAYS_TOOLS = frozenset({"page_check", "page_review", "propose_procedure"})
 
 # ADR 0019 Q3 (#167): a person may save Always for ``run_checks``, but it is **effective**
 # only while this host's containment is verified ``os_sandbox`` (``run_checks.
 # always_effective``); elsewhere the gate reads it as Ask (``rule_always_capped``) and the
 # settings page shows the saved Always with that reason.
-CONDITIONAL_ALWAYS_TOOLS = frozenset({"run_checks"})
+# ``page_look`` (ADR 0015 rev 6, S4): effective only while the axis result is a fresh
+# ``pass``, the turn is a person's chat turn or a YOLO window's, ``file_read`` reads Always
+# and the turn has no repeated failure (``page_look.always_cap_reason``).
+CONDITIONAL_ALWAYS_TOOLS = frozenset({"run_checks", "page_look"})
+# Of those, the ones whose Always belongs to the turn's origin class: the gate also reads
+# the class for its own agent (a live mark of another agent's turn is ``child``: a card).
+ORIGIN_BOUND_ALWAYS_TOOLS = frozenset({"page_look"})
+# The cap code when the conditions cannot be read (an exception, a name without a reader).
+CAP_UNREADABLE = "cap_unreadable"
+# What a saved Always of ``page_look`` needs, stated with the grant (ADR 0010 §5).
+PAGE_LOOK_CONDITIONS = (
+    "axis_pass_and_fresh",
+    "origin_chat_person_or_yolo_window",
+    "file_read_always",
+    "no_repeated_failure_in_turn",
+)
 
 _LOG = logging.getLogger(__name__)
 _WARNED_ALWAYS: set[str] = set()
 
 
-def always_capped(name: str) -> bool:
-    """Whether a saved Always for ``name`` is read as Ask right now (Q3 of ADR 0019)."""
+def always_cap_reason(name: str, tool_config: Any = None, *, in_turn: bool = True) -> str | None:
+    """Why a saved Always for ``name`` is read as Ask right now: a fixed code, or ``None``
+    (it is effective, or ``name`` has no conditional Always). Anything that cannot be read
+    is a cap (fail closed). ``tool_config``: the rules the caller reads (``page_look`` needs
+    ``file_read``'s rule from them; none given = capped). ``in_turn=False`` (the settings
+    row only, never the gate): the conditions that belong to a turn are left out."""
     if name not in CONDITIONAL_ALWAYS_TOOLS:
-        return False
-    from .run_checks import always_effective
-
+        return None
     try:
-        return not always_effective()
+        if name == "page_look":
+            from . import page_look
+
+            return page_look.always_cap_reason(
+                lambda: rule_policy(tool_config, "file_read"), in_turn=in_turn
+            )
+        if name == "run_checks":
+            from .run_checks import always_cap_reason as run_checks_reason
+            from .run_checks import always_effective
+
+            if always_effective():
+                return None
+            return run_checks_reason() or CAP_UNREADABLE
     except Exception:  # noqa: BLE001 - a guard that cannot be read caps (fail closed)
+        return CAP_UNREADABLE
+    return CAP_UNREADABLE
+
+
+def always_capped(name: str, tool_config: Any = None) -> bool:
+    """Whether a saved Always for ``name`` is read as Ask right now (Q3 of ADR 0019)."""
+    return always_cap_reason(name, tool_config) is not None
+
+
+def reserve_rule_answer(name: str, tool_use_id: Any) -> bool:
+    """The gate, when the effective Always of ``name`` is about to answer a call: take the
+    call's slot in the turn's bound (``page_look.reserve``). ``False``: the bound is
+    reached or cannot be read — the gate reads Ask. Tools without such a bound: ``True``."""
+    if name not in ORIGIN_BOUND_ALWAYS_TOOLS:
         return True
+    try:
+        from . import page_look
+
+        return page_look.reserve(tool_use_id) is True
+    except Exception:  # noqa: BLE001 - fail closed: a card
+        return False
+
+
+def release_rule_answer(name: str, tool_use_id: Any) -> None:
+    """The gate, after the call: a slot the tool did not settle no longer counts as running."""
+    if name not in ORIGIN_BOUND_ALWAYS_TOOLS:
+        return
+    try:
+        from . import page_look
+
+        page_look.release(tool_use_id)
+    except Exception:  # noqa: BLE001 - the slot then stays taken (fail closed)
+        _LOG.error("The rule answer's slot of %s could not be released", name)
 
 
 def level_name(level: Any) -> str:
@@ -138,17 +201,20 @@ def rule_policy(tool_config: Any, name: str, *, effective: bool = True) -> str:
     ``effective`` (the gate's view, default): a saved Always of a
     :data:`CONDITIONAL_ALWAYS_TOOLS` name is Ask while its guard does not hold;
     ``effective=False`` is the rule as saved (loosening checks, the settings page).
+    An :data:`ORIGIN_BOUND_ALWAYS_TOOLS` name (``page_look``) is Always only when the file
+    names it in ``enabled_tools``: ``trust_all``'s "everything on" alone reads Ask for it
+    (a person typed its name for that Always; a file saved before the tool existed did not).
     """
-    enabled = getattr(tool_config, "mode", "custom") == "trust_all" or name in set(
-        getattr(tool_config, "enabled_tools", ()) or ()
-    )
-    if not enabled:
+    named = name in set(getattr(tool_config, "enabled_tools", ()) or ())
+    if not (getattr(tool_config, "mode", "custom") == "trust_all" or named):
         return NEVER
+    if name in ORIGIN_BOUND_ALWAYS_TOOLS and not named:
+        return ASK
     if name in set(getattr(tool_config, "ask_tools", ()) or ()) or not always_allowed(name):
         if name in NO_ALWAYS_TOOLS:
             warn_saved_always(tool_config)
         return ASK
-    if effective and always_capped(name):
+    if effective and always_capped(name, tool_config):
         return ASK
     return ALWAYS
 
@@ -271,6 +337,7 @@ def persistent_grant(name: str, policy: str) -> dict | None:
     """What an Always rule grants, stated in full (scope, expiry, where to revoke)."""
     if policy != ALWAYS or not always_allowed(name):
         return None
+    conditions = {"conditions": list(PAGE_LOOK_CONDITIONS)} if name == "page_look" else {}
     return {
         "tool": name,
         "scope": "tool_any_arguments",
@@ -278,6 +345,7 @@ def persistent_grant(name: str, policy: str) -> dict | None:
         "expires": "until_revoked",
         "revoke": REVOKE_TARGET,
         "still_gated_by": ["breaker", "floor"],
+        **conditions,
     }
 
 
@@ -293,9 +361,11 @@ def tool_stack(
     policy = rule_policy(tool_config, name, effective=False)
     category = category_of(name)
     rule = rule_layer(policy)
-    capped = policy == ALWAYS and always_capped(name)
+    # The row is read outside a turn: only the conditions that do not belong to one.
+    cap = always_cap_reason(name, tool_config, in_turn=False) if policy == ALWAYS else None
+    capped = cap is not None
     if capped:
-        # ADR 0019 Q3: saved Always, read as Ask until the host's sandbox is verified.
+        # ADR 0019 Q3 / ADR 0015 rev 6: saved Always, read as Ask while its guard fails.
         rule = {"decision": PROMPT, "reason": "rule_always_capped"}
     if getattr(tool_config, "integrity_error", None):
         rule = {"decision": FORBIDDEN, "reason": "rule_locked"}
@@ -311,7 +381,7 @@ def tool_stack(
         "effective": effective(layers),
         "isolation": isolation(name),
         "grant": None if capped else persistent_grant(name, policy),
-        **({"always_capped": True} if capped else {}),
+        **({"always_capped": True, "always_cap_reason": cap} if capped else {}),
     }
 
 
@@ -376,6 +446,7 @@ __all__ = [
     "PROMPT",
     "RANK",
     "always_allowed",
+    "always_cap_reason",
     "always_capped",
     "breaker_layer",
     "category_of",

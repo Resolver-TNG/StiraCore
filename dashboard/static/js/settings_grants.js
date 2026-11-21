@@ -31,7 +31,15 @@
   const STATES = ["active", "paused", "halted", "revoked", "expired", "ended"];
   const GOALS = ["active", "paused", "blocked", "budget_limited", "awaiting_verification", "complete", "unmet"];
   const TERMINAL = ["revoked", "expired", "ended"];
-  const TOOLS = ["file_read", "editor", "run_checks", "memory_read", "memory_search", "memory_list", "current_time"];
+  const TOOLS = ["file_read", "editor", "run_checks", "page_look", "view_image", "memory_read", "memory_search", "memory_list", "current_time"];
+  // #791 (ADR 0029 B6b): the refusals shown in words (grants/schema.py CODES; a test keeps
+  // them the server's), and the one loosening an issue's confirmation can name
+  const REFUSAL_CODES = ["grant_subtree_protected", "grant_subtree_running_checkout", "grant_self_development_off"];
+  const LOOSEN_SELF_DEVELOPMENT = "loosen:self_development";
+  // #683: the declared completion checks an issue's confirmation names (run_checks kinds)
+  const DONE_WHEN = ["done_when:compileall", "done_when:node_test", "done_when:pytest", "done_when:ruff", "done_when:unittest"];
+  // ADR 0015 rev 6 (S5): offered only while the server says autonomy.page_look_unattended is on
+  const PAGE_TOOLS = ["page_look", "view_image"];
   const ITERATION_STATES = ["running", "yielded", "idle"];
   // W6c: the claim evidence's codes (grants/schema.py; kept equal by a test)
   const CLAIM_CHECKS = ["pass", "fail", "not_run", "unknown"];
@@ -42,7 +50,7 @@
   const CHECK_COUNT_KEYS = ["passed", "failed", "errors", "skipped", "findings"];
   // W6d: the heartbeat start's skip reasons (scheduler/grant_tick.py SKIP_REASONS; a test
   // keeps them equal)
-  const TICK_SKIPS = ["not_enabled", "no_grant", "grant_state", "goal_state", "awaiting_verification", "heartbeat_unhealthy", "breaker", "kill", "authority_unhealthy", "store_unhealthy", "clock", "ttl", "max_iterations", "budget", "turn_busy", "iteration_running", "abandoned_call", "min_spacing", "no_action", "flood", "executor_unavailable", "executor_refused", "narrowed", "scheduler_stopped", "shutdown", "repeated_failure"];
+  const TICK_SKIPS = ["not_enabled", "no_grant", "grant_state", "goal_state", "awaiting_verification", "heartbeat_unhealthy", "breaker", "kill", "authority_unhealthy", "store_unhealthy", "clock", "ttl", "max_iterations", "budget", "turn_busy", "iteration_running", "abandoned_call", "min_spacing", "no_action", "flood", "executor_unavailable", "executor_refused", "narrowed", "scheduler_stopped", "shutdown", "repeated_failure", "ledger_unhealthy", "axis_guard_pending", "axis_breaker_not_normal", "axis_rules_changed", "axis_stale"];
   const n = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
   const code = (value) => (typeof value === "string" && CODE.test(value) ? value : "");
 
@@ -178,6 +186,13 @@
     const short = id.slice(0, 8);
     const box = node(doc, "article", { className: "grant-card", "aria-labelledby": `grant-${short}-title` });
     box.appendChild(node(doc, "h3", { id: `grant-${short}-title` }, tr("grants.card_title", { id: short, state: headlineText(grant) })));
+    if (grant.self_development === true) {
+      // #791: a self-development grant is marked in words (never by colour alone); the
+      // tooltip says what it may write. Fixed catalog text only.
+      const mark = node(doc, "p", { className: "grant-marks" });
+      mark.appendChild(node(doc, "span", { className: "badge grant-self-development", title: tr("grants.self_development_badge_title") }, tr("grants.self_development_badge")));
+      box.appendChild(mark);
+    }
     const list = node(doc, "dl", { className: "summary-grid" });
     const reason = code(grant.reason);
     row(doc, list, tr("grants.field_state"), reason ? `${stateLabel("grant", grant.state)} (${reason})` : stateLabel("grant", grant.state));
@@ -243,10 +258,10 @@
     return box;
   }
 
-  function toolChoices(doc, tools) {
+  function toolChoices(doc, tools, pageTools) {
     const box = doc.getElementById("grants-tools");
     if (!box || box.childElementCount) return;
-    for (const tool of tools.filter((name) => TOOLS.includes(name))) {
+    for (const tool of tools.filter((name) => TOOLS.includes(name) && (pageTools || !PAGE_TOOLS.includes(name)))) {
       const id = `grants-tool-${tool}`;
       const label = node(doc, "label", { for: id, className: "choice" });
       const input = node(doc, "input", { id, type: "checkbox", value: tool });
@@ -274,7 +289,7 @@
       const box = card(doc, grant);
       if (box) list.appendChild(box);
     }
-    toolChoices(doc, Array.isArray(data.tools) ? data.tools : TOOLS);
+    toolChoices(doc, Array.isArray(data.tools) ? data.tools : TOOLS, data.page_look_unattended === true);
   }
 
   async function getJSON(url) {
@@ -289,6 +304,7 @@
     const reason = data && code(data.reason);
     box.textContent = !value ? "" : value === "host_channel_required"
       ? tr("grants.host_channel_required")
+      : REFUSAL_CODES.includes(value) ? tr(`grants.code_${value}`)
       : tr("grants.refused", { code: reason ? `${value}: ${reason}` : value });
     box.hidden = !value;
   }
@@ -347,6 +363,9 @@
     if (Array.isArray(summary.tool)) items.push(tr("grants.confirm_tools", { list: summary.tool.filter((x) => TOOLS.includes(x)).join(", ") }));
     if (Number.isInteger(summary.count)) items.push(tr("grants.confirm_minutes", { n: summary.count }));
     if (summary.source === "heartbeat_start") items.push(tr("grants.confirm_heartbeat_start"));
+    // #791: the server's summary names the loosening; only this exact code is drawn
+    if (Array.isArray(summary.changes) && summary.changes.includes(LOOSEN_SELF_DEVELOPMENT)) items.push(tr("grants.confirm_self_development"));
+    if (Array.isArray(summary.changes)) items.push(...DONE_WHEN.filter((code) => summary.changes.includes(code)));
     if (typeof summary.operation === "string" && CODE.test(summary.operation.replace("#", "_"))) items.push(summary.operation);
     const ok = await root.StiraConfirm.open({
       title: tr(`grants.confirm_${kind}`),
@@ -382,6 +401,8 @@
       confirm: value("grants-confirm"),
       // W6d: only when the switch is on (the box is rendered) and checked
       ...((doc.getElementById("grants-heartbeat-start") || {}).checked === true ? { heartbeat_start: true } : {}),
+      // #791 (B6b): only when the server offers the box (autonomy.grant_self_development) and it is ticked
+      ...((doc.getElementById("grants-self-development") || {}).checked === true ? { self_development: true } : {}),
     };
   }
 
@@ -468,7 +489,7 @@
     if (!root.StiraGrantsNoPoll) root.setInterval(() => load(doc), 15000);
   }
 
-  root.StiraGrants = { render, load, issueBody, gated, claimEvidence, tickRows };
+  root.StiraGrants = { render, load, issueBody, gated, showError, claimEvidence, tickRows };
   if (root.document && root.document.readyState === "loading") {
     root.document.addEventListener("DOMContentLoaded", start);
   } else if (root.document) {

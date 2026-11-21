@@ -89,7 +89,7 @@ other non-empty value forces the feature off, and an empty value means "not set"
 | `STIRA_HEARTBEAT` | gateway `hb_enabled` (off) | Model-free background tick in `stira_server`. | #238, [heartbeat-daemon.md](heartbeat-daemon.md) |
 | `STIRA_SCHEDULER` | off (no config field) | Operator-defined scheduled jobs; on the chat server the Gateway actions `health_check` (model-free) and `memory_harvest` (#251: rule-only Harvest to staging; refused unless `distiller_mode` is `"rule"`). | #239, [ADR 0008](adr/0008-scheduler.md) |
 | `STIRA_ACCESS_LOG_POLLING` | off (poll lines hidden) | Exactly `1` logs the access-log lines of successful page polls again (`GET` `200`/`304` of exactly the polling reads: `/api/turns?limit=1`, `/api/turns/<id>/events?after_seq=<n≥1>`, `/api/hitl/pending`, `/api/hitl/history?limit=50`, `/api/gateway/status`, `/api/diagnostics/write-failures`, `/api/scheduler`, `/api/state`, `/api/history`, `/api/state/history?limit=500`). By default those lines are left out so `stira.out.log` keeps the WARNING/ERROR lines readable; a failing poll (any other status) and every other request are always logged. For debugging the pages' polling. | #369 |
-| `STIRA_STAGE` | off (no config field) | The Stage page `/stage/` on the chat server (pixel-art view of turns, tools, approvals, Neural State and the breaker, inside the dashboard shell). It writes only through the existing APIs: approvals (`/api/hitl/<id>/decision`) and chat messages (`POST /api/chat`, CSRF + `Idempotency-Key`, the chat page's own logic); no new route or permission. Off: no route, no nav item, and gateway `ui.home: "stage"` falls back to the chat. | #341, #350, [stage.md](stage.md) |
+| `STIRA_STAGE` | gateway `stage_enabled` (on) | Overrides the switch saved from the settings page (section "Screens"): `1` / `true` / `yes` / `on` turns the Stage on, any other set value off; unset or empty leaves it to `stage_enabled`. The Stage page `/stage/` on the chat server (pixel-art view of turns, tools, approvals, Neural State and the breaker, inside the dashboard shell). It writes only through the existing APIs: approvals (`/api/hitl/<id>/decision`) and chat messages (`POST /api/chat`, CSRF + `Idempotency-Key`, the chat page's own logic); no new route or permission. Off: no route, no nav item, and gateway `ui.home: "stage"` falls back to the chat. | #341, #350, [stage.md](stage.md) |
 | `STIRA_PROMPT_CACHE` | gateway `prompt_cache` (off) | Prompt caching for eligible Bedrock Claude models. | #254, [prompt-cache.md](prompt-cache.md) |
 | `STIRA_PROMPT_CACHE_TTL` | gateway `prompt_cache_ttl` (`5m`) | `5m` or `1h`. | #254 |
 | `STIRA_CONTEXT_MANAGEMENT` | gateway `context_management` (off) | Offload large tool results + threshold summarization. | #258, [ADR 0005](adr/0005-context-management.md) |
@@ -98,6 +98,7 @@ other non-empty value forces the feature off, and an empty value means "not set"
 | `STIRA_HANDOFF_INJECT` | gateway `handoff_inject` (on) | Handoff notes: the `handoff_write` / `handoff_read` tools and the newest note in the recalled part (no note = no section). `0` turns both off, `1` on. Read at start-up. | [handoff.md](handoff.md) |
 | `STIRA_TASK_MODEL_TOOL_SUMMARY` | gateway `task_models.tool_summary` (`inherit`) | The model of the `tool_summary` task (a long tool result summarized on request, #585): `inherit`, a model id of the chat's provider, or `provider:model`. Unknown model / missing SDK or credentials refuse the start; a failing routed model fails the task (no fallback). Read at start-up. | [task-models.md](task-models.md) |
 | `STIRA_TASK_MODEL_CONTEXT_SUMMARY` | gateway `task_models.context_summary` (`inherit`) | The model of the conversation summary of context management (#258, opt-in), same values and rules. | [task-models.md](task-models.md) |
+| `STIRA_TASK_MODEL_VISUAL_REVIEW` | gateway `task_models.visual_review` (**off**) | The reviewer model of `page_review` (ADR 0015 rev 6, #774). Unset = off: no tool is registered and nothing is sent; `inherit` must be written out. The model's capability row must say `vision`, else the start is refused (`no_vision`). The screenshots go to this model's provider. Needs the budget `visual_review.daily_tokens` in `gateway-config.json` (no default; unset = every call refused `review_budget`). Read at start-up. | [task-models.md](task-models.md), [verification.md](verification.md) |
 | `STIRA_EPISODIC_EMOTION` | agent `episodic_emotion_snapshot` (on) | Opt-out of the post-turn emotion snapshot of new episodes (#364; on the data-directory floor, never in the prompt). Off: episodes stay `episodic-summary/v1`. Read when each episode is written. | #364, [episodic-emotion.md](episodic-emotion.md) |
 | `STIRA_ASSOCIATIVE_RECALL` | agent `associative_recall.enabled` (off) | Opt-in associative recall (#170: a few earlier episodes that fit the message, model-free, records `memory.injected`). Overrides `enabled` only; the limits stay those of `agent-config.json` (or the defaults). Invalid options keep it off. Read at start-up. | #170, [associative-recall.md](associative-recall.md) |
 | `STIRA_RECALL_EMOTION_PROXIMITY` | agent `associative_recall.emotion_proximity` (off) | Opt-in emotion-proximity signal of associative recall (#364, ADR 0017): re-ranks already relevant episodes by how close the current mood is to the one stored with the episode; at most one recalled item changes per turn, only at the NORMAL breaker level. Overrides `emotion_proximity` only; needs associative recall on. Read at start-up. | #364, [associative-recall.md](associative-recall.md) |
@@ -163,7 +164,7 @@ the code, so a field leaves it when something starts to use it.
 | Field | Default | Effect | Env override | Issue |
 |---|---|---|---|---|
 | `model_id` | `"global.anthropic.claude-sonnet-5"` | Chat model ID. | `STIRA_MODEL` | — |
-| `max_output_tokens` | `null` | Output token cap per model call. `null` = automatic: the selected model's documented output limit (`ModelCapabilities.max_output`), bounded at 32000 — 32000 plus the row's `thinking_reserve` (32000) for models whose thinking counts toward the cap; when the limit is not recorded, the provider's default (`8192` for hosted APIs, `32000` for local llama.cpp/Ollama, #416). A number is used as given, also above the model's limit — set it deliberately. A turn that reaches the cap is cut off and shown as such; its tool call is not run. See [Output cap](#output-cap-and-cut-off-turns). Settings page: section "Output limit and cost" (automatic is the recommended default; a number above the model's documented limit is warned about, not refused; 1–1000000 when changed there — a larger value already in the file is kept and does not block saving other settings). Applied from the next turn. | — | #363, #470, #416 |
+| `max_output_tokens` | `null` | Output token cap per model call. `null` = automatic: the selected model's documented output limit (`ModelCapabilities.max_output`), bounded at 32000 — 32000 plus the row's `thinking_reserve` (32000) for models whose thinking counts toward the cap; when the limit is not recorded, the provider's default (`16384` for hosted APIs, `32000` for local llama.cpp/Ollama, #416; also `32000` for an OpenAI-compatible `base_url` on a loopback or private address, #745). A number is used as given, also above the model's limit — set it deliberately. A turn that reaches the cap is cut off and shown as such; its tool call is not run. See [Output cap](#output-cap-and-cut-off-turns). Settings page: section "Output limit and cost" (automatic is the recommended default; a number above the model's documented limit is warned about, not refused; 1–1000000 when changed there — a larger value already in the file is kept and does not block saving other settings). Applied from the next turn. | — | #363, #470, #416 |
 | `region` | `"ap-northeast-1"` | Bedrock region. Applied from the next turn: the chat server re-resolves the model selection before every turn and rebuilds the model when the region differs (`AWS_REGION` wins). | `AWS_REGION` | #470 |
 | `provider` | `"bedrock"` | Model provider. | `STIRA_PROVIDER` | #204 |
 | `base_url` | `null` | Provider endpoint. A non-loopback URL for an API provider can be set only here, not from the settings page. | `STIRA_BASE_URL` | #205 |
@@ -183,8 +184,16 @@ the code, so a field leaves it when something starts to use it.
 | `jev_enabled` | `false` | `false` = classifier "auto" (Sokudan when installed, else rules); `true` = use `jev_classifier`. Applied at start-up. `GET /api/config/jev` shows the choice (`auto` / `rule` / `sokudan`), what it resolves to, the running classifier and `restart_required`; `POST {"classifier": …}` sets the whole choice. | — | #227, #162 |
 | `jev_classifier` | `"rule"` | `"rule"` or `"sokudan"`. | — | #227 |
 | `notify_targets` | `[]` | Stored and shown only; nothing sends notifications to these targets. | — | #272 |
-| `ui` | `{"home": "chat"}` | Dashboard options. `home` (`"chat"` or `"stage"`): the page `/` opens. `"stage"` also lists the Stage first in the menu; it takes effect only with `STIRA_STAGE=1` (otherwise `/` stays the chat and a WARNING is printed at start-up). `/chat` always exists. Read at start-up; not editable from the settings page. `board_svg` (boolean, **default on** since the ADR 0012 addendum of 2026-10-24, written only when off): a reply's ```` ```svg ```` blocks are drawn on the Stage board as an image rebuilt from an allow-list of shapes, colours and text (`dashboard/stage/js/svg_safe.js`; no script, link, outside resource or animation; a refused one stays code with its reason). Set from the settings page (section "Board (Stage)"; turning it off applies directly, turning it back on is confirmed; both are recorded in the settings history); read on each Stage page load. The chat page and the Stage log keep showing code. | — | #350, #453 |
+| `ui` | `{"home": "chat"}` | Dashboard options. `home` (`"chat"` or `"stage"`): the page `/` opens. `"stage"` also lists the Stage first in the menu; it takes effect only while the Stage is on (`stage_enabled` below, or `STIRA_STAGE=1`; otherwise `/` stays the chat and a WARNING is printed at start-up). `/chat` always exists. Read at start-up; set in the settings page's "Screens" section (a saved change waits for a restart). `board_svg` (boolean, **default on** since the ADR 0012 addendum of 2026-10-24, written only when off): a reply's ```` ```svg ```` blocks are drawn on the Stage board as an image rebuilt from an allow-list of shapes, colours and text (`dashboard/stage/js/svg_safe.js`; no script, link, outside resource or animation; a refused one stays code with its reason). Set from the settings page (section "Board (Stage)"; turning it off applies directly, turning it back on is confirmed; both are recorded in the settings history); read on each Stage page load. The chat page and the Stage log keep showing code. | — | #350, #453 |
 <!-- gateway-fields:end -->
+
+### The `stage_enabled` key (#477)
+
+Written only when off (the default is on), so files without it get the Stage page; `/` stays the chat (`ui.home`).
+
+| Field | Default | Effect | Env override | Issue |
+|---|---|---|---|---|
+| `stage_enabled` | `true` | Registers the Stage page (`/stage/` and its menu item; [stage.md](stage.md)); `false` turns it off (no route, no menu item). Settings page: section "Screens", next to `ui.home` (which cannot be set to `"stage"` there while the Stage is off). Read at start-up: a saved change waits for a restart. A page, not a permission: three GET page routes, no API route, so turning it on needs no confirmation. While `STIRA_STAGE` is set the switch is disabled, names the variable, and a change is refused (`env_pinned`). The Stage's frame rate is not a config value: the same section keeps it in the browser (`localStorage` `stira.stage.fps`). | `STIRA_STAGE` | #477, #809 |
 
 ### The `context_profile` keys (#368)
 
@@ -359,6 +368,8 @@ the section is ignored with the warning `autonomy_unknown_key`.
 | `autonomy.heartbeat_start` | `false` | W6d: exactly `true` **and** `stage_c_exec` on (and a running scheduler, `STIRA_SCHEDULER=1`) lets a grant **issued with its own `heartbeat_start: true`** (host-confirmed at issue, never changed afterwards) be started by the scheduler's model-free `grant_tick`: at most one iteration per scheduler wake, through the same `step` as a person's press. Without `stage_c_exec` it stays off (warning `heartbeat_start_needs_stage_c_exec`); without a running scheduler nothing wakes it (one warning `heartbeat_start unavailable (reason=scheduler_off)`; a flagged grant shows `unavailable: scheduler_off`); without the heartbeat daemon (`hb_enabled` / `STIRA_HEARTBEAT=1`, off by default) every wake is skipped `heartbeat_unhealthy` (warning `reason=heartbeat_off`, `unavailable: heartbeat_off`). Off: no ticker, nothing visible, the answers as before. See [grants](grants.md) "Heartbeat start". |
 | `autonomy.tick_min_spacing_sec` | `300` | W6d: the shortest time from the grant's issue, from an iteration's end (any origin) and (W6-F, #644) from the grant's last resume to a heartbeat-started one (30–86400 s; the floor 30 s cannot be lowered). Anything else is the default (warning `tick_min_spacing_sec_invalid`). |
 | `autonomy.allow_browser_confirm` | `false` | Issue / resume / verify need a **host confirmation** (the YOLO desk's `dialog` or `command` channel: `STIRA_YOLO_ALLOW` + `STIRA_YOLO_HOST_CONFIRM=auto` / `dialog` / `command`). Without one they are refused (`host_channel_required`). `true` accepts the browser confirmation when the channel is the browser one (`STIRA_YOLO_HOST_CONFIRM` unset / `browser` with `yolo.host_confirm` `"browser"`, or YOLO off with `STIRA_YOLO_HOST_CONFIRM` and the other `STIRA_YOLO_*` overrides unset — a set one refuses the start, `… is set but the YOLO allowance is off`) — the weaker, user-chosen layer: a same-user process can drive it (logged at start). It never replaces a configured host channel (`auto` / `dialog` / `command` still take precedence). Revoke / pause / kill never need it. |
+| `autonomy.grant_self_development` | `false` | #791 (ADR 0029 B6b): by default a grant whose `scope.workspace_subtree` overlaps the protected part of a Stira checkout (a directory holding `src/stiracore/__init__.py`; its data places `.local/` and `workspace/` take ordinary grants) or holds one is refused (`grant_subtree_protected`). Exactly `true` lets a person issue such a grant for a checkout other than the running server's (that one is always refused: `grant_subtree_running_checkout`); the grant's `editor` then writes only the allow-list (`docs/`) — only with the separate confirmation `self_development: true` in the issue body, named in the host-confirmed summary as `loosen:self_development`. A loosening: off by default, read at start (set it in `gateway-config.json` and restart; no settings route writes it); the issue still needs the NORMAL breaker, the typed `ISSUE` and the host confirmation. Even when on, that grant's editor cannot write the never-editable list or the run-later files ([grants](grants.md#protected-subtrees-and-paths-791)). Anything but a boolean is read as `false`. |
+| `autonomy.page_look_unattended` | `false` | ADR 0015 rev 6 (S5): exactly `true` lets a grant's scope name `page_look` (and the narrowed `view_image`), so a grant iteration opens **its own workspace page files** in the closed browser **without an approval card** — whatever the tool's saved rule says, except Never. A loosening: off by default, read at start (set it in `gateway-config.json` and restart), and each such grant is still issued with the typed, host-confirmed `ISSUE`. Even when on, the grant is refused at issue and every round is refused unless `page_look` is registered (a browser was found), `file_read` is in the scope with its rule Always and the axis check passes ([grants](grants.md#page-tools-in-a-grant-adr-0015-rev-6-s5)). Anything but a boolean is read as `false`. |
 | `autonomy.run_checks_unattended` | `true` | Whether a grant's scope may name `run_checks`. Effective **only on a verified `os_sandbox` host** (ADR 0019): on `limits_only` such a grant is refused whatever this says. Anything but a boolean is read as `false`. |
 
 
@@ -383,6 +394,22 @@ effective model and its source read-only.
 
 ```json
 {"task_models": {"tool_summary": "global.anthropic.claude-haiku-4-5-20251001-v1:0"}}
+```
+
+`visual_review` is the exception: unset means **off**, not the chat model (see below).
+
+### The `visual_review` section (ADR 0015 rev 6, #774)
+
+The budget of `page_review`'s reviewer model. `daily_tokens`: a positive integer a person
+sets, the reviewer's input + output tokens per UTC day. **No default**: absent, `{}` or any
+other value means every `page_review` call is refused `review_budget`. The count is kept in
+memory (a restart starts the day's count again); a call whose provider reports no usage is
+charged an estimate (800 + 1,600 per image). Hand edit; read at start-up. The section does
+nothing unless `task_models.visual_review` (or `STIRA_TASK_MODEL_VISUAL_REVIEW`) names a
+vision model — see [task-models.md](task-models.md) and [verification.md](verification.md).
+
+```json
+{"task_models": {"visual_review": "ollama:llama3.2-vision:11b"}, "visual_review": {"daily_tokens": 200000}}
 ```
 
 ### The `token_prices` section (#451)
@@ -436,10 +463,10 @@ Per agent. Unknown keys are refused at load.
 | `distiller_base_url` | `null` | Endpoint of the LLM distiller. |
 | `distiller_api_key_env` | `null` | Key variable name of the LLM distiller. |
 | `harvest_stage_auto` | `true` | Harvest stages the automatic band (0.4–0.7) for human review as well, until the review UI (#193). `false` (not recommended): the auto band is written to `semantic/knowledge/` directly, without human review (#293). |
-| `memory_retention` | `{}` | Retention limits per store, read only by `stira memory retention` (#294). Empty = no limits (except `memory_plans`, below); nothing is ever removed without `--apply`, and what `--apply` removes is archived (undo: `stira memory restore <id>`). Keys: `episodic` (`max_age_days`, `max_entries`, `keep_unharvested` = `true`, `honour_expires_at` = `false`), `turns` / `tool_payloads` / `checkpoints` (`max_age_days`; checkpoints also `max_per_thread`), `memory_plans` (`max_age_days`, default `90`: plan files of memory jobs, the one limit set by default), `staging` (`warn_after_days`), `scheduler_log` / `archive` (`warn_bytes`) — the last three are reported only. Integers 1–1000000 (`*_bytes`: up to 10^15). See [memory-maintenance.md](memory-maintenance.md#retention-delete-requests-and-provenance-294). |
+| `memory_retention` | `{}` | Retention limits per store, read only by `stira memory retention` (#294). Editable under Settings → Memory retention limits (#474: the values, and a read-only dry run that shows counts only; `--apply` stays on the command line). Empty = no limits (except `memory_plans`, below); nothing is ever removed without `--apply`, and what `--apply` removes is archived (undo: `stira memory restore <id>`). Keys: `episodic` (`max_age_days`, `max_entries`, `keep_unharvested` = `true`, `honour_expires_at` = `false`), `turns` / `tool_payloads` / `checkpoints` (`max_age_days`; checkpoints also `max_per_thread`), `memory_plans` (`max_age_days`, default `90`: plan files of memory jobs, the one limit set by default), `staging` (`warn_after_days`), `scheduler_log` / `archive` (`warn_bytes`) — the last three are reported only. Integers 1–1000000 (`*_bytes`: up to 10^15). See [memory-maintenance.md](memory-maintenance.md#retention-delete-requests-and-provenance-294). |
 | `harvest_job_max_episodes` | `100` | Episodes one scheduled `memory_harvest` run scores (1–100000), newest first; the rest wait for the next run (#251). Rule distiller only (with `"llm"`/`"jev"` the job cannot be created or run; use `distillation_cli`); its output always goes to staging, whatever `harvest_stage_auto` says. |
 | `episodic_emotion_snapshot` | `true` | Record the post-turn emotion snapshot (six dimensions, category, intensity, breaker, turn) of each new episode in `memory/…/emotion/`, on the floor: not readable by the agent, never in the prompt or the memory tools (#364, [episodic-emotion.md](episodic-emotion.md)). `false` = opt out: new episodes stay `episodic-summary/v1`; existing records stay until deleted (`emotion_cli orphans --apply` removes only orphans). `STIRA_EPISODIC_EMOTION` overrides it. |
-| `episode_labels` | `{}` | Speaker labels of the episodes the chat server writes (#653): `{"user": "User", "agent": "Resolver"}` stores `User: … → Resolver: …`. Empty or a missing key = the labels used so far (`マスター` / `リゾルバ`). The default does not follow the UI or persona language: for English labels, set `episode_labels`. A label needs at least one letter or digit, and a label equal to the other speaker's label (also to its default, when only one side is set) puts both back to the defaults. A label is 1–24 letters, digits, spaces or `_ - . ・`; any other value (a colon, an arrow, a line break, a control character, brackets, two equal labels) is ignored with a warning that names the key only, and the default label stays. Only newly written episodes change: stored episodes are not rewritten, and associative recall skips both the old and the current labels. Read at start-up. |
+| `episode_labels` | `{}` | Speaker labels of the episodes the chat server writes (#653): `{"user": "User", "agent": "Resolver"}` stores `User: … → Resolver: …`. Empty or a missing key = the labels used so far (`マスター` / `リゾルバ`). The default does not follow the UI or persona language: for English labels, set `episode_labels`. A label needs at least one letter or digit, and a label equal to the other speaker's label (also to its default, when only one side is set) puts both back to the defaults. A label is 1–24 letters, digits, spaces or `_ - . ・`; any other value (a colon, an arrow, a line break, a control character, brackets, two equal labels) is ignored with a warning that names the key only, and the default label stays.  The key `placeholders` (`"ja"` default / `"en"`) sets the language of the fixed words inside a line (empty text, omitted tool output, omitted code). Only newly written episodes change: stored episodes are not rewritten, and associative recall skips both the old and the current labels. Read at start-up. |
 | `associative_recall` | `{}` | Opt-in associative recall (#170): `{"enabled": true}` offers up to `max_items` (3; 1–5) earlier episodes that fit the message, in at most `max_chars` (600; 100–2000) characters, chosen from the newest `window` (200; 1–1000) index rows with Neural State weighting (read-only). No model call; records `memory.injected`. Empty = off. The chat server reads it at start-up. `STIRA_ASSOCIATIVE_RECALL` overrides `enabled`. `"emotion_proximity": true` (default `false`) adds the emotion-proximity signal (#364, ADR 0017; `STIRA_RECALL_EMOTION_PROXIMITY` overrides it). [associative-recall.md](associative-recall.md) |
 | `memory_autonomy` | `{}` | ADR 0018 **phase 0 (observe only)**. `{}` / absent = off (no `memory_rate` tool, no memory job kind, nothing bound). `{"phase": 0}` turns it on: `in_turn_rating` (default `true`) offers `memory_rate` (the agent rates its turn's episode; the rating is stored, nothing uses it yet); `jobs` (`memory_rate_backfill` / `memory_consolidate` / `memory_tidy`, each default `false`) lets a person create those scheduler jobs, which write plan files only (the model-calling kinds start only while the heartbeat is healthy, ADR 0021 §8); `daily_token_budget` (100000; 0–100000) caps all memory jobs together; `undo_window_days` (30; stored for phase 2). Only phase `0` is accepted. Read at start-up; `STIRA_MEMORY_AUTONOMY=0` forces it off. [memory-autonomy.md](memory-autonomy.md) |
 | `containment` | `{}` | ADR 0023 **phase 0 (observe only)**. `{}` / absent = off. `{"phase": 0}` counts the containment signals (refusals and holds the gate already makes: secret-path reads, floor writes, own-dashboard calls, egress holds, bursts, reach-outs; text cues at weight 0) in a sliding window and reports the stage the session **would** be in (`open` / `restricted` / `closed` / `quarantine`). Nothing is enforced: no tool is removed, no card added, no level moved. `window_seconds` (600; 60–3600). Only phase `0` is accepted. Read at start-up; `STIRA_CONTAINMENT_OBSERVE=0` forces it off. [containment.md](containment.md) |
@@ -608,12 +635,13 @@ Stop the server before moving or deleting anything.
 | `authority-epoch` | `stira_server` (the authority service, ADR 0011 §5, [authority-service](authority-service.md)) | the authority epoch: the newest 16 records `seq`, `epoch`, hash of the previous record, own hash (no incarnation) — `0600`, written durably (flush, rename, directory flush) | yes | no | Do not edit: an unreadable, unsafe or mismatched file makes the server unhealthy (no permit, YOLO approves nothing automatically). Repair only for a damaged epoch file (never for a latch store: that is `reset-latches`): with the server stopped keep a copy, remove it, run `stira authority reset-latches`, start, unlatch. |
 | `authority-latches` | `stira_server` (the authority service, ADR 0011 W2, [authority-service](authority-service.md)) | the stop latches `kill`, `unhealthy`, `halted:<reason>` with their stop ids (incarnation, epoch); the newest 64 records, chained (`seq`, previous hash) — `0600`, written durably | yes | no | Do not edit or remove: a latch is cleared only by `stira authority unlatch` with the server stopped. An unreadable, unsafe, mismatched, missing or rolled-back file (checked against the commitment in `authority-epoch` and the lifecycle log) counts as every latch set (killed, unhealthy); repair: `stira authority reset-latches` (every latch set), then `unlatch`. |
 | `authority-lifecycle.jsonl`, `authority-lifecycle.1.jsonl` | the authority service (W2) | hash-chained `lifecycle_event` lines: codes and ids only (subject, from, to, reason code, incarnation, epoch, time) — `0600`, flushed per line; moved to `.1` when an append would pass 1 MiB (the older `.1` goes) | yes | no | Keep (the stop record; it is also checked against the latch store at start). A damaged file makes the server unhealthy; repair: authority-service.md "Repairs". |
+| `grant-rounds.jsonl`, `grant-rounds.1.jsonl` | the grant iteration executor (ADR 0028 §5, [grants](grants.md)) | the round ledger: one hash-chained, allow-listed record per ended grant iteration — codes and counts only (no goal, model text, path, URL or secret) — `0600`, flushed per line; moved to `.1` when an append would pass 1 MiB (the older `.1` goes) | yes | no | Observation only: it never makes the server unhealthy. A damaged or unsafe file makes the ledger unusable until a restart: heartbeat starts of grants are skipped (`tick_skipped(ledger_unhealthy)`), a press still runs. Keep a copy before moving a damaged file away. |
 | `authority-outbox.json` | the authority service (W2) | the notifications (one per subject + incarnation + epoch + to, at most 256, older unread ones coalesced) with unread / acknowledged, the notified and acknowledged event ids — `0600`, atomic replace | yes | no | Removing it rebuilds the notices from the lifecycle log as unread; a damaged file makes the server unhealthy. |
 | `authority-kill-armed`, `authority-kill-fired` | the authority service (W2) | an empty marker made at start and renamed by the kill switch (a second kill record that needs no free blocks) | yes | no | Do not remove `authority-kill-fired`: `stira authority unlatch kill` does. A fired marker without the kill latch makes the next start refuse the latch store. |
 | `authority-watchdog.json` | the authority watchdog (W2) | its last pass time (the gap since is recorded as `gateway_down` at start) — `0600` | yes | no | Removing it only skips the next gap record; a damaged file makes the server unhealthy. |
 | `grants.json` | `stira_server` (only with gateway `autonomy.stage_c`, ADR 0011 W4, [grants](grants.md)) | the goal grants: the newest 4 chained records (`seq`, previous hash), each the whole state; the **goal text lives only here**; a live grant is always written as `revoked(restart)` (never as active) — `0600`, written durably | yes | no | Do not edit: an unsafe, unreadable, malformed or changed file makes the grant stage unhealthy (every grant revoked, nothing issued; the file is never overwritten). Repair: with the server stopped keep a copy, move it aside, start (every grant is gone; issue a new one). |
 | `checkpoints/` | `FileCheckpointStore` | per batch: Neural State, conversation, pending tool calls, engine state (20 per thread) | yes | no | Deleting one makes a resume that needs it refuse and cancel the approval. |
-| `context-stash/` | context management (#258) | masked originals of offloaded tool results | no (it must be inside the write roots, ADR 0005) | yes | Yes; references become unreadable. Old entries go after `retention_hours` (24). |
+| `context-stash/` | context management (#258) | masked originals of offloaded tool results | no (the offloader writes it itself; a file tool can write there only while it is inside the write roots, ADR 0005, #746) | yes | Yes; references become unreadable. Old entries go after `retention_hours` (24). |
 | `artifacts/` | `WorkspaceArtifacts` (#454, ADR 0020) | `index.db` (per version: relative path, turn id, create/update, size, SHA-256, kind, time; a person's labels) and `blobs/` (content-addressed snapshots of small versions) | yes | no | Yes; the artifact list, its versions and labels are lost (workspace files are not touched). |
 | `turns.db` | `TurnEventStore` | UI turn events (masked previews); the source of `/observability` too (#286) | yes | no | Yes; the turn history in the UI and `/observability` is lost. |
 | `events.db` | `SQLiteEventStore` | hash-chained audit events (the chat server writes `/new` only) | yes | no | Only together with `-wal`, `-shm` and `.head`. |
@@ -631,6 +659,31 @@ Stop the server before moving or deleting anything.
 
 Outside the data directory: `.local/stira.out.log` / `.local/stira.err.log`
 (`stira_ctl.sh` output) and `STIRA_CHAT_DATA_DIR` (chat bots).
+
+## Browser storage (this browser only) — *checked*
+
+What the pages keep in the browser (#481). These are not server settings: they are not in a
+configuration file, the settings history or a backup of the data directory, each browser
+(and each origin: host and port) has its own, and clearing the site data resets them. The
+server has no route or field for them and reads no cookie (`tests/test_browser_storage_docs.py`
+fails when a page uses a key that is not in this table). Every key starts with `stira.`.
+
+<!-- browser-storage:begin -->
+| Key | Storage | Values (default) | Set by | Sent to the server | Used for |
+|---|---|---|---|---|---|
+| `stira.lang` | `localStorage` | `ja` / `en` (`ja`) | the language selector (side menu; Settings → Display), or a page opened with `?lang=en` / `?lang=ja` | no | The language of every page and the Stage. |
+| `stira.sidebar` | `localStorage` | `expanded` / `collapsed` (`expanded`) | the side menu's toggle, on a wide window | no | Whether the side menu is open. |
+| `stira.chat.neuralTrend` | `localStorage` | `expanded` / `collapsed` (`collapsed`) | the heading of the chat page's Neural State trend | no | Whether the trend is open. |
+| `stira.settings.showInternal` | `localStorage` | `1` / `0` (`0`) | Settings → Display → "Show internal names" | no | Tool names and other internal names next to their descriptions. |
+| `stira.stage.fps` | `localStorage` | an integer from 15 to 120 (30) | the settings page's "Screens" section (slider; stored as it moves, "back to the default" removes the key); the Stage only reads it. `?fps=N` wins for that page load | no | The Stage's frame-rate cap ([stage.md](stage.md), "Frame rate"). |
+| `stira.stage.board_idle` | `localStorage` | `on` / `off` (`off`) | the Stage board's "Show the activity on the board while she waits" tick | no | Opens the Activity board by itself while no turn runs. |
+| `stira.yolo.ack` | `localStorage` | the identifier of the last YOLO window end the person acknowledged (none) | the OK next to an ended window, or a successful Unlatch | no | Not showing the same ended window again. A display state, not a permission: the window and its latch are the server's (ADR 0012). |
+| `stira.grant.view.<id>` | `sessionStorage` (this tab) | the one-time view token of a goal grant (32 hex characters) | issuing a grant on the settings page (only with `autonomy.stage_c`) | **yes**: once, in the `X-Stira-Goal-View` header of the issuer's "show the goal" request; removed after a successful view | The issuer-only view of the goal text (ADR 0011). Not a setting. |
+<!-- browser-storage:end -->
+
+`?lang=` and `?fps=` are part of the page's address, so they reach the server with the page
+request; the server does not read them. With `stira.stage.board_idle` on, the Stage makes the
+same read-only requests as the Activity button; the value itself is not sent.
 
 ## Output cap and cut-off turns
 
@@ -652,12 +705,32 @@ provider). There is no environment override.
   `thinking_reserve` (32000) on top of the reply's 32000: `min(64000, limit)` — Claude 5.x and
   4.x Sonnet/Haiku 64000, Opus 4/4.1 32000 (its limit). Rows without thinking keep 32000.
 - **No recorded limit (#416).** The automatic cap is the provider's default
-  (`unknown_limit_max_output`): `8192` for hosted APIs (Bedrock, Anthropic, OpenAI and
+  (`unknown_limit_max_output`): `16384` for hosted APIs (was `8192` before #745) (Bedrock, Anthropic, OpenAI and
   OpenAI-compatible servers, Gemini, LiteLLM, ...), because they refuse a request whose cap is
   above the model's own limit — a larger guess would turn every turn into an API error; `32000`
   for local `llamacpp` / `ollama`, whose servers accept a large cap (generation ends at the
   context window) and do not bill. The settings page says so in automatic mode ("Reasoning
   models can use this up on thinking alone. If you know the model's limit, set a number").
+- **A local OpenAI-compatible endpoint (#745).** With provider `openai` / `openai_responses`,
+  a model without a recorded limit, and a `base_url` whose host is `localhost`, a loopback
+  address (`127.0.0.0/8`, `::1`) or an RFC 1918 address (`10/8`, `172.16/12`, `192.168/16`),
+  the automatic cap is `32000`, as for `llamacpp` / `ollama`: it is the same kind of server
+  (llama.cpp-class behind `/v1`), which accepts a large cap and does not bill. With the old `8192`
+  one `file_write` of a few hundred lines was cut off in every round. The host is read from
+  the URL text only (no DNS lookup): a public name keeps `16384` even when it resolves to a
+  private address — set `max_output_tokens` there. A model with a recorded limit and every
+  other provider keep their rule. (`is_local_endpoint`, `tests/test_local_output_cap.py`.)
+- **The hosted default is `16384` (owner decision, 2026-11-13).** `8192` was too low for code
+  generation (one `file_write` of a few hundred lines was cut off). Most current hosted models
+  accept `16384`; a model that refuses the cap fails with the provider's message — set
+  `max_output_tokens` (or record the model's limit in the capability table) for such a model.
+- **Which cap is in use.** `GET /api/gateway/status` returns
+  `max_output_tokens: {value, source}` (`null` when the agent reports no cap). `source` is
+  `"setting"` (a number was set), `"model_table"` (the model's recorded limit),
+  `"unknown_limit_default"` (no recorded limit, hosted: `16384`) or `"local_default"` (no
+  recorded limit, local server: `32000`). A number and a code only — no endpoint, no key.
+  The source is read back from the running value: a setting equal to the automatic value is
+  reported with the automatic source (the two behave the same).
   A model switched in the settings page takes the cap resolved for the new model. To pin the cap for a deployment, set `max_output_tokens` itself (settings page, "Output limit and cost", or the file; applied from the next turn — the cut-off note in the chat links there);
   `options.capabilities.max_output` in a `ModelSpec` only affects code that builds the spec
   and calls `resolve_max_output_tokens` (library use) — there is no config-file path for it.
@@ -680,7 +753,13 @@ provider). There is no environment override.
   "The output limit (N tokens) was reached before the reply began. With models whose thinking
   counts toward the limit, thinking alone can use it up. Raise the limit." — the SSE `error`
   carries `cut: "before_reply"` and `limit`, `turn.completed` carries `cut` (#416). (`tests/test_max_output_tokens.py`,
-  `tests/test_headless_file_tools_e2e.py`.)
+  `tests/test_headless_file_tools_e2e.py`.) Since #745 the SSE `error` also carries
+  `limit_source` (the codes above), and when the limit is an automatic default the message
+  ends with "(automatic default 16384; set `max_output_tokens`)". The note that replaces a
+  cut tool call now tells the model the cause and the remedy: after the SDK's sentence, a
+  fixed text says that the call was cut off by the output limit (N tokens), was not run, and
+  should be redone in smaller pieces (a long file in several shorter calls). The note holds
+  that text and the number only, nothing of the cut arguments.
 - **Usage of a failed call.** Bedrock bills a call that ends in `max_tokens`. Its
   `metadata.usage` is recorded in `turn.completed.usage` and the session totals. When no count
   exists, the turn carries `usage_reason` instead of a bare `null`: `E_USAGE_NOT_REPORTED`
@@ -703,7 +782,7 @@ How a turn ends (`turn.completed.stop`):
 | `stop` | When | `error` |
 |---|---|---|
 | `completed` | The turn finished — with or without a page reading it | `false` |
-| `cancelled` | **Only** an explicit stop: the chat page's **■ Stop** (`POST /api/chat/cancel`). The SDK stops at its next safe point (during the model's stream, before a tool, after a tool); a card of that turn waiting for a person is rejected — also one that appears after the press, until the turn has ended — so the stop never waits for `hitl_timeout_sec`. What the turn produced so far is kept in the history (`stop: "cancelled"`) | `true` |
+| `cancelled` | An explicit stop — the chat page's **■ Stop** or the Stage's **■ Stop the turn** (`POST /api/chat/cancel`) — or one of the automatic stops below (with a fixed `reason`). The SDK stops at its next safe point (during the model's stream, before a tool, after a tool); a card of that turn waiting for a person is rejected — also one that appears after the press, until the turn has ended — so the stop never waits for `hitl_timeout_sec`. What the turn produced so far is kept in the history (`stop: "cancelled"`) | `true` |
 | `interrupted` | The server stopped while the turn ran (`reason: "server_stopped"`), or a turn was found without an end at the next start — a crash or a kill (`reason: "server_restarted"`). The reply of such a turn is lost (resuming across a restart is #240) | `true` |
 | `error` / `max_tokens` | As before | `true` |
 
@@ -711,14 +790,25 @@ How a turn ends (`turn.completed.stop`):
   stays pending until `hitl_timeout_sec` (default 120 s, at most 24 h); approving it on any
   page (or `/approvals`) after reconnecting lets the turn go on. Expiry and the server's stop
   are still rejections (fail closed).
+- **Automatic stops of a turn** (#680, [ADR 0034](adr/0034-unattended-chat-turn-stops.md);
+  fixed values, no setting). Each ends the turn `stop: "cancelled"` like ■ Stop, with a fixed
+  `reason` / `stop_reason`: `yolo_window_ended` (the YOLO window the turn ran under has ended
+  when it next waits for an approval — the card is rejected; a running tool call finishes),
+  `approval_unanswered` (a card of the turn expired at `hitl_timeout_sec` with no answer,
+  whether a page reads the turn or not), and, only while no page reads the turn,
+  `unattended_time_limit` (3600 s since the start) / `unattended_token_limit` (2,000,000
+  input + output tokens of its model calls). The turn's YOLO window is the first one it saw;
+  a window opened later does not replace it. Cards an automatic stop rejects are recorded as
+  the server's (`resolver: "system"`, `resolution_reason_code: turn_auto_stopped`).
 - **One turn at a time**, as before (the turn lock, held from the send to the turn's end and
   released on every path, also when the turn fails). A second send while one runs gets the
   stream's `error` event "処理中です / Agent is busy" with `code: "turn_running"`; `/new` is
   refused with `turn_running`. The YOLO stop, `/new` and the running-tool-call refusal behave as
-  before; the YOLO stop ends the window (later tool calls go to cards) but does not stop the turn
-  itself — **■ Stop** does.
+  before; the YOLO stop ends the window (later tool calls go to cards); a tool call already
+  running is not cancelled, and a turn that ran under the window stops at its next approval wait
+  (`yolo_window_ended` above) — **■ Stop** stops it at once.
 - The Stage's **■ Stop showing** only stops that page's reading (as its label says); the turn
-  goes on.
+  goes on. Its **■ Stop the turn** is the chat page's ■ Stop (same route, by turn id).
 - **Coming back.** A chat page opened (or reloaded) while a turn still runs says so ("An earlier
   turn is still running on the server…"), offers **■ Stop** for that turn (named by its id, so
   a stop never lands on a turn started meanwhile) and reads the history when it has ended.

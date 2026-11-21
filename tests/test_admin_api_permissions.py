@@ -77,6 +77,8 @@ STIRA_ROUTES = {
     ("/api/config/hub", "POST"): ("config", "mutate"),  # draft save with conflict check
     ("/api/config/hub/validate", "POST"): ("config", "read"),  # validation only, no write
     ("/api/config/history", "GET"): ("config", "read"),  # change history (no secret values)
+    # #474: the dry run of ``stira memory retention`` (counts only; no route applies it)
+    ("/api/config/memory-retention/dry-run", "GET"): ("config", "read"),
     # ADR 0025 §9: the Make Always dialog's view of one card (issues a one-time save token)
     ("/api/config/hub/card/<request_id>", "GET"): ("config", "read"),
     ("/api/config/history/<entry_id>/rollback", "POST"): ("config", "mutate"),
@@ -91,12 +93,16 @@ STIRA_ROUTES = {
     ("/api/tools/page-check-ports", "GET"): ("config", "read"),
     ("/api/tools/page-check-ports", "POST"): ("config", "mutate"),
     ("/api/memory/tree", "GET"): ("memory", "read"),
+    # #652: the Memory page's table (key, importance, retention; no body).
+    ("/api/memory/entries", "GET"): ("memory", "read"),
     # #463: the procedural review screen (approve: confirm + turn lock; reject narrows).
     ("/api/memory/procedural/review", "GET"): ("memory", "read"),
     ("/api/memory/procedural/proposals/<key>/approve", "POST"): ("memory", "mutate"),
     ("/api/memory/procedural/proposals/<key>/reject", "POST"): ("memory", "mutate"),
     ("/api/observability/events", "GET"): ("observe", "read"),
     ("/api/observability/snapshot", "GET"): ("observe", "read"),
+    # #195: token totals and the per-model breakdown for the settings page (numbers only).
+    ("/api/observability/usage", "GET"): ("observe", "read"),
     ("/api/state/history", "GET"): ("observe", "read"),
     # Registered twice (chat_api + observability); chat_api's handler wins.
     ("/api/turns", "GET"): ("observe", "read"),
@@ -124,7 +130,13 @@ STIRA_ROUTES = {
     ("/api/containment", "GET"): ("observe", "read"),
     # ADR 0022 phase 0 (#458): the taint observation, read only (no write route).
     ("/api/taint", "GET"): ("observe", "read"),
+    # The Stage page (#341, #477): on by default; three GET page routes, no API route. Off
+    # (gateway ``stage_enabled: false`` or STIRA_STAGE=0) they do not exist (see below).
+    ("/stage", "GET"): ("page", "read"),
+    ("/stage/", "GET"): ("page", "read"),
+    ("/stage/<path:asset>", "GET"): ("page", "read"),
 }
+STAGE_ROUTES = {key for key in STIRA_ROUTES if key[0].startswith("/stage")}
 OBSERVER_ROUTES = {
     **{
         key: value
@@ -155,12 +167,17 @@ GRANT_ROUTES = {
     ("/api/grants/operations/<op_id>/cancel", "POST"): ("grants", "mutate"),
 }
 # W5: only with autonomy.stage_c_exec as well.
-EXEC_ROUTES = {("/api/grants/<grant_id>/step", "POST"): ("grants", "mutate")}
+EXEC_ROUTES = {
+    ("/api/grants/<grant_id>/step", "POST"): ("grants", "mutate"),
+    # ADR 0028 §5 (#757): the round ledger's records of one grant (codes and counts only).
+    ("/api/grants/<grant_id>/rounds", "GET"): ("grants", "read"),
+}
 URL_VALUES = {
     "<grant_id>": "c" * 32,
     "<op_id>": "d" * 32,
     "<allow_id>": "a" * 32,
     "<path:filename>": "css/tokens.css",
+    "<path:asset>": "stage.css",
     "<request_id>": "r1",
     "<job_id>": "j1",
     "<run_id>": "run1",
@@ -187,6 +204,7 @@ def stira_app(tmp_path, monkeypatch):
     from stiracore.agent import nxp_agent, stimulus_classifier
     from stiracore.agent.stimulus_classifier import StimulusResult
 
+    monkeypatch.delenv("STIRA_STAGE", raising=False)  # the default: the Stage page is on
     monkeypatch.setattr(stira_server, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(nxp_agent, "BedrockModel", Mock(return_value=Mock()))
     monkeypatch.setattr(nxp_agent, "Agent", Mock(side_effect=AssertionError("model called")))
@@ -199,6 +217,16 @@ def stira_app(tmp_path, monkeypatch):
     )
     store = ConfigStore(tmp_path / "gw.json", tmp_path / "agent.json", tmp_path / "tools.json")
     return stira_server.create_app(config_store=store)
+
+
+def test_with_the_stage_off_only_its_three_page_routes_are_gone(request, tmp_path):
+    """The Stage is a page, not a permission: off removes three GET page routes, no API.
+    (STIRA_STAGE=0 does the same: tests/test_stage_page.py.)"""
+    (tmp_path / "gw.json").write_text('{"stage_enabled": false}', encoding="utf-8")
+    app = request.getfixturevalue("stira_app")
+    assert set(_inventory(app)) == set(STIRA_ROUTES) - STAGE_ROUTES
+    assert all(method == "GET" and not rule.startswith("/api/") for rule, method in STAGE_ROUTES)
+    assert app.test_client().get("/stage/").status_code == 404
 
 
 @pytest.fixture

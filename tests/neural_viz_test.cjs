@@ -1,6 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {correlation, timestamp, heartbeatText} = require('../dashboard/static/js/neural_viz.js');
+const {correlation, timestamp, heartbeatText, shownDimensions, shownColumns} = require('../dashboard/static/js/neural_viz.js');
+test('#137: vigilance is dropped from the chart dimensions and the matrix columns', () => {
+  const dims = ['trust', 'curiosity', 'vigilance', 'attachment', 'stability', 'satisfaction'];
+  assert.deepEqual(shownDimensions(dims), ['trust', 'curiosity', 'attachment', 'stability', 'satisfaction']);
+  assert.deepEqual(shownColumns([[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12]], dims), [[1, 2, 4, 5, 6], [7, 8, 10, 11, 12]]);
+});
 test('Pearson heatmap handles positive, negative, constant and missing samples', () => {
   const rows = [1, 2, 3].map(v => ({state: {a: v, b: 4 - v, c: 1}}));
   assert.deepEqual(correlation(rows, ['a', 'b', 'c']), [[1, -1, null], [-1, 1, null], [null, null, null]]);

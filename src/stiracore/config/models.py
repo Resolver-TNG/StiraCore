@@ -198,9 +198,13 @@ class GatewayConfig:
     jev_classifier: str = "rule"
     notify_targets: list[str] = field(default_factory=list)
     # Dashboard options (#350). ``home``: the page ``/`` opens, "chat" (default) or "stage"
-    # (only when the Stage is enabled with STIRA_STAGE=1; otherwise ``/`` stays the chat).
+    # (only while the Stage is enabled, ``stage_enabled`` / STIRA_STAGE; otherwise ``/`` stays
+    # the chat).
     # ``board_svg`` (#453, opt-in, default off): ```svg blocks become pictures on the board.
     ui: dict[str, Any] = field(default_factory=lambda: {"home": "chat"})
+    # The Stage page (#341, #477): on by default (a page, not a permission; no API route);
+    # STIRA_STAGE=1/0 overrides it at start-up. Written only when off.
+    stage_enabled: bool = True
     # YOLO values (ADR 0012 phase 7c), kept as written: ``stiracore.yolo.config_file``
     # reads them (an environment variable wins per value). Written only by a person's
     # confirmed save (``POST /api/yolo/settings``); every other save carries it over.
@@ -240,6 +244,11 @@ class GatewayConfig:
     # ``stiracore.agent.task_models.TASKS``. Empty (the default) = every task on the chat
     # model. STIRA_TASK_MODEL_<TASK> wins per task. Written only when it holds a value.
     task_models: dict[str, Any] = field(default_factory=dict)
+    # ``page_review``'s reviewer budget (ADR 0015 rev 6, S6): ``{"daily_tokens": N}``, set
+    # by a person; no default. Kept as written and read leniently by
+    # ``stiracore.tools.page_review.daily_tokens_from`` (anything else: every review is
+    # refused ``review_budget``). Written only when present.
+    visual_review: dict[str, Any] = field(default_factory=dict)
     path: Path = field(default=DEFAULT_GATEWAY_CONFIG_PATH, repr=False)
     lock: Any = field(default_factory=RLock, init=False, repr=False, compare=False)
     # The file's heartbeat bounds had floor > ceil, so ``load`` used the defaults for both
@@ -310,6 +319,8 @@ class GatewayConfig:
             raise ValueError("hb_interval_floor_sec must be <= hb_interval_ceil_sec")
         self.notify_targets = list(self.notify_targets)
         self.ui = _validate_ui(self.ui)
+        if type(self.stage_enabled) is not bool:
+            raise ValueError("stage_enabled must be a boolean")
         # Never refuses (a hand-edited section must not stop the server): read leniently by
         # stiracore.yolo.config_file.clean; a non-object is kept so that it is reported.
         self.yolo = copy.deepcopy(self.yolo) if isinstance(self.yolo, dict) else self.yolo
@@ -341,6 +352,11 @@ class GatewayConfig:
         from stiracore.agent.task_models import check_config as check_task_models
 
         self.task_models = check_task_models(self.task_models)  # ValueError: unknown task
+        self.visual_review = (
+            copy.deepcopy(self.visual_review)
+            if isinstance(self.visual_review, dict)
+            else self.visual_review
+        )
         self.path = Path(self.path)
 
     @classmethod
@@ -372,6 +388,7 @@ class GatewayConfig:
             "jev_classifier",
             "notify_targets",
             "ui",
+            "stage_enabled",
             "yolo",
             "progress",
             "delegation",
@@ -383,6 +400,7 @@ class GatewayConfig:
             "handoff_max_tokens",
             "handoff_max_age_hours",
             "task_models",
+            "visual_review",
         }
         data = _load_object(path, allowed, "gateway")
         if data is None:
@@ -443,6 +461,8 @@ class GatewayConfig:
                 "jev_classifier": self.jev_classifier,
                 "notify_targets": list(self.notify_targets),
                 "ui": dict(self.ui),
+                # #477: only when off (the default is on).
+                **({} if self.stage_enabled else {"stage_enabled": False}),
                 # Only when present (phase 7c): files without a YOLO section stay as they were.
                 **({"yolo": copy.deepcopy(self.yolo)} if self.yolo else {}),
                 **({"progress": copy.deepcopy(self.progress)} if self.progress else {}),
@@ -458,6 +478,12 @@ class GatewayConfig:
                 **({"token_prices": copy.deepcopy(self.token_prices)} if self.token_prices else {}),
                 # Task models: only when it holds a value (files without it stay as they were).
                 **({"task_models": dict(self.task_models)} if self.task_models else {}),
+                # ADR 0015 rev 6 (S6): only when present (files without it stay as they were).
+                **(
+                    {"visual_review": copy.deepcopy(self.visual_review)}
+                    if self.visual_review
+                    else {}
+                ),
                 # Handoff notes: only a value that differs from the default is written.
                 **{
                     name: getattr(self, name)
@@ -767,6 +793,9 @@ class AgentConfig:
     provider_override: str | None = None
     base_url_override: str | None = None
     api_key_env_override: str | None = None
+    # #476: NAME of the OpenAI organization variable for ``provider_override`` (never the
+    # value). Written only when set, so files without it stay as they were.
+    organization_env_override: str | None = None
     # TODO(#131): expose these fields through the shared settings API/UI after it merges.
     distiller_mode: Literal["rule", "llm", "jev"] = "rule"
     distiller_model_id: str = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
@@ -875,6 +904,11 @@ class AgentConfig:
                 raise ValueError("provider_override requires model_override")
         elif self.base_url_override is not None or self.api_key_env_override is not None:
             raise ValueError("base_url_override/api_key_env_override require provider_override")
+        elif self.organization_env_override is not None:
+            raise ValueError("organization_env_override requires provider_override")
+        self.organization_env_override = _validate_optional(
+            self.organization_env_override, validate_env_name, "organization_env_override"
+        )
         self.base_url_override = _validate_optional(
             self.base_url_override, validate_base_url, "base_url_override"
         )
@@ -986,6 +1020,7 @@ class AgentConfig:
             "provider_override",
             "base_url_override",
             "api_key_env_override",
+            "organization_env_override",
             "distiller_mode",
             "distiller_model_id",
             "distiller_provider",
@@ -1062,6 +1097,12 @@ class AgentConfig:
                 "provider_override": self.provider_override,
                 "base_url_override": self.base_url_override,
                 "api_key_env_override": self.api_key_env_override,
+                # #476: only when set (files without it stay as they were).
+                **(
+                    {"organization_env_override": self.organization_env_override}
+                    if self.organization_env_override is not None
+                    else {}
+                ),
                 "distiller_mode": self.distiller_mode,
                 "distiller_model_id": self.distiller_model_id,
                 "distiller_provider": self.distiller_provider,

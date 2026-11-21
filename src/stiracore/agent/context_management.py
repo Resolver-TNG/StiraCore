@@ -19,7 +19,9 @@ NXPAgent rebuilds its ``Agent`` every turn, so the stash is a directory on disk
 (:class:`StashStorage`) keyed by the agent id, never the SDK's per-Agent
 in-memory store: a reference written in turn *n* still resolves in turn *n+k*
 and after a restart, until the retention period ends. The stash directory must
-lie inside the agent's write roots (#243), otherwise context management is
+lie inside the agent's write roots (#243) or be the server's own
+``<data dir>/context-stash/`` (#746, :func:`internal_stash`: written by the
+offloader, not a write root for file tools), otherwise context management is
 refused for the turn (fail-closed: nothing is offloaded that could not be read
 back). Text is secret-masked before it is written (#185); media blocks are not
 written at all (the offload is abandoned and the result stays in context).
@@ -397,13 +399,21 @@ def build_turn_components(
 
 
 def resolve_context_window_source(
-    settings: ContextManagementSettings, model: Any, capabilities: Any
+    settings: ContextManagementSettings,
+    model: Any,
+    capabilities: Any,
+    *,
+    server_window: Any = None,
 ) -> tuple[int, str]:
-    """The window and where it came from: ``setting`` | ``model`` | ``capability`` | ``default``.
+    """The window and where it came from: ``setting`` | ``model`` | ``capability`` |
+    ``server`` | ``default``.
 
     The one resolution order (``context_window_tokens``, the model's own
     ``context_window_limit``, the capability row, 200k): summarization and the
     read-only status field (``/api/gateway/status`` ``context_window``, #350) share it.
+    ``server_window`` (#746) is a callable asked only when none of the first three is
+    known: the window a local server reports
+    (``stiracore.providers.server_window``), used before the 200k fallback.
     """
     if settings.context_window_tokens is not None:
         return settings.context_window_tokens, "setting"
@@ -413,14 +423,107 @@ def resolve_context_window_source(
     window = getattr(capabilities, "context_window", None)
     if type(window) is int and window > 0:
         return window, "capability"
+    if server_window is not None:
+        reported = server_window()
+        if type(reported) is int and reported > 0:
+            return reported, "server"
     return DEFAULT_CONTEXT_WINDOW_TOKENS, "default"
 
 
 def resolve_context_window(
-    settings: ContextManagementSettings, model: Any, capabilities: Any
+    settings: ContextManagementSettings,
+    model: Any,
+    capabilities: Any,
+    *,
+    server_window: Any = None,
 ) -> int:
-    """Settings, then the model's own ``context_window_limit``, the capability row, 200k."""
-    return resolve_context_window_source(settings, model, capabilities)[0]
+    """Settings, then the model's own ``context_window_limit``, the capability row, the
+    window a local server reports (``server_window``, #746), 200k."""
+    return resolve_context_window_source(
+        settings, model, capabilities, server_window=server_window
+    )[0]
+
+
+# Why context management was refused (#746): fixed codes with a fixed hint each, so the
+# status field and the log line never carry a path, an agent id or an exception text.
+REFUSAL_REASONS: dict[str, str] = {
+    "no_stash_dir": "pass context_stash_dir (the chat server uses <data dir>/context-stash/)",
+    "agent_id_not_plain": "use an agent id made of letters, digits, '_', '.' and '-'",
+    "stash_outside_write_roots": (
+        "use <data dir>/context-stash/ (a real directory, not a symbolic link) or a "
+        "directory inside the agent's write roots"
+    ),
+    "stash_unusable": "check that the stash directory exists and can be written by the server",
+}
+_MODES = frozenset({"off", "on", "refused", "unsupported"})
+
+
+def internal_stash(policy: Any, directory: Path) -> bool:
+    """Whether ``directory`` is the server's own stash, below ``<data dir>/context-stash/``.
+
+    The offloader writes there itself (:class:`StashStorage`), not through a file tool, so
+    the location does not have to be one of the agent's write roots (#746): with
+    ``workspace_dir`` on a project outside the data directory it is none. Accepted only
+    when the policy's data directory (``floor_tree``) lists ``context-stash`` among its
+    checked exceptions, that directory is real (never a symbolic link) and ``directory``
+    resolves strictly below it. Nothing is added to the write roots: file tools are
+    refused there as before.
+    """
+    from stiracore.config.data_dir import CONTEXT_STASH_NAME
+
+    tree = getattr(policy, "floor_tree", None)
+    if tree is None or CONTEXT_STASH_NAME not in getattr(policy, "floor_tree_writable", ()):
+        return False
+    base = tree.resolve() / CONTEXT_STASH_NAME
+    if base.is_symlink() or base.resolve() != base or not base.is_dir():
+        return False
+    resolved = directory.resolve()
+    return len(resolved.parts) > len(base.parts) and resolved.parts[: len(base.parts)] == base.parts
+
+
+def status_view(agent: Any) -> dict[str, Any]:
+    """``enabled``, last ``mode`` and the refusal ``reason`` code, for a status field (#746).
+
+    Allowlisted values only: a mode or a reason outside the fixed sets is reported as
+    ``None``. ``reason`` is set only while the mode is ``refused``.
+    """
+    mode = (getattr(agent, "last_context_management", None) or {}).get("mode")
+    mode = mode if mode in _MODES else None
+    reason = getattr(agent, "context_refusal_reason", None)
+    return {
+        "enabled": getattr(agent.context_management, "enabled", False) is True,
+        "mode": mode,
+        "reason": reason if mode == "refused" and reason in REFUSAL_REASONS else None,
+    }
+
+
+_TURN_COUNTS = ("summaries", "summarized_messages", "offloaded_results", "history_messages")
+
+
+def turn_record(agent: Any, max_input_tokens: Any = None) -> dict[str, Any] | None:
+    """What context management did in the latest turn, for ``turn.completed.context`` (#746).
+
+    Allowlisted: the ``mode`` (and the refusal ``reason`` code), non-negative counts
+    (``summaries`` / ``offloaded_results`` in the history after the turn,
+    ``summarized_messages`` replaced in this turn, ``history_messages``) and
+    ``max_input_tokens``, the largest input of one model call the caller saw. ``None``
+    while the feature is off (nothing is added to the event) or the mode is unknown.
+    """
+    record = getattr(agent, "last_context_management", None)
+    mode = record.get("mode") if isinstance(record, dict) else None
+    if mode not in _MODES or mode == "off":
+        return None
+    out: dict[str, Any] = {"mode": mode}
+    reason = getattr(agent, "context_refusal_reason", None)
+    if mode == "refused" and isinstance(reason, str) and reason in REFUSAL_REASONS:
+        out["reason"] = reason
+    for key in _TURN_COUNTS:
+        value = record.get(key)
+        if type(value) is int and value >= 0:
+            out[key] = value
+    if type(max_input_tokens) is int and max_input_tokens > 0:
+        out["max_input_tokens"] = max_input_tokens
+    return out
 
 
 def history_markers(messages: list[Any]) -> dict[str, int]:
@@ -447,13 +550,17 @@ def history_markers(messages: list[Any]) -> dict[str, int]:
 __all__ = [
     "DEFAULT_CONTEXT_WINDOW_TOKENS",
     "OFFLOAD_MARKER",
+    "REFUSAL_REASONS",
     "RETRIEVAL_TOOL_NAME",
     "STIRA_SUMMARIZATION_PROMPT",
     "ContextManagementSettings",
     "StashStorage",
     "build_turn_components",
     "history_markers",
+    "internal_stash",
     "resolve_context_window",
     "resolve_context_window_source",
     "restore_conversation_manager",
+    "status_view",
+    "turn_record",
 ]

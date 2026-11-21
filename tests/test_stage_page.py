@@ -1,6 +1,7 @@
-"""Stage (#341, stage 2): the opt-in /stage page on the chat server.
+"""Stage (#341, stage 2): the /stage page on the chat server.
 
-Off by default (no route, no nav item); STIRA_STAGE=1 adds three read-only page routes
+On by default (``/`` stays the chat); gateway ``stage_enabled: false`` or STIRA_STAGE=0 turns
+it off (no route, no nav item). On, it adds three read-only page routes
 that serve an allow-list of the files under dashboard/stage/. No API route is added: the
 page reads the existing masked, same-origin APIs and decides approvals through the existing
 decision API (tests/stage_adapter_test.cjs covers the client side).
@@ -22,13 +23,19 @@ ROOT = Path(__file__).resolve().parents[1]
 STAGE_ROUTES = {("/stage", "GET"), ("/stage/", "GET"), ("/stage/<path:asset>", "GET")}
 
 
-def _app(tmp_path, monkeypatch, enabled: bool):
+_BY_FLAG = object()
+
+
+def _app(tmp_path, monkeypatch, enabled: bool, stage_env=_BY_FLAG):
+    """``enabled`` sets STIRA_STAGE=1/0; ``stage_env`` sets it as given (None = unset)."""
     from dashboard import stira_server
     from stiracore.agent import nxp_agent, stimulus_classifier
     from stiracore.agent.stimulus_classifier import StimulusResult
 
-    if enabled:
-        monkeypatch.setenv("STIRA_STAGE", "1")
+    if stage_env is _BY_FLAG:
+        stage_env = "1" if enabled else "0"
+    if stage_env is not None:
+        monkeypatch.setenv("STIRA_STAGE", stage_env)
     else:
         monkeypatch.delenv("STIRA_STAGE", raising=False)
     monkeypatch.setattr(stira_server, "DATA_DIR", tmp_path / "data")
@@ -57,7 +64,7 @@ def _routes(app) -> set:
     ("value", "expected"),
     [(None, False), ("", False), ("0", False), ("no", False), ("1", True), ("true", True)],
 )
-def test_stage_is_opt_in(monkeypatch, value, expected):
+def test_without_a_config_only_the_variable_counts(monkeypatch, value, expected):
     if value is None:
         monkeypatch.delenv("STIRA_STAGE", raising=False)
     else:
@@ -65,11 +72,29 @@ def test_stage_is_opt_in(monkeypatch, value, expected):
     assert stage_enabled() is expected
 
 
-def test_off_by_default_no_route_no_nav(tmp_path, monkeypatch):
-    app = _app(tmp_path, monkeypatch, enabled=False)
+def test_on_by_default_page_and_nav_and_root_stays_the_chat(tmp_path, monkeypatch):
+    """No variable, no config file: the Stage page exists, ``/`` is still the chat."""
+    app = _app(tmp_path, monkeypatch, enabled=True, stage_env=None)
+    assert _routes(app) & STAGE_ROUTES == STAGE_ROUTES
+    client = app.test_client()
+    assert client.get("/stage/").status_code == 200
+    assert 'href="/stage/"' in client.get("/chat").get_data(as_text=True)
+    assert client.get("/").headers["Location"].endswith("/chat")
+    nav = [key for key, *_ in app.extensions["stira_shell"]["nav"]]
+    assert nav[0] == "chat" and nav[-1] == "stage"
+
+
+@pytest.mark.parametrize("how", ["env", "file"])
+def test_off_no_route_no_nav(tmp_path, monkeypatch, how):
+    if how == "file":
+        (tmp_path / "gw.json").write_text('{"stage_enabled": false}', encoding="utf-8")
+        app = _app(tmp_path, monkeypatch, enabled=False, stage_env=None)
+    else:
+        app = _app(tmp_path, monkeypatch, enabled=False)
     assert not _routes(app) & STAGE_ROUTES
     client = app.test_client()
     assert client.get("/stage/").status_code == 404
+    assert client.get("/stage/stage.css").status_code == 404
     assert 'href="/stage/"' not in client.get("/chat").get_data(as_text=True)
 
 
@@ -216,10 +241,10 @@ def test_chat_post_from_the_stage_needs_csrf(tmp_path, monkeypatch):
 @pytest.mark.parametrize(
     ("enabled", "home", "location", "first"),
     [
-        (False, None, "/chat", "chat"),  # default: unchanged
+        (False, None, "/chat", "chat"),  # Stage off: unchanged
         (True, None, "/chat", "chat"),  # Stage on, ui.home default "chat": unchanged
         (True, "chat", "/chat", "chat"),
-        (True, "stage", "/stage/", "stage"),  # opt-in: / is the Stage, listed first
+        (True, "stage", "/stage/", "stage"),  # chosen: / is the Stage, listed first
         (False, "stage", "/chat", "chat"),  # Stage off: falls back to the chat
     ],
 )
@@ -233,6 +258,41 @@ def test_ui_home(tmp_path, monkeypatch, capsys, enabled, home, location, first):
     assert ("stage" in nav) is enabled
     warned = "ui.home" in capsys.readouterr().out
     assert warned is (home == "stage" and not enabled)
+
+
+@pytest.mark.parametrize(
+    ("saved", "env", "enabled"),
+    [
+        (None, None, True),  # no key in the file: on (the default)
+        (None, "0", False),
+        (True, None, True),  # #477: the settings page's switch
+        (True, "0", False),  # STIRA_STAGE=0 wins over the file
+        (False, "1", True),  # ...and STIRA_STAGE=1 as before
+        (False, None, False),  # saved off: no Stage, / falls back to the chat
+    ],
+)
+def test_the_config_switch_registers_the_stage_and_the_variable_wins(
+    tmp_path, monkeypatch, capsys, saved, env, enabled
+):
+    import json
+
+    (tmp_path / "gw.json").write_text(
+        json.dumps(
+            {"ui": {"home": "stage"}, **({} if saved is None else {"stage_enabled": saved})}
+        ),
+        encoding="utf-8",
+    )
+    app = _app(tmp_path, monkeypatch, enabled=False, stage_env=env)
+    assert bool(_routes(app) & STAGE_ROUTES) is enabled
+    assert (_routes(app) & STAGE_ROUTES == STAGE_ROUTES) is enabled
+    nav = [key for key, *_ in app.extensions["stira_shell"]["nav"]]
+    assert ("stage" in nav) is enabled
+    assert app.extensions["ui_home"] == ("stage" if enabled else "chat")
+    out = capsys.readouterr().out
+    assert ("Settings → Screens" in out) is (not enabled)
+    hub_state = app.test_client().get("/api/config/hub").get_json()
+    assert hub_state["stage_running"] is enabled and hub_state["stage_enabled"] is enabled
+    assert hub_state["apply"]["screens"] == {"status": "applied", "applies": "restart"}
 
 
 def test_ui_home_validation():

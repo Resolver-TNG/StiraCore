@@ -209,7 +209,7 @@ def resolve_config(
             "provider": effective_agent.provider_override,
             "base_url": effective_agent.base_url_override,
             "api_key_env": effective_agent.api_key_env_override,
-            "organization_env": None,
+            "organization_env": effective_agent.organization_env_override,
         }
         if "STIRA_MODEL" not in env:
             model_id = effective_agent.model_override
@@ -225,6 +225,8 @@ def resolve_config(
             effective_gateway.max_output_tokens,
             provider_values["provider"],
             model_id,
+            # #745: a local OpenAI-compatible endpoint takes the local default.
+            base_url=provider_values["base_url"],
         ),
         region=effective_gateway.region,
         port=effective_gateway.port,

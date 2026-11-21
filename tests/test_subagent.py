@@ -100,7 +100,10 @@ async def test_agent_as_tool_returns_result_and_parent_blocks_alias(parent):
     assert "research" in parent.config.blocked_tool_names
     parent.state.stability = 0.4
     tools, _ = parent._prepare_turn(parent.engine.pre_turn())
-    assert delegate not in tools
+    # #259: still offered; the call is refused by name (delegation is write class).
+    assert delegate in tools
+    refusal = parent.identity_guard.check_tool_call("research", {"input": "task"})
+    assert not refusal.allowed and "breaker_write_refused" in refusal.reason
     parent.engine.post_turn(stimulus=None)
 
 
@@ -162,7 +165,7 @@ async def test_separate_children_can_run_concurrently(parent):
     assert second.state.stability > 0.5
 
 
-def test_warning_filters_child_writes_and_swarm_handoff(parent):
+def test_warning_refuses_child_writes_and_swarm_handoff(parent):
     from strands import tool
 
     @tool
@@ -172,9 +175,25 @@ def test_warning_filters_child_writes_and_swarm_handoff(parent):
 
     worker = child(parent, tools=[file_write], state=NeuralState(stability=0.4))
     create_nxp_swarm([worker])
+    worker.model.responses = [
+        [
+            {"toolUse": {"name": "file_write", "toolUseId": "w1", "input": {}}},
+            {"toolUse": {"name": "handoff_to_agent", "toolUseId": "h1", "input": {}}},
+        ],
+        [{"text": "done"}],
+    ]
     worker()
-    assert "file_write" not in {t["name"] for t in worker.model.calls[0]}
-    assert "handoff_to_agent" not in {t["name"] for t in worker.model.calls[0]}
+    # #259: the child's tool list is fixed; both calls are refused at the call.
+    assert {"file_write", "handoff_to_agent"} <= {t["name"] for t in worker.model.calls[0]}
+    results = {
+        block["toolResult"]["toolUseId"]: block["toolResult"]
+        for message in worker.agent.messages
+        for block in message["content"]
+        if "toolResult" in block
+    }
+    for use_id in ("w1", "h1"):
+        assert results[use_id]["status"] == "error"
+        assert "breaker_write_refused" in results[use_id]["content"][0]["text"]
     assert "file_write" in worker.agent.tool_registry.registry
 
 

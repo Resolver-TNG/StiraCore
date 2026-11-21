@@ -501,7 +501,7 @@ def test_real_app_an_approval_waits_while_no_page_is_open(stira):
     assert (stira["data"] / "workspace" / target).read_text() == "hello"
 
 
-def test_real_app_an_unanswered_approval_still_expires_as_a_rejection(stira):
+def test_real_app_an_unanswered_approval_expires_as_a_rejection_and_stops_the_turn(stira):
     app, client, model = stira["app"], stira["client"], stira["model"]
     app.extensions["new_session"]._agent.engine.config.hitl_timeout_sec = 1.0
     model.script[:] = [
@@ -513,7 +513,11 @@ def test_real_app_an_unanswered_approval_still_expires_as_a_rejection(stira):
     card = _until(lambda: _card(client))
     response.close()
     done = _until(lambda: _latest(client))
-    assert done["stop"] == "completed"
+    # #680 (ADR 0034 §2): an approval wait nobody answers stops the turn (fixed reason).
+    assert done["stop"] == "cancelled"
+    assert client.get("/api/chat/history").get_json()["turns"][-1]["stop_reason"] == (
+        "approval_unanswered"
+    )
     history = client.get("/api/hitl/history").get_json()["history"]
     assert next(h for h in history if h["id"] == card["id"])["status"] == "expired"
     assert not (stira["data"] / "workspace" / "notes" / "never.txt").exists()

@@ -27,7 +27,7 @@ from typing import Any
 
 from stiracore.config import settings_surface, stira_delivery
 from stiracore.config.agent_jobs import AGENT_JOB_LIMITS, AgentJobSettings
-from stiracore.config.models import BOARD_SVG_DEFAULT, ui_board_svg
+from stiracore.config.models import BOARD_SVG_DEFAULT, UI_HOMES, ui_board_svg
 from stiracore.core import StiraConfig
 from stiracore.core.coherence import BC_MIN_SAMPLES
 from stiracore.identity_paths import WORKSPACE_ROOT, broad_root_problem
@@ -46,12 +46,14 @@ GROUPS = (
     "write",
     "read",
     "board",
+    "screens",
     "output",
     "cache",
     "context",
     "heartbeat",
     "delegation",
     "agent_jobs",
+    "memory_retention",
 )
 BREAKER_FIELDS = ("stability_warning", "stability_critical", "bc_threshold")
 EXIT_FIELDS = {
@@ -358,7 +360,7 @@ def effective_context_profile(gateway, environ: Mapping[str, str] | None = None)
     }
 
 
-def cost_model_info(provider: str, model_id: str) -> dict:
+def cost_model_info(provider: str, model_id: str, base_url: str | None = None) -> dict:
     """What the selected model allows: the automatic cap, its documented limit, caching."""
     from stiracore.providers import capabilities_for, resolve_max_output_tokens
     from stiracore.providers.capabilities import automatic_cap_source
@@ -370,7 +372,10 @@ def cost_model_info(provider: str, model_id: str) -> dict:
     except (TypeError, ValueError):
         capabilities, provider_name = None, provider
     return {
-        "auto_max_output_tokens": resolve_max_output_tokens(None, provider, model_id),
+        # #745: with a local OpenAI-compatible endpoint this is the local default.
+        "auto_max_output_tokens": resolve_max_output_tokens(
+            None, provider, model_id, base_url=base_url
+        ),
         "model_max_output": capabilities.max_output if capabilities else None,
         "thinking_uses_output_budget": bool(
             capabilities and capabilities.thinking_uses_output_budget
@@ -506,6 +511,7 @@ HEARTBEAT_INTERVAL_LIMITS = {"min": 60.0, "max": 86_400.0}
 HEARTBEAT_INTERVALS = ("interval_floor_sec", "interval_ceil_sec")
 # What the page may show of the running daemon's status (no path, no message).
 _PLAIN_NAME = re.compile(r"(?:loop:)?[A-Za-z_][A-Za-z0-9_]{0,63}")
+_ISO_TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\+00:00|Z)")
 HEARTBEAT_LIVE_FIELDS = (
     "enabled",
     "running",
@@ -585,6 +591,72 @@ def heartbeat_live(status: Mapping | None) -> dict | None:
     return live
 
 
+# --- Screens (#477): the Stage page and the page ``/`` opens ---------------------------
+#
+# Stored in gateway-config.json (``stage_enabled``, default on and written only when off,
+# and ``ui.home``)
+# and read once when the chat server starts (it registers the Stage's page routes and the
+# menu then), so every change waits for a restart. A page, not a permission: the Stage adds
+# no API route and nothing here needs a confirmation.
+
+SCREENS_CONFIG_FIELDS = {
+    "screens.stage": "gateway.stage_enabled",
+    "screens.home": "gateway.ui",
+}
+
+
+def screens_values(gateway) -> dict:
+    ui = gateway.ui if isinstance(gateway.ui, Mapping) else {}
+    home = ui.get("home", "chat")
+    return {
+        "stage": getattr(gateway, "stage_enabled", False) is True,
+        "home": home if home in UI_HOMES else "chat",
+    }
+
+
+def gateway_overrides_for_screens(screens: Mapping, gateway) -> dict:
+    """GatewayConfig fields for the ``screens`` group (the other ``ui`` keys are kept)."""
+    return {
+        "stage_enabled": screens["stage"],
+        "ui": {**gateway.ui, "home": screens["home"]},
+    }
+
+
+def screens_env_pins(environ: Mapping[str, str] | None = None) -> dict:
+    """``{field: ENV_NAME}``: ``STIRA_STAGE`` pins the switch (the surface rule)."""
+    return _env_pins(SCREENS_CONFIG_FIELDS, environ)
+
+
+def effective_stage_enabled(gateway, environ: Mapping[str, str] | None = None) -> bool:
+    """The switch the chat server starts with: STIRA_STAGE=1/0 over ``stage_enabled``
+    (default on; no config given, e.g. an unreadable file, = off)."""
+    env = _environ(environ)
+    switch = _env_switch(env.get("STIRA_STAGE"))
+    if switch is not None:
+        return switch
+    return getattr(gateway, "stage_enabled", False) is True
+
+
+def _validate_screens(values: Mapping, current: Mapping | None, report, environ=None) -> None:
+    screens = values["screens"]
+    stage, home = screens.get("stage"), screens.get("home")
+    if type(stage) is not bool:
+        report("screens.stage", "not_boolean")
+    if home not in UI_HOMES:
+        report("screens.home", "unknown_choice", allowed=list(UI_HOMES))
+    elif home == "stage" and type(stage) is bool and field_moved(values, current, "screens.home"):
+        # Choosing the Stage as ``/`` needs the Stage on at the next start (the variable
+        # over the saved switch). A pair already in the file is kept: ``/`` falls back to
+        # the chat (stira_server), so turning the Stage off is never blocked.
+        switch = _env_switch(_environ(environ).get("STIRA_STAGE"))
+        if not (stage if switch is None else switch):
+            report("screens.home", "stage_off")
+    if current is not None:
+        for field, name in screens_env_pins(environ).items():
+            if field_moved(values, current, field):
+                report(field, "env_pinned", env=name)
+
+
 def _validate_heartbeat(values: Mapping, current: Mapping | None, report, environ=None) -> None:
     """The shape always; a bound only on a field the request moves (:func:`field_moved`)."""
     heartbeat = values["heartbeat"]
@@ -652,6 +724,151 @@ def gateway_agent_jobs(values: Mapping) -> dict:
     return {key: values[key] for key in defaults if key in values and values[key] != defaults[key]}
 
 
+# --- Memory retention (#474): the limits ``stira memory retention`` reads -------------
+#
+# Stored in agent-config.json (``memory_retention``) and read by the command line each time
+# it runs; the chat server never applies them (nothing is removed without ``--apply`` on the
+# command line). One hub key per setting, ``<store>__<name>``. No confirmation: a limit
+# removes nothing by itself. The page builds this form from :func:`retention_schema`.
+
+RETENTION_SEPARATOR = "__"
+# What a dry run may show: how many items ``--apply`` would archive and remove, by kind.
+RETENTION_COUNT_KEYS = (
+    "episodic",
+    "turn_events",
+    "tool_payloads",
+    "checkpoints",
+    "emotion_records",
+    "memory_plans",
+)
+
+
+def _retention_fields() -> list[tuple[str, str, str, type, Any]]:
+    """``(hub key, store, name, kind, default)`` for every ``memory_retention`` setting."""
+    from stiracore.control.memory_retention import RETENTION_KEYS, RetentionPolicy
+
+    unset = RetentionPolicy()
+    return [
+        (f"{store}{RETENTION_SEPARATOR}{name}", store, name, kind, unset.get(store, name))
+        for store, names in RETENTION_KEYS.items()
+        for name, kind in names.items()
+    ]
+
+
+def retention_values(agent=None) -> dict:
+    """Every setting as the command line would read it: the saved value, else its default,
+    else ``None`` (no limit). A section that does not validate is shown as unset."""
+    from stiracore.control.memory_retention import RetentionPolicy
+
+    try:
+        policy = RetentionPolicy.from_options(getattr(agent, "memory_retention", None) or {})
+    except ValueError:
+        policy = RetentionPolicy()
+    return {
+        key: policy.get(store, name) for key, store, name, _kind, _default in _retention_fields()
+    }
+
+
+def agent_memory_retention(values: Mapping) -> dict:
+    """The agent ``memory_retention`` object to save: only what differs from the defaults
+    (``None`` = no limit = not written)."""
+    section: dict[str, dict[str, Any]] = {}
+    for key, store, name, _kind, default in _retention_fields():
+        value = values.get(key)
+        if value is not None and value != default:
+            section.setdefault(store, {})[name] = value
+    return section
+
+
+def retention_schema() -> dict:
+    """JSON Schema of the ``memory_retention`` group (#195): the page builds its inputs from
+    it, so a setting added to ``RETENTION_KEYS`` needs no page change. ``x-section`` groups
+    the inputs by store; a setting without a default may be ``null`` (no limit)."""
+    from stiracore.control.memory_retention import setting_bounds
+
+    properties = {}
+    for key, store, name, kind, default in _retention_fields():
+        if kind is bool:
+            properties[key] = {"type": "boolean", "default": default, "x-section": store}
+            continue
+        low, high = setting_bounds(name)
+        properties[key] = {
+            "type": "integer" if default is not None else ["integer", "null"],
+            "minimum": low,
+            "maximum": high,
+            "default": default,
+            "x-section": store,
+        }
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": False,
+        "properties": properties,
+    }
+
+
+def schemas() -> dict:
+    """``{group: JSON Schema}`` for the groups the page renders from a schema (#195)."""
+    return {"memory_retention": retention_schema()}
+
+
+def _validate_retention(values: Mapping, report) -> None:
+    """Field errors by the schema's own rules; nothing is rounded or replaced."""
+    retention = values.get("memory_retention")
+    if retention is None:
+        return  # values built without the group (older callers): nothing to check
+    if not isinstance(retention, Mapping):
+        report("memory_retention", "invalid_combination")
+        return
+    clean = True
+    for key, rule in retention_schema()["properties"].items():
+        field, value = f"memory_retention.{key}", retention.get(key)
+        if rule["type"] == "boolean":
+            if type(value) is not bool:
+                report(field, "not_boolean")
+                clean = False
+            continue
+        if value is None and rule["type"] != "integer":
+            continue
+        if type(value) is not int:
+            report(field, "not_integer")
+            clean = False
+        elif not rule["minimum"] <= value <= rule["maximum"]:
+            report(field, "out_of_range", min=rule["minimum"], max=rule["maximum"])
+            clean = False
+    if clean:
+        from stiracore.control.memory_retention import RetentionPolicy
+
+        try:  # final guard: what the command line will load must accept it
+            RetentionPolicy.from_options(agent_memory_retention(retention))
+        except ValueError:
+            report("memory_retention", "invalid_combination")
+
+
+def retention_dry_run(report: Mapping) -> dict:
+    """What the page may show of a ``stira memory retention`` report (#474): counts only.
+
+    No key, path, text or date of an entry: the number of items per kind that ``--apply``
+    would archive and remove (``None`` when the report holds no plain count), and how many
+    stores could not be inspected (their reasons hold paths and stay inside).
+    """
+    counts = report.get("will_remove")
+    counts = counts if isinstance(counts, Mapping) else {}
+    skipped = report.get("skipped")
+    at = report.get("at")
+    return {
+        "available": True,
+        "apply": "cli",
+        "at": at if isinstance(at, str) and _ISO_TIME.fullmatch(at) else None,
+        "policy_configured": report.get("policy_configured") is True,
+        "will_remove": {
+            name: counts[name] if type(counts.get(name)) is int and counts[name] >= 0 else None
+            for name in RETENTION_COUNT_KEYS
+        },
+        "not_inspected": len(skipped) if isinstance(skipped, list) else 0,
+    }
+
+
 def hub_values(gateway, stira_config, tool_config: ToolConfig, agent=None) -> dict:
     roots = agent.write_roots if agent is not None else WRITE_SCOPES[DEFAULT_WRITE_SCOPE]
     read_roots = (getattr(agent, "read_roots", None) if agent is not None else None) or READ_SCOPES[
@@ -665,12 +882,14 @@ def hub_values(gateway, stira_config, tool_config: ToolConfig, agent=None) -> di
         "write": {"roots": list(roots)},
         "read": {"roots": list(read_roots)},
         "board": board_values(gateway),
+        "screens": screens_values(gateway),
         "output": output_values(gateway),
         "cache": cache_values(gateway),
         "context": context_values(gateway),
         "heartbeat": heartbeat_values(gateway),
         "delegation": delegation_values(gateway),
         "agent_jobs": agent_jobs_values(gateway),
+        "memory_retention": retention_values(agent),
     }
 
 
@@ -802,12 +1021,14 @@ def default_values(tool_path=None) -> dict:
         "write": {"roots": list(WRITE_SCOPES[DEFAULT_WRITE_SCOPE])},
         "read": {"roots": list(READ_SCOPES[DEFAULT_READ_SCOPE])},
         "board": {"svg": BOARD_SVG_DEFAULT},
+        "screens": {"stage": True, "home": "chat"},
         "output": {"max_output_tokens": None},
         "cache": {"enabled": False, "ttl": "5m"},
         "context": {"enabled": False, **_context_defaults()},
         "heartbeat": heartbeat_defaults(),
         "delegation": DelegationSettings().as_dict(),
         "agent_jobs": AgentJobSettings().as_dict(),
+        "memory_retention": retention_values(),
     }
     return preset_values(DEFAULT_PRESET, base)
 
@@ -847,6 +1068,8 @@ def constraints(stira_config) -> dict:
         "context": copy.deepcopy(CONTEXT_RULES),
         # #472: interval bounds in seconds (checked on a field the request moves).
         "heartbeat": {name: dict(HEARTBEAT_INTERVAL_LIMITS) for name in HEARTBEAT_INTERVALS},
+        # #477: the pages ``/`` may open ("stage" only with the Stage on).
+        "screens": {"homes": list(UI_HOMES)},
         "delegation": {
             name: {"min": low, "max": high} for name, (low, high) in DELEGATION_LIMITS.items()
         },
@@ -1043,6 +1266,7 @@ def validate_values(
         err("board.svg", "not_boolean")
     _validate_cost(values, current, err, environ)
     _validate_heartbeat(values, current, err, environ)
+    _validate_screens(values, current, err, environ)
     delegation = values.get("delegation")
     if not isinstance(delegation, Mapping):
         err("delegation", "invalid_combination")
@@ -1067,6 +1291,7 @@ def validate_values(
                 err(f"agent_jobs.{name}", "not_integer")
             elif not low <= value <= high:
                 err(f"agent_jobs.{name}", "out_of_range", min=low, max=high)
+    _validate_retention(values, err)
     roots = values["write"].get("roots")
     if not isinstance(roots, list) or not all(isinstance(r, str) for r in roots):
         err("write.roots", "not_list")
@@ -1378,23 +1603,33 @@ def aborted_entry(entry: Mapping) -> dict:
     }
 
 
+MODEL_HISTORY_KEYS = ("provider", "model_id", "organization_env", "region")
+
+
+def model_changes(before: Mapping, after: Mapping) -> list[dict]:
+    """The diff of a model selection (#476): names and ids only, masked like every row."""
+    return [
+        {
+            "field": f"model.{k}",
+            "from": mask_secrets(before.get(k)),
+            "to": mask_secrets(after.get(k)),
+        }
+        for k in MODEL_HISTORY_KEYS
+        if before.get(k) != after.get(k)
+    ]
+
+
 def model_history_entry(before: Mapping, after: Mapping, *, now=None) -> dict | None:
     """Record a model/provider switch (display only; roll back from the model section)."""
-    keys = ("provider", "model_id")
-    old = {k: before.get(k) for k in keys}
-    new = {k: after.get(k) for k in keys}
-    if old == new:
+    changes = model_changes(before, after)
+    if not changes:
         return None
     timestamp = (now or datetime.now(UTC)).strftime("%Y-%m-%dT%H:%M:%SZ")
     return {
         "id": uuid.uuid4().hex[:12],
         "at": timestamp,
         "source": "model",
-        "changes": [
-            {"field": f"model.{k}", "from": mask_secrets(old[k]), "to": mask_secrets(new[k])}
-            for k in keys
-            if old[k] != new[k]
-        ],
+        "changes": changes,
         "before": {},
         "after": {},
         "redacted_fields": [],

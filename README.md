@@ -35,7 +35,7 @@ yet. Known gaps on current `main`:
   or a manually upgraded release is refused for the exec class (the log says
   `Not registering shell: …`). Check with `python -m pip show strands-agents-tools`.
 - **Emotion classification is basic.** With the default install the stimulus classifier is the
-  rule-based one: its patterns are English and it detects almost nothing in Japanese. The
+  rule-based one: its patterns are English-first; for Japanese it covers only a minimal set (gratitude and questions) and detects almost nothing else. The
   Japanese Sokudan classifier needs the `jev` extra on Python 3.11
   ([stimulus classifiers](#stimulus-classifiers),
   [Japanese rule classifier, opt-in](docs/ja-rules-classifier.md)). There is no stimulus
@@ -80,7 +80,7 @@ Amazon Bedrock); the Stage art in them is CC BY 4.0 ([License](#license)).
 
 | | |
 |---|---|
-| ![Stage page: the pixel-art character in a night-time lab, a text window saying "Idle — no turn is running."](docs/images/stage-idle.png)<br>**Stage** (opt-in, `STIRA_STAGE=1`): the agent's pixel-art view, idle, with the text window and the composer. | ![Stage whiteboard showing an Observe, Think, Act loop diagram with a heart, drawn from the model's reply](docs/images/board-svg.png)<br>**Whiteboard**: a reply's `svg` code block, rebuilt from an allow-list and drawn on the Stage board (a frame from a recording; the label at the top right is its caption). |
+| ![Stage page: the pixel-art character in a night-time lab, a text window saying "Idle — no turn is running."](docs/images/stage-idle.png)<br>**Stage** (on by default; `STIRA_STAGE=0` or Settings → Screens turns it off): the agent's pixel-art view, idle, with the text window and the composer. | ![Stage whiteboard showing an Observe, Think, Act loop diagram with a heart, drawn from the model's reply](docs/images/board-svg.png)<br>**Whiteboard**: a reply's `svg` code block, rebuilt from an allow-list and drawn on the Stage board (a frame from a recording; the label at the top right is its caption). |
 | ![Chat page: six Neural State values with trend lines, a reply, and the per-turn change line under it](docs/images/chat-inner-state.png)<br>**Chat**: the six Neural State values with trends, and the per-turn change under a reply (the rule classifier read a thank-you as `connection`). | ![Approval card for the journal tool: normalized arguments, their hash, and the buttons Approve once, Reject and two allow-again options](docs/images/approval-card.png)<br>**Approval card**: a write tool set to Ask waits for a person — the normalized arguments, their hash and the choices (the outline on *Approve once* was added for the recording). |
 | ![Memory page: three columns, episodic with ten entries, semantic and procedural empty](docs/images/memory-page.png)<br>**Memory**: the newest entries of the episodic, semantic and procedural layers, read-only. | ![Observability page: operation log rows for a tool call, model calls and the turn end, with time, duration and tokens](docs/images/observability-log.png)<br>**Observability**: the operation log — model calls, tool calls and turns with time, duration and tokens. |
 
@@ -238,7 +238,7 @@ wire it yourself; a minimal `NXPAgent(...)` does not start every component.
 
 ### Stimulus classifiers
 - `RuleBasedClassifier`: dependency-free heuristics (its patterns are English; it detects
-  almost nothing in Japanese — measured in an internal live probe).
+  almost nothing else in Japanese beyond a minimal gratitude / question set (#654) — measured in an internal live probe).
 - `SokudanClassifier` (Jev-compatible, Japanese, `GeneLab/sokudan-ja-310m`, `jev` extra,
   Python 3.11): runs on CPU without torch; measured p50 ≈ 22 ms on an Apple M1 Max.
   `get_classifier()` falls back to rules when Sokudan is not installed.
@@ -502,7 +502,6 @@ These are planned or partly designed but **do not exist on `main`**:
   open points — #258; breaker tool
   hiding vs runtime refusal (needs a decision) — #259
 - Time-limited Always rules and the other open points of ADR 0010 — #190, #270
-- Diagnostics tab on the settings page — #267
 - Session list / switch / search in the UI — #196
 - Formal bcScore definition and COHERENCE behaviour while the window fills — #168
 - Multilingual classifier and classifier switching beyond rule/Sokudan — #106
@@ -608,13 +607,13 @@ Open `http://127.0.0.1:5600/chat` and send a message. Data goes to `<repo>/.loca
 
 Stage is a pixel-art visual-novel view of what the agent is doing: the character, a text
 window with the composer, approvals as a choice window, Neural State and the breaker. It
-adds no permission. Start the server with `STIRA_STAGE=1` and open `/stage/`:
+adds no permission. It is on by default; start the server and open `/stage/` (the example pins the variable):
 
 ```bash
 STIRA_STAGE=1 STIRA_PORT=5600 python dashboard/stira_server.py
 ```
 
-Without `STIRA_STAGE=1` there is no `/stage` route. A reply's ```` ```svg ```` block is drawn on
+With the Stage turned off (`STIRA_STAGE=0` or Settings → Screens) there is no `/stage` route. A reply's ```` ```svg ```` block is drawn on
 the board as a picture rebuilt from an allow-list of shapes, colours and text (no script, link
 or outside resource; on by default, off in Settings → "Board (Stage)", `ui.board_svg`).
 Details: [docs/stage.md](docs/stage.md).

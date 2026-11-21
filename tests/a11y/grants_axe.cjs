@@ -161,6 +161,8 @@ async function main() {
   if (JSON.stringify(flow.slice(0, 3)) !== JSON.stringify(expected)) problems.push(`issue flow: ${flow.join(', ')}`);
   const issued = posted.find((p) => p.url === '/api/grants/issue');
   if (tickBox ? !issued || issued.body.heartbeat_start !== true : issued && 'heartbeat_start' in issued.body) problems.push('the heartbeat-start flag of the issue');
+  // #791: the self-development box (when the page has it) starts unticked and nothing here ticks it
+  if (issued && 'self_development' in issued.body) problems.push('self_development was sent without a tick');
   const confirm = posted.find((p) => p.url.endsWith('/confirm'));
   if (!confirm || confirm.body.acknowledged !== true || confirm.body.token !== '8'.repeat(32)) problems.push('confirm body');
   // The issuer-only view: the token kept in this tab, the typed word, then the goal.

@@ -382,3 +382,71 @@ test('yolo: a refusal of the confirm route comes back with its code', async () =
   const result = await harness(server).context.StiraHostConfirm.yolo(press(false));
   assert.deepEqual({ ...result }, { code: 'host_not_acknowledged' });
 });
+
+// --- #656: the client contract for a scheduler create answered 428 (browser channel) ---
+
+const JOBS = '/api/scheduler/jobs';
+function jobsServer(open) {
+  const seen = { dialogs: [] };
+  const server = (url, init, headers) => {
+    if (url === JOBS) {
+      return headers.has('X-Stira-Host-Operation') ? [201, { job: { job_id: 'health-hourly' } }]
+        : browserRequired({ kind: 'scheduler_loosen', summary: { action: 'create', job: 'health-hourly' } });
+    }
+    if (url === `/api/host-operations/${OP}/confirm`) { seen.confirm = true; return [200, { operation: { state: 'confirmed' } }]; }
+    if (url === `/api/host-operations/${OP}/cancel`) { seen.cancel = true; return [200, { operation: { state: 'cancelled' } }]; }
+    return [500, {}];
+  };
+  if (open) server.confirm = { open: (options) => { seen.dialogs.push(options); return open(); } };
+  return { server, seen };
+}
+const createJob = (h) => h.context.stiraFetch(JOBS, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ job: { job_id: 'health-hourly' }, confirm: true }),
+});
+const settled = async (promise, ticks = 20) => {
+  let done = false;
+  promise.then(() => { done = true; }, () => { done = true; });
+  for (let i = 0; i < ticks && !done; i += 1) await new Promise((r) => setImmediate(r));
+  return done;
+};
+
+test('scheduler create: a page without the confirm dialog fails fast with a readable 409, nothing re-sent', async () => {
+  const { server, seen } = jobsServer(null);
+  const h = harness(server);
+  const pending = createJob(h);
+  assert.equal(await settled(pending), true, 'stiraFetch settles without waiting for anyone');
+  const response = await pending;
+  assert.equal(response.status, 409);
+  const data = await response.json();
+  assert.equal(data.code, 'host_channel_unavailable');
+  assert.equal(data.error, catalog['host.code_host_channel_unavailable']);
+  assert.equal(data.local, true);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(seen.cancel, true, 'the unused operation is cancelled');
+  assert.equal(h.calls.filter((c) => c.url === JOBS).length, 1);
+});
+
+test('scheduler create: with the dialog the person confirms, then the same request is re-sent with the header', async () => {
+  const { server, seen } = jobsServer(async () => true);
+  const h = harness(server);
+  const response = await createJob(h);
+  assert.equal(response.status, 201);
+  assert.equal(seen.dialogs.length, 1);
+  assert.equal(seen.dialogs[0].title, catalog['host.browser_title'].replace('{what}', catalog['host.kind_scheduler_loosen']));
+  const posts = h.calls.filter((c) => c.url === JOBS);
+  assert.equal(posts.length, 2);
+  assert.equal(posts[0].headers.has('X-Stira-Host-Operation'), false);
+  assert.equal(posts[1].headers.get('X-Stira-Host-Operation'), OP);
+  assert.equal(posts[1].body, posts[0].body);
+});
+
+test('scheduler create: an unanswered dialog is a shown question, not a re-send (the request waits for the person)', async () => {
+  const { server, seen } = jobsServer(() => new Promise(() => {}));
+  const h = harness(server);
+  const pending = createJob(h);
+  assert.equal(await settled(pending), false);
+  assert.equal(seen.dialogs.length, 1, 'the dialog is on screen');
+  assert.equal(seen.confirm, undefined);
+  assert.equal(h.calls.filter((c) => c.url === JOBS).length, 1);
+});

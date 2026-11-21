@@ -72,7 +72,9 @@ button, static SVG on the Stage board) is shown by default ([ADR 0012 addendum
 | **Guide: automatic memory organisation** (recommended profiles, review, safety, weekly routine) / **ガイド: 記憶の自動整理**（推奨のプロファイル・レビュー・安全・週次の手順） | [guide-memory-routines.md](guide-memory-routines.md) / [guide-memory-routines_ja.md](guide-memory-routines_ja.md) |
 | Containment phase 0 (observe only, off by default: signals counted, `would_be` stage, weekly summary) / 隔離の段階フェーズ 0（観測のみ・既定 OFF） | [containment.md](containment.md) / [containment_ja.md](containment_ja.md) |
 | Taint phase 0 (observe only, off by default: context labels, would-hold counts, weekly summary) / 信頼ラベルフェーズ 0（観測のみ・既定 OFF） | [taint.md](taint.md) / [taint_ja.md](taint_ja.md) |
+| `page_check` `explore` / `design_lint` (a seeded walk and model-free layout checks; counts and ids only) / `page_check` の `explore`・`design_lint`（種つきの探索とモデル不要のレイアウト計測。件数と ID のみ） | [verification.md](verification.md) / [verification_ja.md](verification_ja.md) |
 | Failure digest (an operator command: failures counted by code with representative event ids; no model, writes nothing) / 失敗ダイジェスト（運用者のコマンド: 失敗をコード別に数え、代表イベントの ID を付ける。モデルを呼ばず、何も書かない） | [failure-digest.md](failure-digest.md) / [failure-digest_ja.md](failure-digest_ja.md) |
+| ATIF export (an operator command: one recorded turn as a trajectory file for outside tools; ids, numbers and codes only, no model, no network) / ATIF エクスポート（運用者のコマンド: 記録済みの 1 ターンを外部ツール向けの軌跡ファイルに書き出す。ID・数値・コードのみ。モデルもネットワークも使わない） | [atif-export.md](atif-export.md) / [atif-export_ja.md](atif-export_ja.md) |
 | Autonomous memory recording and periodic maintenance (accepted; phase 0 scheduled) / 記憶の自律記録と定期整理（承認済み、フェーズ 0 を実装予定） | [ADR 0018](adr/0018-autonomous-memory.md) |
 | Episodic emotion snapshots (on the floor) and opt-in emotion-proximity recall / エピソードの感情スナップショット（床の中）とオプトインの感情近傍想起 | [episodic-emotion.md](episodic-emotion.md) / [episodic-emotion_ja.md](episodic-emotion_ja.md) |
 | Associative recall (opt-in, read-side Amygdala Pass) / 連想想起（オプトイン、読み出し側 Amygdala Pass） | [associative-recall.md](associative-recall.md) / [associative-recall_ja.md](associative-recall_ja.md) |
@@ -92,6 +94,7 @@ button, static SVG on the Stage board) is shown by default ([ADR 0012 addendum
 | Topic / 内容 | Document |
 |---|---|
 | Emotion-ablation pre-registration / アブレーション事前登録 | [eval/emotion-ablation-prereg.md](eval/emotion-ablation-prereg.md) |
+| Memory autonomy pre-registration (ADR 0018 §5; before phase 1, not edited after results) / 記憶の自律の事前登録（フェーズ 1 の前・結果後は編集しない） | [eval/memory-autonomy-prereg.md](eval/memory-autonomy-prereg.md) |
 | Harness-change A/B procedure, pre-registration (dev + hidden held-out; procedure only, not yet run) / ハーネス変更の A/B 手順の事前登録（dev と隠した held-out。手順のみ・未実行） | [eval/harness-ab-prereg.md](eval/harness-ab-prereg.md) |
 | JP stimulus mini-set and ja-hybrid evaluation (dev/test) / 日本語刺激ミニデータと ja-hybrid の評価 | [eval/jp-stimulus/README.md](eval/jp-stimulus/README.md), [eval/jp-stimulus/ja-hybrid/report.md](eval/jp-stimulus/ja-hybrid/report.md) |
 | A/B run guards (deterministic parts: run fingerprint, plan check, leak check; no runner) / A/B 実行のガード（決定的な部品: 指紋・計画照合・漏洩検査。実行器は含まない） | [eval/ab-run-guards.md](eval/ab-run-guards.md) |
@@ -104,7 +107,7 @@ Checked against `docs/adr/` by `tests/test_docs_sync.py`. / `tests/test_docs_syn
 <!-- adr-index:begin -->
 | ADR | Title | Status | Issue |
 |---|---|---|---|
-| [0001](adr/0001-stimulus-attribution.md) | Stimulus attribution | Proposed | — |
+| [0001](adr/0001-stimulus-attribution.md) | Stimulus attribution | Accepted in part (2026-11-15) | — |
 | [0002](adr/0002-breaker-enforcement.md) | Breaker enforcement (read-only by default; `halt` = per-write approval, amended 2026-10-16) | Accepted (amended) | — |
 | [0003](adr/0003-memory-design.md) | Three-layer memory design | Accepted | — |
 | [0004](adr/0004-editor-file-editor-sandbox.md) | `editor` = SDK `file_editor` behind Stira's write sandbox | Accepted | #245 |
@@ -114,11 +117,11 @@ Checked against `docs/adr/` by `tests/test_docs_sync.py`. / `tests/test_docs_syn
 | [0008](adr/0008-scheduler.md) | Operator-defined scheduled jobs and health notifications | Accepted (two Open points; to be amended by ADR 0011, Proposed) | #239 |
 | [0009](adr/0009-eventstore-chain.md) | Hash-chained EventStore and trajectory metrics | Accepted (stages 2–3 planned) | #171 |
 | [0010](adr/0010-tool-policy-gate-stack.md) | Always / Ask / Never tool rules and the effective gate stack | Accepted (Open points marked) | #190 |
-| [0011](adr/0011-agent-self-scheduling.md) | Bounded agent self-scheduling and grant-scoped autonomous goal loops | Proposed | #296 |
+| [0011](adr/0011-agent-self-scheduling.md) | Bounded agent self-scheduling and grant-scoped autonomous goal loops | Accepted for stage C (2026-11-15) | #296 |
 | [0012](adr/0012-yolo-mode.md) | YOLO mode: six hours of automatic approval for Ask, in two tiers, started by a button | Proposed | #365 |
-| [0013](adr/0013-audit-event-contract.md) | Audit event contract, separated from operational observability | Proposed | #277 |
+| [0013](adr/0013-audit-event-contract.md) | Audit event contract, separated from operational observability | Accepted in part (2026-11-15; Open 1–4 decided) | #277 |
 | [0014](adr/0014-progress-report-phase.md) | Progress reports: stop at a checkpoint, report on the board, continue / redirect / stop | Accepted (phase 1) | #451 |
-| [0015](adr/0015-verification-browser-tool.md) | A verification-only browser tool: open and exercise the agent's own pages, inside the workspace, with no network | Accepted (phase 1 implemented) | #449 |
+| [0015](adr/0015-verification-browser-tool.md) | A verification-only browser tool: open and exercise the agent's own pages, inside the workspace, with no network | Accepted (phases 1–3 implemented; Addendum rev 5 Proposed, #747; Addendum rev 6 Accepted, implementation Proposed, #763) | #449 |
 | [0016](adr/0016-subagent-orchestration.md) | Delegating to child agents under Stira's gate: one Stira-owned tool, depth 1, bounded summary | Accepted (2026-10-19; phase 1 implemented) | #486 |
 | [0017](adr/0017-emotion-proximity-recall.md) | Emotion-proximity in associative recall: a bounded re-ranking signal from the stored snapshot, off by default | Accepted (2026-10-20; phase 1, default off) | #364 |
 | [0018](adr/0018-autonomous-memory.md) | Autonomous memory recording and maintenance: importance rated by the agent at creation, memory jobs outside the tick, reversible-only apply | Accepted (2026-10-20; phase 0 scheduled, phases 1–2 need their own go) | #251, #252 |
@@ -129,6 +132,12 @@ Checked against `docs/adr/` by `tests/test_docs_sync.py`. / `tests/test_docs_syn
 | [0023](adr/0023-containment-stages-and-attack-regression.md) | Containment stages (restricted / closed / quarantine / terminated), deterministic threat signals, and the attack-scenario regression set | Accepted (2026-10-21; #461-A and #460-0 scheduled, later phases need their own go) | #460, #461 |
 | [0024](adr/0024-approvals-beyond-the-turn.md) | Approvals that outlive their turn: breaker freeze, job-origin approvals, what a resume can repeat (follow-up to ADR 0006) | Accepted (2026-10-21; phase 1b scheduled, phase 2 needs its own go) | #240 |
 | [0025](adr/0025-allow-again-from-the-approval-card.md) | "Allow the same again" on an approval card: a session allowance for one tool and one target class (≤ 2 h, memory only), and "make this tool Always" through the settings hub | Accepted (revision 5, 2026-10-24; Q1–Q7 as recommended; implemented: PR 1 backend, PR 2 page, PR 3 Make Always and both buttons on) | #571 |
-| [0026](adr/0026-memory-index-handoff-small-windows.md) | Memory structure for small context windows: index first (`memory_index`, Memory Map), a handoff note of pointers, a corrected Japanese token estimate and window profiles (phase 1); hierarchical compression designed only (phase 2) | Proposed (revision 4, 2026-10-23; Memory Map and handoff injection on by default per operator, env off; Q3, Q5 decided) | #258, #368 |
+| [0026](adr/0026-memory-index-handoff-small-windows.md) | Memory structure for small context windows: index first (`memory_index`, Memory Map), a handoff note of pointers, a corrected Japanese token estimate and window profiles (phase 1); hierarchical compression designed only (phase 2) | Accepted for phase 1 (2026-11-15); phase 2 Proposed | #258, #368 |
+| [0028](adr/0028-round-mode-loop.md) | A round-mode loop for grants: any guarded provider, runs beyond today's caps, an allow-listed round ledger, a harness-run check hook, an optional reviewer file, and model approvers for unattended runs (operator direction) | Accepted for implementation (2026-11-15) | #748 |
+| [0029](adr/0029-assisted-grant-brief.md) | An assisted grant brief: draft the issue form with a model (`brief_assist`, unset = off), presets `build-and-test` / `investigate`, a Stira-computed diff with every loosening marked, only the person's host-confirmed version takes effect | Accepted for implementation (2026-11-15) | #785 |
+| [0030](adr/0030-autonomy-timeline-and-task-board.md) | An autonomy console: a read-only timeline of grant rounds and lifecycle events from the round ledger and the lifecycle log, and a task board whose cards only call the existing person-only grant routes (no auto-start of queued briefs) | Accepted for implementation (2026-11-15) | #788 |
+| [0031](adr/0031-run-frame.md) | One run frame for every unattended run (YOLO window, grant, scheduled job): the shared limits, stop causes and record, with the trigger and the approver as options; the approval side and the autonomy side stay apart; no authority decision, stop path or file format changes | Proposed (2026-11-15; docs only) | module-map T1 |
+| [0032](adr/0032-thinking-modes.md) | Thinking modes: chain (converge) and diverge, chosen by the person per turn or job, default off, capped inside existing budgets, allow-listed trajectory event | Proposed (2026-11-15; docs only) | #430 |
+| [0034](adr/0034-unattended-chat-turn-stops.md) | A chat turn nobody watches: it stops at its next approval wait after the YOLO window ends, on an unanswered approval, or at fixed upper bounds (3600 s / 2,000,000 tokens) while no page reads it; a Stage button for the existing stop | Accepted (2026-11-16; implemented) | #680 |
 | [vigilance-bidirectional](adr/vigilance-bidirectional.md) | Bidirectional vigilance | Accepted | #76 |
 <!-- adr-index:end -->

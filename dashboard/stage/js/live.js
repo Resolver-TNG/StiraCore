@@ -230,6 +230,8 @@ export class LiveFeed {
       }
     }
     this.booted = true;
+    // #680: the server's own word on whether POST /api/chat/cancel can stop this turn
+    if (this.turn && latest && latest.turn_id === this.turn.id) this.turn.stoppable = latest.stoppable === true;
     if (this.turn && !this.turn.done) await this.pullEvents();
     return this.turnKey() !== before || this.turnOpen;
   }

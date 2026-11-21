@@ -26,6 +26,7 @@ from stiracore.providers import ModelSpec
 from stiracore.providers.capabilities import (
     AUTO_MAX_OUTPUT_TOKENS,
     CAPABILITY_TABLE,
+    HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT,
     LEGACY_MAX_OUTPUT_TOKENS,
     automatic_cap_source,
     capabilities_for,
@@ -66,22 +67,26 @@ THINKING_AUTO = AUTO_MAX_OUTPUT_TOKENS + 32_000
         ("openai", "gpt-4.1", 32_000),  # no thinking: 32000, under its 32,768
         ("gemini", "gemini-2.5-pro", THINKING_AUTO),
         # Family members whose limit is lower or not recorded: the provider's safe default.
-        ("openai", "gpt-5-chat-latest", LEGACY_MAX_OUTPUT_TOKENS),
-        ("openai", "o3-pro", LEGACY_MAX_OUTPUT_TOKENS),
-        ("gemini", "gemini-2.5-flash-preview-tts", LEGACY_MAX_OUTPUT_TOKENS),
+        ("openai", "gpt-5-chat-latest", HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT),
+        ("openai", "o3-pro", HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT),
+        ("gemini", "gemini-2.5-flash-preview-tts", HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT),
         # Known row without a recorded limit, and unknown models: the provider's default —
         # 8192 for hosted APIs (they reject a cap above the model's limit), the automatic
         # value for local servers (no rejection, no bill).
-        ("bedrock", "anthropic.claude-3-5-sonnet-20240620-v1:0", LEGACY_MAX_OUTPUT_TOKENS),
-        ("openai_responses", "fugu-cyber", LEGACY_MAX_OUTPUT_TOKENS),
-        ("bedrock", "vendor.some-new-model-v1", LEGACY_MAX_OUTPUT_TOKENS),
+        ("bedrock", "anthropic.claude-3-5-sonnet-20240620-v1:0", HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT),
+        ("openai_responses", "fugu-cyber", HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT),
+        ("bedrock", "vendor.some-new-model-v1", HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT),
         ("llamacpp", "qwen3-8b", AUTO_MAX_OUTPUT_TOKENS),
         ("ollama", "some-local-model", AUTO_MAX_OUTPUT_TOKENS),
     ],
 )
 def test_automatic_cap_follows_the_model(provider, model_id, expected):
     assert resolve_max_output_tokens(None, provider, model_id) == expected
-    source = "provider_default" if expected in (8192,) or provider in _LOCAL else "model"
+    source = (
+        "provider_default"
+        if expected in (HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT,) or provider in _LOCAL
+        else "model"
+    )
     assert automatic_cap_source(provider, model_id) == source
 
 
@@ -90,10 +95,10 @@ _LOCAL = ("llamacpp", "ollama")
 
 def test_unknown_limit_default_is_per_provider():
     for provider in ("bedrock", "anthropic", "openai", "openai_responses", "gemini", "litellm"):
-        assert unknown_limit_max_output(provider) == LEGACY_MAX_OUTPUT_TOKENS, provider
+        assert unknown_limit_max_output(provider) == HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT, provider
     for provider in _LOCAL:
         assert unknown_limit_max_output(provider) == AUTO_MAX_OUTPUT_TOKENS, provider
-    assert unknown_limit_max_output("no-such-provider") == LEGACY_MAX_OUTPUT_TOKENS
+    assert unknown_limit_max_output("no-such-provider") == HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT
 
 
 def test_explicit_value_always_wins():
@@ -140,7 +145,7 @@ def test_thinking_reserve_only_where_thinking_shares_the_cap():
 
 def test_a_spec_level_capability_override_lowers_the_automatic_cap():
     spec = ModelSpec.bedrock("vendor.model", region_name="us-east-1")
-    assert resolve_max_output_tokens(None, spec) == LEGACY_MAX_OUTPUT_TOKENS
+    assert resolve_max_output_tokens(None, spec) == HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT
     spec = ModelSpec.bedrock(
         "global.anthropic.claude-sonnet-5-5",
         region_name="us-east-1",
@@ -158,7 +163,7 @@ def test_gateway_default_is_automatic_and_resolves_per_model(tmp_path):
     assert json.loads(path.read_text())["max_output_tokens"] is None
     assert resolve_config(GatewayConfig.load(path), environ={}).max_output_tokens == THINKING_AUTO
     unknown = GatewayConfig(model_id="vendor.some-new-model-v1")
-    assert resolve_config(unknown, environ={}).max_output_tokens == LEGACY_MAX_OUTPUT_TOKENS
+    assert resolve_config(unknown, environ={}).max_output_tokens == HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT
     pinned = GatewayConfig(max_output_tokens=64_000)
     assert resolve_config(pinned, environ={}).max_output_tokens == 64_000
 
@@ -451,7 +456,10 @@ def test_resolve_config_pins_and_automatics_per_gateway_file(tmp_path):
     path.write_text(json.dumps({"max_output_tokens": 12_345}))
     assert resolve_config(GatewayConfig.load(path), environ={}).max_output_tokens == 12_345
     path.write_text(json.dumps({"model_id": "vendor.some-new-model-v1"}))
-    assert resolve_config(GatewayConfig.load(path), environ={}).max_output_tokens == 8192
+    assert (
+        resolve_config(GatewayConfig.load(path), environ={}).max_output_tokens
+        == HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT
+    )
     # An environment model switch moves the automatic cap with the model.
     auto = GatewayConfig.load(path)
     env = {"STIRA_MODEL": "global.anthropic.claude-sonnet-5-5"}

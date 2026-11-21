@@ -6,7 +6,7 @@ import asyncio
 import logging
 import os
 
-from .runtime import DIMENSIONS, ICONS, ChatSessions, chunks
+from .runtime import DISPLAY_DIMENSIONS, ICONS, ChatSessions, chunks
 
 logger = logging.getLogger(__name__)
 COLORS = {"normal": 0x2ECC71, "warning": 0xF1C40F, "critical": 0xE74C3C, "coherence": 0xF1C40F}
@@ -19,7 +19,7 @@ def state_embed(discord, status):
         description=f"{ICONS.get(level, '⚪')} Breaker: {level.upper()}",
         color=COLORS.get(level, 0x95A5A6),
     )
-    for name in DIMENSIONS:
+    for name in DISPLAY_DIMENSIONS:
         value = status["neural_state"][name]
         filled = round(max(0.0, min(1.0, value)) * 10)
         embed.add_field(name=name, value=f"{'█' * filled}{'░' * (10 - filled)} {value:.2f}")

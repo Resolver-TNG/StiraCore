@@ -1,7 +1,8 @@
 'use strict';
 const $ = id => document.getElementById(id);
 // Gauge colours come from style.css (.gauge.<dimension>, stability zones via data-zone).
-const dims = ['trust','curiosity','vigilance','attachment','stability','satisfaction'];
+// #137: vigilance is not displayed; the engine keeps it.
+const dims = ['trust','curiosity','attachment','stability','satisfaction'];
 const label = (prefix, raw) => window.i18n ? window.i18n.label(prefix + raw, raw) : raw;
 for (const name of dims) {
   const row = document.createElement('div');
@@ -66,6 +67,7 @@ function renderHistory(entries) {
     event.append(time,name,details);
     const deltas=document.createElement('div');deltas.className='deltas';
     for(const [key,value] of Object.entries(entry.deltas || {})) {
+      if(!dims.includes(key)) continue;
       const chip=document.createElement('span');chip.className='delta'+(value<0?' negative':'');chip.textContent=`${label('dim.',key)} ${value>0?'+':''}${Number(value).toFixed(3)}`;deltas.append(chip);
     }
     if(!deltas.childElementCount){const chip=document.createElement('span');chip.className='micro';chip.textContent=t('observer.no_change');deltas.append(chip);}

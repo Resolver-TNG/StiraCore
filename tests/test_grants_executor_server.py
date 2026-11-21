@@ -31,6 +31,23 @@ def _threads():
     return [t for t in threading.enumerate() if t.name.startswith("grants-iteration")]
 
 
+def _threads_after_exit(timeout: float = 10.0):
+    """The iteration threads still alive once each was given ``timeout`` to exit.
+    ``wait_idle`` returns when the iteration's end is written; its thread returns from
+    ``_run`` only after that, so a look at the thread list right then can still see it
+    (#716)."""
+    for thread in _threads():
+        thread.join(timeout)
+    return _threads()
+
+
+def _end_watchdog_passes(app) -> None:
+    """End the watchdog's passes for a test that asserts an iteration's end code. Every
+    lifecycle event wakes a pass, and a pass looks at the running iteration (``poll``): on
+    a loaded host that look can land between a claim and its end code (#716)."""
+    assert app.extensions["authority_watchdog"].stop_passes(10) == "stopped"
+
+
 def test_stage_c_alone_builds_no_executor_and_no_step_route(tmp_path, monkeypatch):
     build, _data = _build(tmp_path, monkeypatch, {"autonomy": {"stage_c": True}})
     app = build()
@@ -99,6 +116,7 @@ def test_one_iteration_through_the_route_claims_and_awaits_verification(stage_c_
     from grants_exec_helpers import Counter, ScriptedProvider, use
 
     app, _data, ws = stage_c_exec
+    _end_watchdog_passes(app)
     executor = app.extensions["grant_executor"]
     provider = ScriptedProvider(
         [[use("goal_report", {"kind": "claim_complete", "code": "goal_met"})]]
@@ -110,11 +128,84 @@ def test_one_iteration_through_the_route_claims_and_awaits_verification(stage_c_
     started = client.post(f"/api/grants/{grant_id}/step", json={}, headers=SAME)
     assert started.status_code == 200, started.get_json()
     assert started.get_json()["iteration"]["state"] in ("running", "idle")
-    assert executor.wait_idle(20)
+    assert executor.wait_idle(20), executor.view(grant_id)
     view = client.get(f"/api/grants/{grant_id}").get_json()
-    assert view["iteration"]["end"] == "claimed"
-    assert view["grant"]["goal_state"] == "awaiting_verification"
-    assert view["grant"]["state"] == "active" and _threads() == []
+    assert view["iteration"]["end"] == "claimed", view["iteration"]
+    assert view["grant"]["goal_state"] == "awaiting_verification", view["grant"]
+    assert view["grant"]["state"] == "active", view["grant"]
+    assert _threads_after_exit() == []
+
+
+def test_wait_idle_returns_before_the_iteration_thread_has_exited(stage_c_exec):
+    """#716: the end of an iteration (what ``wait_idle`` waits for) is not the end of its
+    thread. With the thread held right after its end was written, the thread list still
+    holds it; it is gone once the thread was let go and joined."""
+    from grants_exec_helpers import Counter, ScriptedProvider, use
+
+    app, _data, ws = stage_c_exec
+    _end_watchdog_passes(app)
+    executor = app.extensions["grant_executor"]
+    provider = ScriptedProvider(
+        [[use("goal_report", {"kind": "claim_complete", "code": "goal_met"})]]
+    )
+    executor._estimator = Counter()
+    executor._inner_model = lambda _parent: provider
+    leave, finish = threading.Event(), executor._finish
+
+    def slow_exit(it):
+        finish(it)
+        leave.wait(20)
+
+    executor._finish = slow_exit
+    client = app.test_client()
+    grant_id = _issue(client, ws)["grant"]["grant_id"]
+    try:
+        assert client.post(f"/api/grants/{grant_id}/step", json={}, headers=SAME).status_code == 200
+        assert executor.wait_idle(20)
+        assert executor.view(grant_id)["end"] == "claimed", executor.view(grant_id)
+        assert len(_threads()) == 1  # written, idle, and its thread not yet out
+    finally:
+        leave.set()
+    assert _threads_after_exit() == []
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="#716: the watchdog's look between a claim and its end code ends the iteration "
+    "'stopped' (goal_not_active); the executor's order is left as it is here",
+)
+def test_a_watchdog_look_between_the_claim_and_its_end_code_keeps_claimed(stage_c_exec):
+    """#716, reproduced without a clock: the claim moves the goal to
+    ``awaiting_verification`` and posts ``goal_claimed`` (which wakes the watchdog) before
+    the iteration's own ``claimed`` stop is set. The watchdog's look (``poll``) in between
+    reads ``goal_not_active`` and stops the iteration first (the end the gate saw)."""
+    from grants_exec_helpers import Counter, ScriptedProvider, use
+
+    app, _data, ws = stage_c_exec
+    _end_watchdog_passes(app)  # the one look below is the only one
+    executor = app.extensions["grant_executor"]
+    provider = ScriptedProvider(
+        [[use("goal_report", {"kind": "claim_complete", "code": "goal_met"})]]
+    )
+    executor._estimator = Counter()
+    executor._inner_model = lambda _parent: provider
+    grants = executor._grants
+    claim = grants.claim_complete
+
+    def claim_then_look(grant_id):
+        view = claim(grant_id)
+        executor.poll()  # the watchdog's pass, at the instant the gate hit by chance
+        return view
+
+    grants.claim_complete = claim_then_look
+    client = app.test_client()
+    grant_id = _issue(client, ws)["grant"]["grant_id"]
+    assert client.post(f"/api/grants/{grant_id}/step", json={}, headers=SAME).status_code == 200
+    assert executor.wait_idle(20), executor.view(grant_id)
+    view = client.get(f"/api/grants/{grant_id}").get_json()
+    assert view["grant"]["goal_state"] == "awaiting_verification", view["grant"]
+    assert view["iteration"]["end"] == "claimed", view["iteration"]
+    assert _threads_after_exit() == []
 
 
 def test_a_persons_chat_message_signals_before_the_turn_lock(stage_c_exec):

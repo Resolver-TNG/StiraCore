@@ -28,10 +28,13 @@ test('live ui_event stream renders a ribbon with glyphs, confidence and breaker'
   assert.equal(ribbon.dataset.turnId, id);
   assert.equal(ribbon.parent.classList.contains('has-ribbon'), true);
   const dims = ribbon.findAll(byClass('ribbon-dim'));
+  // #137: vigilance moved (+0.08 in SUMMARY.deltas) but has no cell and is not read out.
   assert.deepEqual(dims.map(d => d.textContent), [
-    '信頼 ・0', '好奇心 ・0', '警戒 ▲+0.08', '愛着 ・0', '安定 ▼−0.02', '満足 ・0',
+    '信頼 ・0', '好奇心 ・0', '愛着 ・0', '安定 ▼−0.02', '満足 ・0',
   ]);
-  assert.deepEqual(dims.map(d => d.dataset.trend), ['flat', 'flat', 'up', 'flat', 'down', 'flat']);
+  assert.deepEqual(dims.map(d => d.dataset.trend), ['flat', 'flat', 'flat', 'down', 'flat']);
+  assert.ok(dims.every(d => d.dataset.dim !== 'vigilance'));
+  assert.doesNotMatch(ribbon.textContent, /警戒|vigilance/i);
   assert.equal(ribbon.find(byClass('ribbon-stimulus')).textContent, '⚡ threat');
   assert.equal(ribbon.find(byClass('ribbon-confidence')).textContent, '分類信頼度 0.82');
   assert.equal(ribbon.find(byClass('ribbon-breaker')).textContent, '🟢 正常');
@@ -40,7 +43,8 @@ test('live ui_event stream renders a ribbon with glyphs, confidence and breaker'
   assert.match(label, /刺激: threat/);
   assert.match(label, /分類信頼度: 0\.82/);
   assert.match(label, /ブレーカー: 正常/);
-  assert.match(label, /警戒 \+0\.08/);
+  assert.match(label, /安定 −0\.02/);
+  assert.doesNotMatch(label, /警戒|vigilance/i);
   assert.match(label, /信頼 変化なし/);
   assert.equal(ribbon.attributes['aria-controls'], 'turn-inspector');
 });
@@ -62,7 +66,7 @@ test('missing data shows "not recorded" and is never zero-filled', async () => {
   await settle();
   const pretty = ctx.get('inspector-pretty');
   const cells = pretty.findAll(node => node.tagName === 'td');
-  assert.equal(cells.length, 6 * 4);
+  assert.equal(cells.length, 5 * 4);
   assert.ok(cells.every(cell => cell.textContent === '未記録'), 'no zero-filled cells');
 });
 
@@ -101,8 +105,9 @@ test('inspector opens from the ribbon, keeps turn id in URL, toggles JSON and re
 
   const pretty = ctx.get('inspector-pretty');
   const rows = pretty.find(node => node.tagName === 'tbody').children.map(row => row.children.map(c => c.textContent));
-  assert.deepEqual(rows[4], ['安定', '0.700', '0.680', '−0.02', '0.690']);
-  assert.deepEqual(rows[2], ['警戒', '0.100', '0.180', '+0.08', '0.180']);
+  assert.deepEqual(rows[3], ['安定', '0.700', '0.680', '−0.02', '0.690']);
+  // #137: the state table has no vigilance row (before 0.100 / after 0.180 are in SUMMARY).
+  assert.deepEqual(rows.map(row => row[0]), ['信頼', '好奇心', '愛着', '安定', '満足']);
   const text = pretty.textContent;
   assert.match(text, /current_time — 成功 · 4 ms/);
   assert.match(text, /🟡 警告 → 🟢 正常/);

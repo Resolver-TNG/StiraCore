@@ -40,6 +40,7 @@ def _record(request: str, code: str = "200") -> logging.LogRecord:
         "/api/gateway/status",
         "/api/scheduler",
         "/api/state",
+        "/api/history",
         "/api/state/history?limit=500",
     ],
 )

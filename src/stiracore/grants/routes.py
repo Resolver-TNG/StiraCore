@@ -26,7 +26,9 @@ own-dashboard guard (the agent's own HTTP tools cannot reach this server).
 * W5, only with ``autonomy.stage_c_exec``: ``POST /api/grants/<id>/step`` — a person's one
   press starts exactly one goal iteration (no typed word, no host operation: the grant was
   host-confirmed at issue; refused ``grant_iteration_refused`` with a ``reason`` code); the
-  views carry ``iteration`` (``running`` / ``yielded`` / ``idle``, codes and counters).
+  views carry ``iteration`` (``running`` / ``yielded`` / ``idle``, codes and counters);
+  ``GET /api/grants/<id>/rounds`` — the round ledger's records of the grant (ADR 0028 §5:
+  codes and counts only) and the ledger's state.
 
 Every operation step (request, consume, browser confirmation) is refused while an agent
 tool call runs, and the browser confirmation is refused when the effective channel is the
@@ -190,6 +192,17 @@ def create_grants_blueprint(
 
             return run(press)
 
+        @blueprint.get("/api/grants/<grant_id>/rounds")
+        def grants_rounds(grant_id):
+            # ADR 0028 §5: the round ledger's records of this grant — codes and counts
+            # only (the ledger's allow-list), and the ledger's state (``ok`` or a fixed
+            # code). Read from memory; an unknown id is ``grant_unknown``.
+            def rounds(svc):
+                svc.view(grant_id)
+                return executor.ledger_view(grant_id)
+
+            return run(rounds)
+
     @blueprint.post("/api/grants/operations/<op_id>/confirm")
     def grants_confirm(op_id):
         if not browser_ok():
@@ -242,4 +255,7 @@ def install(app: Flask, service: GrantService, **kwargs: Any) -> None:
         ui = {"grants_ui": True, "grants_exec_ui": kwargs.get("executor") is not None}
         if kwargs.get("ticker") is not None:
             ui["grants_tick_ui"] = True  # W6d: the issue form's heartbeat-start choice
+        settings = getattr(service, "settings", None)
+        if getattr(settings, "grant_self_development", False) is True:
+            ui["grants_self_dev_ui"] = True  # #791 (B6b): the form's separate tick
         return ui

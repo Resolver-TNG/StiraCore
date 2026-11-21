@@ -264,7 +264,17 @@ test('no claim: the grant panel is the one of before W6c', { skip: JSDOM ? false
     grant({ claim: undefined, card: true, cards: 1 }),
     grant({ claim: undefined, state: 'revoked', live: false, headline: { subject: 'grant', state: 'revoked', reason: 'user' } }),
   ];
-  for (const g of variants) assert.equal(html(A, g), html(A0, g));
+  // since the denser panel (the Stage's grant display): the state's mark and tone, the
+  // iterations meter and the reason in words are new; everything else is still W5b's
+  const plain = (s) => s
+    .replace(/<span class="act-ico" aria-hidden="true">[^<]*<\/span> /g, '')
+    .replace(/ data-tone="[a-z]+"/g, '')
+    .replace(new RegExp(`<meter class="act-meter" min="0" max="\\d+" value="\\d+" aria-label="${t('stage.grant_iter_label')}"></meter> `, 'g'), '')
+    .replace(`(${t('stage.grant_reason_user')})`, '(user)');
+  for (const g of variants) {
+    assert.notEqual(html(A, g), html(A0, g), 'the new marks are drawn');
+    assert.equal(plain(html(A, g)), html(A0, g));
+  }
   assert.equal(html(A, null), html(A0, null));
   dom.window.close();
   fs.rmSync(dir, { recursive: true, force: true });

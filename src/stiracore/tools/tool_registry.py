@@ -32,6 +32,7 @@ from .own_dashboard_gate import URL_ARGUMENTS as _OWN_DASHBOARD_URL_TOOLS
 from .own_dashboard_gate import OwnDashboardGuardedTool, install_registered_redirect_check
 from .page_check import browser_status as _browser_status
 from .page_check import page_check
+from .page_look import page_look
 from .procedure_tool import PROPOSE_PROCEDURE_TOOL_NAME, unbound_propose_procedure
 from .run_checks import run_checks as _run_checks_tool
 from .search_tools import perplexity_configured, perplexity_search
@@ -267,8 +268,13 @@ for _tool in (web_fetch, web_search, webhook_send, oauth_api_call, lsp_diagnosti
 PAGE_CHECK_STATUS = _browser_status()
 if PAGE_CHECK_STATUS.available:
     _register(WRITE_TOOLS, page_check)
+    # ADR 0015 rev 6 (S3): the file-only page tool shares the browser discovery.
+    _register(WRITE_TOOLS, page_look)
 else:
-    _LOG.info("Skipping page_check: %s", PAGE_CHECK_STATUS.detail or PAGE_CHECK_STATUS.code)
+    _LOG.info(
+        "Skipping page_check and page_look: %s",
+        PAGE_CHECK_STATUS.detail or PAGE_CHECK_STATUS.code,
+    )
 
 # ADR 0019 (#167): ``run_checks`` only when gateway-config.json says ``run_checks:
 # {"phase": 1}`` (the server calls :func:`enable_run_checks` at start-up); absent = not
@@ -292,6 +298,24 @@ def enable_run_checks(settings: Any) -> str:
     _rc.mark_enabled(code == "run_checks_on")
     RUN_CHECKS_STATE.update(code=code, registered=code == "run_checks_on")
     return code
+
+
+def enable_page_review(reviewer: Any) -> bool:
+    """Register (or not) ``page_review`` for this process (ADR 0015 rev 6, S6).
+
+    ``reviewer``: the server's ``page_review.Reviewer``, or ``None`` while the task
+    ``visual_review`` is unset — then nothing is registered and the tool list is what it
+    was. It shares ``page_check``'s browser discovery: no browser, no tool (there is no
+    run to review). Returns whether the tool is registered."""
+    from . import page_review as _pr
+
+    on = reviewer is not None and PAGE_CHECK_STATUS.available
+    if on:
+        on = "page_review" in WRITE_TOOLS or bool(_register(WRITE_TOOLS, _pr.page_review))
+    if not on:
+        WRITE_TOOLS.pop("page_review", None)
+    _pr.set_reviewer(reviewer if on else None, configured=reviewer is not None)
+    return on
 
 
 if perplexity_configured():
@@ -418,6 +442,26 @@ def get_tools(
 
             write_tools["page_check"] = WorkspacePageCheck(
                 write_tools["page_check"], write_policy, PAGE_CHECK_STATUS.path
+            )
+    if "page_look" in write_tools:
+        # As page_check (C6): no write policy, no tool (fail closed).
+        if write_policy is None:
+            write_tools.pop("page_look")
+        else:
+            from .page_look import WorkspacePageLook
+
+            write_tools["page_look"] = WorkspacePageLook(
+                write_tools["page_look"], write_policy, PAGE_CHECK_STATUS.path
+            )
+    if "page_review" in write_tools:
+        # As page_check (C6): no write policy, no tool (fail closed).
+        if write_policy is None:
+            write_tools.pop("page_review")
+        else:
+            from .page_review import WorkspacePageReview
+
+            write_tools["page_review"] = WorkspacePageReview(
+                write_tools["page_review"], write_policy
             )
     if "run_checks" in write_tools:
         # Needs the workspace (what it may copy); without a policy it is not offered.

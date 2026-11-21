@@ -46,6 +46,9 @@ JOB_RESTART = "job runs do not survive a restart"
 # ADR 0011 W5: a grant iteration's card ended because the iteration stopped (kill, revoke,
 # a person's chat turn, its wall time) or because the process restarted.
 GRANT_STOPPED = "the grant iteration stopped"
+# ADR 0034 (#680): a chat turn's card ended because the turn stopped by itself (its YOLO
+# window ended, a card went unanswered, an unread turn's upper bound).
+TURN_AUTO_STOPPED = "the turn was stopped automatically"
 # ApprovalStore records its own expiry with this word.
 STORE_EXPIRED = "expired"
 
@@ -60,6 +63,7 @@ _RESOLUTION_CODES = {
     BREAKER_STRICTER: "breaker_stricter",
     JOB_RESTART: "job_restart",
     GRANT_STOPPED: "grant_stopped",
+    TURN_AUTO_STOPPED: "turn_auto_stopped",
 }
 SYSTEM_RESOLVER = "system"
 # Every code the two functions below can return (the UI and /observability check against these).

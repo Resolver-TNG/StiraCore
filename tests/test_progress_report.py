@@ -419,7 +419,42 @@ def test_stop_holds_even_when_the_window_stop_fails(make_app, clock, monkeypatch
     assert app.extensions["progress"].tick() is False
 
 
-# --- the automatic continue (operator decision 2026-10-19) ----------------------------------
+def test_an_answer_that_cannot_be_recorded_is_counted_as_a_dropped_event(
+    make_app, clock, monkeypatch
+):
+    """#705: the report's events are written outside the active turn; a failure is counted."""
+    from dashboard import stira_server
+    from stiracore.observability.turn_events import TurnEventRecorder
+
+    made = []
+
+    class Recorder(TurnEventRecorder):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            made.append(self)
+
+    monkeypatch.setattr(stira_server, "TurnEventRecorder", Recorder)
+    model = ClockModel(clock)
+    app = make_app(model, env=_on())
+    client = app.test_client()
+    _open_window(client)
+    frame, report = _report_turn(app, client, model)
+    (recorder,) = made
+    before = recorder.drop_counts()
+    real = recorder.store.append
+
+    def append(turn_id, event_type, data=None):
+        if event_type == "progress.reply":
+            raise OSError("disk")
+        return real(turn_id, event_type, data)
+
+    monkeypatch.setattr(recorder.store, "append", append)
+    response = client.post(f"/api/progress/{report['report_id']}/stop", headers=_headers(app))
+    assert response.status_code == 200 and response.get_json()["recorded"] is False
+    after = recorder.drop_counts()
+    assert after["record_failed"] == before["record_failed"] + 1
+    assert {**after, "record_failed": before["record_failed"]} == before
+    assert _progress_events(client, frame["turn_id"])[-1]["type"] != "progress.reply"
 
 
 def test_without_an_answer_one_automatic_continue_after_ten_minutes(make_app, clock):

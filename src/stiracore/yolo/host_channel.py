@@ -510,11 +510,23 @@ def ask(socket_path: Path, message: dict, timeout: float = 10.0) -> dict:
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
         sock.settimeout(timeout)
         sock.connect(str(socket_path))
-        sock.sendall(json.dumps(message).encode("ascii") + b"\n")
+        refused: OSError | None = None
+        try:
+            sock.sendall(json.dumps(message).encode("ascii") + b"\n")
+        except (BrokenPipeError, ConnectionResetError) as error:
+            # The server answers a refused peer and closes without reading the request,
+            # so the send can fail after the answer was queued: read that answer.
+            refused = error
         data = b""
-        while b"\n" not in data:
-            chunk = sock.recv(65536)
-            if not chunk:
-                break
-            data += chunk
+        try:
+            while b"\n" not in data:
+                chunk = sock.recv(65536)
+                if not chunk:
+                    break
+                data += chunk
+        except ConnectionResetError:
+            if refused is None:
+                raise
+        if refused is not None and b"\n" not in data:
+            raise refused
     return json.loads(data.split(b"\n", 1)[0].decode("ascii"))

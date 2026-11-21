@@ -128,7 +128,22 @@ EXTERNAL_TOOLS = frozenset(
 # ``run_checks`` (ADR 0019 Q2, #167) runs the agent's own code in a throwaway copy: a card
 # in every window while its rule is Ask (phases 1-2); answering it inside a window on a
 # verified Mac is a later, separate decision (phase 1b).
-PERSON_TOOLS = frozenset({"diagram", "delegate", "page_check", "propose_procedure", "run_checks"})
+#
+# ``page_look`` (ADR 0015 rev 6, S3): the file-only page tool; a card in every window too.
+#
+# ``page_review`` (ADR 0015 rev 6, S6): sends screenshots to the reviewer model; a window
+# never answers a send, so it is a card in every window, both tiers.
+PERSON_TOOLS = frozenset(
+    {
+        "diagram",
+        "delegate",
+        "page_check",
+        "page_look",
+        "page_review",
+        "propose_procedure",
+        "run_checks",
+    }
+)
 CHILD_PERSON_REASONS = {"delegate": "child_not_yet_covered"}
 
 # Phase 7 (§9 option C): the exec tools a window with the exec flag may answer. Each call

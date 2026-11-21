@@ -74,6 +74,17 @@ def _run_checks_code(agent_config: Path) -> str:
     return run_checks.platform_code() or "run_checks_on"
 
 
+def _page_check_guard() -> dict[str, str]:
+    """The guard state for the report (ADR 0015 Addendum rev 6, S1). The state lives in
+    memory only, so this process measures it itself: G runs once on a background thread
+    and is waited for at most 10 s (``unmeasured`` after that, and at once where the
+    platform has no measured run or no browser is found)."""
+    from stiracore.tools import page_check_guard
+
+    page_check_guard.ensure_guard()
+    return page_check_guard.guard_report()
+
+
 def _checks_discover(args: argparse.Namespace) -> int:
     """``stira checks discover <dir>`` (ADR 0019 phase 0): the kinds that apply and the
     argv each would run. Files only — nothing is executed."""
@@ -194,6 +205,7 @@ def main(argv: list[str] | None = None) -> int:
         write_test=not args.no_write_test,
         classifier_choice=_classifier_choice(args.config),
         run_checks_code=_run_checks_code(args.config),
+        page_check_guard=_page_check_guard(),
     )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))

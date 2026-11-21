@@ -368,7 +368,7 @@ def test_cut_off_file_write_is_never_run_even_under_always(tmp_path, fake):
     ("gateway", "expected"),
     [
         ({"max_output_tokens": 12_345}, 12_345),  # pinned in gateway-config.json
-        ({"model_id": "vendor.some-new-model-v1"}, 8192),  # automatic, model without a limit
+        ({"model_id": "vendor.some-new-model-v1"}, 16384),  # automatic, model without a limit
         ({"model_id": "global.anthropic.claude-opus-4-1-20250805-v1:0"}, 32_000),
     ],
 )
@@ -417,16 +417,16 @@ def test_a_turn_whose_thinking_uses_the_cap_says_so(tmp_path, fake):
     ("gateway", "accepted"),
     [
         ({"model_id": "vendor.some-new-model-v1"}, True),  # automatic: the provider's default
-        ({"model_id": "vendor.some-new-model-v1", "max_output_tokens": 8193}, False),  # control
+        ({"model_id": "vendor.some-new-model-v1", "max_output_tokens": 16385}, False),  # control
     ],
 )
 def test_unknown_model_default_fits_an_endpoint_that_enforces_its_limit(
     tmp_path, fake, gateway, accepted
 ):
-    """#416: an unknown Bedrock model gets the provider's safe default (8192), which an
-    endpoint enforcing an 8192 limit accepts; one token more is refused (the control shows
+    """#416: an unknown Bedrock model gets the provider's safe default (16384), which an
+    endpoint enforcing a 16384 limit accepts; one token more is refused (the control shows
     the endpoint really enforces it)."""
-    fake.limits["vendor.some-new-model-v1"] = 8192
+    fake.limits["vendor.some-new-model-v1"] = 16384
     server = _start(tmp_path, fake, "devnull", gateway)
     try:
         status, body = server.request("POST", "/api/chat", {"message": "hello"})

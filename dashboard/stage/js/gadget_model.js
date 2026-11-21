@@ -13,6 +13,7 @@ export const GADGET_KINDS = ['code', 'test', 'subagent', 'file'];
 export const MEMORY_LAYERS = ['episodic', 'semantic', 'procedural'];
 export const DRONE_SLOTS = 6; // drones drawn; more running agents show as "+N"
 export const AGENT_LIMIT = 12;
+export const FOLDER_MAX = 3; // binders drawn for reads running at once
 
 // Tool name -> category, for adapters that only have the tool name (stage 2 SSE). Exact
 // names first, then a few prefixes. Unknown names are a generic `tool`.
@@ -127,7 +128,8 @@ export function deriveGadgets(s, set0, ref) {
   const mem = [...running('memory'), ...running('file')];
   const reads = mem.filter((t) => !t.write);
   const writes = mem.filter((t) => t.write);
-  set('gadget.folder', reads.length || (err && (err.kind === 'memory' || err.kind === 'file') && !err.write) ? 1 : 0,
+  // value = how many reads run at once (1..FOLDER_MAX): the binders drawn; a failed read shows one
+  set('gadget.folder', reads.length ? Math.min(reads.length, FOLDER_MAX) : (err && (err.kind === 'memory' || err.kind === 'file') && !err.write) ? 1 : 0,
     reads.length ? `read running: ${names(reads)} (${ref('tools')})` : err && !err.write && (err.kind === 'memory' || err.kind === 'file') ? `read failed: ${err.name} (${ref('lastError')})` : 'no memory/file read running');
   set('gadget.note', writes.length || (err && (err.kind === 'memory' || err.kind === 'file') && err.write) ? 1 : 0,
     writes.length ? `write running: ${names(writes)} (${ref('tools')})` : err && err.write && (err.kind === 'memory' || err.kind === 'file') ? `write failed: ${err.name} (${ref('lastError')})` : 'no memory/file write running');

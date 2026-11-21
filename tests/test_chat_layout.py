@@ -67,9 +67,30 @@ def test_chat_retains_sidebar_and_sparkline_targets():
         "output-tokens",
         "estimated-cost",
     } <= set(markup.ids)
-    for dimension in ("trust", "curiosity", "vigilance", "attachment", "stability", "satisfaction"):
+    for dimension in ("trust", "curiosity", "attachment", "stability", "satisfaction"):
         assert f"spark-{dimension}" in markup.ids
         assert f"sv-{dimension}" in markup.ids
+    # #137: vigilance is not displayed; the engine keeps it.
+    assert "spark-vigilance" not in markup.ids
+    assert "sv-vigilance" not in markup.ids
+
+
+def test_vigilance_is_not_displayed_in_the_dashboard_markup_and_scripts():
+    """#137 (decided 2026-11-16): vigilance is off every display; the state keeps it."""
+    for template in ("chat.html", "index.html", "settings.html"):
+        path = ROOT / "templates" / template
+        if path.exists():
+            html = path.read_text(encoding="utf-8")
+            assert "vigilance" not in html and "警戒" not in html, template
+    for lang in ("ja", "en"):
+        catalog = (ROOT / "static" / "i18n" / f"catalog.{lang}.json").read_text("utf-8")
+        hint = re.search(r'"hub\.classifier_desc": "([^"]*)"', catalog).group(1)
+        assert "vigilance" not in hint.lower() and "警戒" not in hint
+    observer = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+    dims = re.search(r"const dims = \[([^\]]*)\]", observer).group(1)
+    assert "vigilance" not in dims
+    ribbon = (ROOT / "static" / "js" / "turn_ribbon.js").read_text(encoding="utf-8")
+    assert "vigilance" not in re.search(r"const DIMS = \[([^\]]*)\]", ribbon).group(1)
 
 
 class _TrendMarkup(HTMLParser):

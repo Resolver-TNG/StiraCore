@@ -102,6 +102,24 @@ def _authority_threads(before):
 
 
 @pytest.fixture(autouse=True)
+def _no_leaked_page_look_scope():
+    """#773 (S4b): an app built in a test wires ``page_look``'s axis scope, audit sink and
+    key directory (module state). They end with the test, so that a later test's page tool
+    call measures nothing (no guard run, no browser), writes no row into another test's
+    store and no key file into its directory, unless that test wires them itself. The
+    turn / window counts of the conditional Always start empty too."""
+    import sys
+
+    yield
+    module = sys.modules.get("stiracore.tools.page_look")
+    if module is not None:
+        module.set_axis_scope(None)
+        module.set_audit(None)
+        module.set_key_dir(None)
+        module.reset_counts()
+
+
+@pytest.fixture(autouse=True)
 def _no_leaked_authority_threads(request):
     import sys
     import threading

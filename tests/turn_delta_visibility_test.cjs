@@ -83,7 +83,7 @@ test('detected stimulus renders signed deltas, breaker, and rationale on live tu
   assert.equal(summary.hidden, false);
   assert.equal(
     summary.children[0].textContent,
-    '⚡ threat 検知 → vigilance +0.08, stability -0.02, satisfaction -0.03 [breaker: normal]'
+    '⚡ threat 検知 → stability -0.02, satisfaction -0.03 [breaker: normal]'
   );
   assert.equal(summary.children[1].textContent, 'rule: threat (tool error)');
   assert.equal(summary.children[0].className, 'turn-summary-line');
@@ -109,6 +109,20 @@ test('history restores turn summary on its matching agent bubble', async () => {
 
   const [summary] = agentSummaries(get('conversation'));
   assert.equal(summary.hidden, false);
-  assert.match(summary.children[0].textContent, /vigilance \+0\.08/);
+  assert.match(summary.children[0].textContent, /stability -0\.02/);
+  assert.doesNotMatch(summary.children[0].textContent, /vigilance/);
   assert.equal(summary.children[1].textContent, detected.emotion_transcription);
+});
+
+test('#137: a turn that moved only vigilance shows no summary line', async () => {
+  const { get } = await setup({
+    turnSummary: { category: 'uncertainty', deltas: { vigilance: 0.04 }, emotion_transcription: null, breaker: 'normal' }
+  });
+  get('message').value = 'hmm';
+
+  await get('chat-form').listeners.submit({ preventDefault() {} });
+
+  const [summary] = agentSummaries(get('conversation'));
+  assert.equal(summary.hidden, true);
+  assert.equal(summary.children.length, 0);
 });

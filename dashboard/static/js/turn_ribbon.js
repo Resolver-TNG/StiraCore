@@ -8,7 +8,8 @@
  */
 (function (root) {
   "use strict";
-  const DIMS = ["trust", "curiosity", "vigilance", "attachment", "stability", "satisfaction"];
+  // #137: vigilance is not displayed (ribbon, Inspector); the engine keeps it.
+  const DIMS = ["trust", "curiosity", "attachment", "stability", "satisfaction"];
   // #310: coherence uses the #284 word ("shell.coherence"), same as chat.js and the nav chip.
   const GLYPH = { normal: "🟢", warning: "🟡", coherence: "🟣", critical: "🔴" };
   const LEVEL_KEY = {

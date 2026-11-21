@@ -340,3 +340,49 @@ test('drones launch from and land beside her on their own side (docks), clear of
   for (let y = g.dock[1]; y < g.dock[1] + dh; y += 1) for (let x = g.dock[0]; x < g.dock[0] + dw; x += 1) if (px[((y - CHAR[1]) * pm.size[0] + x - CHAR[0]) * 4 + 3]) old += 1;
   assert.ok(old > 50, `the single dock covers her (${old})`);
 });
+
+test('beacon is a sprite stack: 16 baked paddle angles of one size, picked by the spin phase', async () => {
+  const { beaconFrame } = await load('gadget_scene.js');
+  const meta = JSON.parse(fs.readFileSync(path.join(ROOT, 'assets', 'gadgets', 'gadgets.json'), 'utf8'));
+  const sizes = new Set();
+  for (let k = 0; k < 16; k += 1) {
+    const r = meta.sprites[`beacon.s${k}`];
+    assert.ok(r, `beacon.s${k} is in the atlas`);
+    sizes.add(`${r[2]}x${r[3]}`);
+  }
+  assert.equal(sizes.size, 1, 'frames of one prop share a size (setSprite refuses a swap otherwise)');
+  assert.equal(beaconFrame(0), 'beacon.s0');
+  assert.equal(beaconFrame(0.5), 'beacon.s8');
+  assert.equal(beaconFrame(0.999), 'beacon.s15');
+  assert.equal(beaconFrame(1), 'beacon.s0', 'the phase wraps');
+  assert.equal(beaconFrame(-0.25), 'beacon.s12', 'a negative phase wraps too');
+  assert.equal(beaconFrame(NaN), 'beacon.s0', 'a bad phase falls back to the rest frame');
+  // deterministic: the same phase always gives the same frame
+  assert.equal(beaconFrame(0.37), beaconFrame(0.37));
+});
+
+test('folder is a sprite stack: 1..3 binders by reads running at once, swung out by folder.out', async () => {
+  const { folderFrame } = await load('gadget_scene.js');
+  const { FOLDER_MAX } = await load('gadget_model.js');
+  const meta = JSON.parse(fs.readFileSync(path.join(ROOT, 'assets', 'gadgets', 'gadgets.json'), 'utf8'));
+  const sizes = new Set();
+  for (let n = 1; n <= FOLDER_MAX; n += 1) {
+    for (let k = 0; k < 4; k += 1) {
+      const r = meta.sprites[`folder.s${n}.${k}`];
+      assert.ok(r, `folder.s${n}.${k} is in the atlas`);
+      sizes.add(`${r[2]}x${r[3]}`);
+    }
+  }
+  assert.equal(sizes.size, 1, 'frames of one prop share a size');
+  assert.equal(folderFrame(1, 0), 'folder.s1.0');
+  assert.equal(folderFrame(2, 7), 'folder.s2.3');
+  assert.equal(folderFrame(3, 3.5), 'folder.s3.2');
+  assert.equal(folderFrame(9, 99), 'folder.s3.3', 'counts and slide are clamped');
+  assert.equal(folderFrame(NaN, NaN), 'folder.s1.0');
+  // the count is the number of reads running at once, capped; one read (or a failed read) is 1
+  assert.equal((await poseOf(T, start('a', 'file', 'file_read')))['gadget.folder'], 1);
+  assert.equal((await poseOf(T, start('a', 'file', 'file_read'), start('b', 'memory', 'memory_search')))['gadget.folder'], 2);
+  assert.equal((await poseOf(T, start('a', 'file', 'file_read'), start('b', 'memory', 'memory_search'),
+    start('c', 'memory', 'memory_read'), start('d', 'file', 'file_read')))['gadget.folder'], FOLDER_MAX);
+  assert.equal((await poseOf(T, start('a', 'memory', 'memory_write', { write: true })))['gadget.folder'], 0, 'a write is not a read');
+});

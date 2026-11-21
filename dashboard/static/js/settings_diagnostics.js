@@ -11,6 +11,19 @@
   const LEVELS = new Set(["info", "warning", "error"]);
   const SKIPS = new Set(["no_policy", "unsupported", "symlink_in_path", "changed"]);
   const PRINCIPALS = new Set(["terminal", "app", "launchd", "process", "user"]);
+  const GUARD_CODE = /^[a-z_]{1,40}$/;
+
+  // The page tools' guard row (ADR 0015 Addendum rev 6, S1): fixed codes and seconds only.
+  function pageGuardText(row) {
+    const code = value => (typeof value === "string" && GUARD_CODE.test(value) ? value : "?");
+    const seconds = row.measured_age_s;
+    const age = Number.isInteger(seconds) && seconds >= 0
+      ? t("diagnostics.tab_page_guard_age", { seconds })
+      : t("diagnostics.tab_page_guard_no_age");
+    return t("diagnostics.tab_page_guard_value", {
+      guard: code(row.guard), code: code(row.guard_code), axis: code(row.axis), age,
+    });
+  }
 
   // t() that returns null for a key the catalog does not have (no console warning).
   function tryT(key, vars) {
@@ -125,6 +138,9 @@
       fact(t("diagnostics.tab_platform"), report.platform || "—");
       fact(t("diagnostics.who"), report.principal ? principalText(report.principal) : "—");
       fact(t("diagnostics.tab_generated"), report.generated_at || "—");
+      if (report.page_guard && typeof report.page_guard === "object") {
+        fact(t("diagnostics.tab_page_guard"), pageGuardText(report.page_guard));
+      }
       const checks = report.checks || [];
       els.checksBox.hidden = checks.length === 0;
       list(els.checks, checks, null);

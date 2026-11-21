@@ -18,6 +18,40 @@ from stiracore.tools.identity_tools import check_tool_write, editor_read_only
 from stiracore.tools.os_protection import is_command_tool, os_protection_denial
 from stiracore.tools.tool_registry import is_exec_tool
 
+# #259 (ADR 0010 addendum): the tool list stays the same at every breaker level; a write
+# the breaker stops is refused at the call with this fixed reason code instead.
+BREAKER_WRITE_REFUSED = "breaker_write_refused"
+_WARNING_REFUSAL = (
+    f"Write tools require confirmation at WARNING [{BREAKER_WRITE_REFUSED}]: no confirmation "
+    "gateway exists, so this call was not executed. Read tools keep working."
+)
+_CRITICAL_REFUSAL = (
+    f"Writes are blocked by the circuit breaker at CRITICAL [{BREAKER_WRITE_REFUSED}]; this "
+    "call was not executed. Read tools keep working."
+)
+
+
+def breaker_withholds_writes(actions: Any) -> bool:
+    """Whether the breaker stops write-class tools outright (WARNING; CRITICAL without
+    ``halt``). Under HALT they go to the human approval gate instead (``CheckpointHooks``)."""
+    return bool(actions & BreakAction.REQUIRE_CONFIRMATION) or bool(
+        actions & BreakAction.BLOCK_WRITES and not actions & BreakAction.HALT
+    )
+
+
+def breaker_write_names(engine: Any) -> set[str]:
+    """The write-class names the breaker refuses: configured ``blocked_tool_names`` plus the
+    live write registry (MCP tools included, #145). Before #259 these were removed from
+    the tool list (``NXPAgent._turn_tools``)."""
+    from stiracore.tools.tool_registry import WRITE_TOOLS
+
+    config = getattr(engine, "config", None)
+    if isinstance(config, Mapping):
+        names = config.get("blocked_tool_names", ())
+    else:
+        names = getattr(config, "blocked_tool_names", ())
+    return set(names or ()) | set(engine.blocked_tools()) | set(WRITE_TOOLS)
+
 
 @dataclass(frozen=True)
 class GuardResult:
@@ -301,6 +335,10 @@ class IdentityGuard(HookProvider):
         path_policy: WritePathPolicy | None = None,
     ) -> None:
         self.engine = engine
+        # #259: the breaker's write names as of the turn's start (``NXPAgent._turn_tools``);
+        # unioned with the live set, so an MCP provider closed mid-turn keeps its names
+        # refused until the turn ends.
+        self.turn_write_names: frozenset[str] = frozenset()
         self.protected_patterns = tuple(p.replace("\\", "/") for p in (protected_patterns or ()))
         # One policy object shared with the file-tool wrapper and the HITL gate
         # (#243): floor (identity, read-only paths, protected_dirs) + write roots.
@@ -452,20 +490,31 @@ class IdentityGuard(HookProvider):
         if denial is not None:
             return denial
 
-        if write_capable and self.engine.is_write_blocked() and not hitl_approved:
-            return GuardResult(
-                False,
-                "Writes are blocked by the circuit breaker.",
-                None,
+        # #259: the names the breaker used to remove from the tool list are refused by name
+        # (no approval lifts it; under HALT they go to the human gate instead).
+        status = getattr(self.engine, "breaker_status", None)
+        actions = getattr(status(), "actions", None) if callable(status) else None
+        if (
+            actions is not None
+            and breaker_withholds_writes(actions)
+            and (
+                tool_name in self.turn_write_names or tool_name in breaker_write_names(self.engine)
             )
+        ):
+            return GuardResult(False, self._breaker_refusal(actions), None)
 
-        # WARNING has no confirmation gateway yet, so NXPAgent drops the named
-        # write tools; also deny write-shaped names that were not registered (#145).
+        if write_capable and self.engine.is_write_blocked() and not hitl_approved:
+            return GuardResult(False, _CRITICAL_REFUSAL, None)
+
+        # WARNING has no confirmation gateway yet: also deny write-shaped names that
+        # were not registered (#145).
         if write_capable and self._requires_confirmation() and not hitl_approved:
-            return GuardResult(
-                False,
-                "Write tools require confirmation at WARNING; no confirmation gateway exists.",
-                None,
-            )
+            return GuardResult(False, _WARNING_REFUSAL, None)
 
         return GuardResult(True, "Tool call allowed.")
+
+    @staticmethod
+    def _breaker_refusal(actions: Any) -> str:
+        if actions & BreakAction.REQUIRE_CONFIRMATION:
+            return _WARNING_REFUSAL
+        return _CRITICAL_REFUSAL

@@ -52,6 +52,8 @@ def test_max_tokens_failure_closes_turn_with_neutral_state(monkeypatch) -> None:
     wrapper = nxp_agent.NXPAgent("offline-model", "us-east-1")
     engine = Mock()
     engine.pre_turn.return_value = BreakResult(BreakLevel.NORMAL, BreakAction.NONE)
+    engine.config.blocked_tool_names = set()
+    engine.blocked_tools.return_value = []
     wrapper.engine = engine
 
     with pytest.raises(MaxTokensReachedException) as caught:

@@ -45,6 +45,16 @@
 }
 .nodes .empty { color: var(--color-text-muted); margin: 0; }
 
+/* Memory table (#652): key, importance, retention per entry; never the body. */
+.memtable {
+  margin-top: var(--space-8); padding: var(--space-4);
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.memtable h2 { font-size: var(--font-size-lg); margin-top: 0; }
+.memtable .muted { margin-bottom: var(--space-2); }
+.memtable-key { overflow-wrap: anywhere; }
+
 /* Procedural proposals (#463): the review panel under the forest. */
 .proposals {
   margin-top: var(--space-8); padding: var(--space-4);

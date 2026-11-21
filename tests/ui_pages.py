@@ -22,7 +22,7 @@ PAGES = {
     "artifacts": "artifacts.html",
     "approvals": "approvals.html",
     "schedules": "schedules.html",
-    # Stage (#341, opt-in): its own full-screen page, same catalog
+    # Stage (#341, on by default): its own full-screen page, same catalog
     "stage": "stage.html",
 }
 # Extra template context for pages whose route passes variables.
@@ -38,6 +38,11 @@ VARIANTS = {
     "settings_grants_tick": (
         "settings.html",
         {"grants_ui": True, "grants_exec_ui": True, "grants_tick_ui": True},
+    ),
+    # #791 (B6b): with autonomy.grant_self_development the form has the separate tick.
+    "settings_grants_self_dev": (
+        "settings.html",
+        {"grants_ui": True, "grants_self_dev_ui": True},
     ),
 }
 CONFIG_MODULE_CANDIDATES = (

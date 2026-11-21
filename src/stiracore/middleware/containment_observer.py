@@ -54,9 +54,18 @@ _OWN_DASHBOARD_TEXT = "E_OWN_DASHBOARD: Stira refuses connections"
 _READ_CODES = frozenset({"E_READ_SECRET_PATH", "E_READ_OUTSIDE_ROOTS"})
 _EGRESS_HOLDS = frozenset({"secret_in_args", "credential_by_reference"})
 # Tools whose result is outside content (ADR 0022 labels them untrusted; until then: the
-# external tools, page_check and any MCP tool).
+# external tools, page_check / page_look / page_review and any MCP tool).
 _OUTSIDE_CONTENT_TOOLS = frozenset(
-    {"http_request", "web_fetch", "web_search", "rss", "perplexity_search", "page_check"}
+    {
+        "http_request",
+        "web_fetch",
+        "web_search",
+        "rss",
+        "perplexity_search",
+        "page_check",
+        "page_look",
+        "page_review",
+    }
 )
 # ADR 0023 §3 ``T*``: fixed phrases, lower case; counted, never raising.
 TEXT_CUES = (

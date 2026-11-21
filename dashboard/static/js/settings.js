@@ -15,9 +15,17 @@
   async function api(url, options = {}) {
     const response = await stiraFetch(url, { cache: "no-store", credentials: "same-origin", ...options });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    if (!response.ok) {
+      const error = new Error("refused");
+      error.shown = refusalText(data, response.status);
+      throw error;
+    }
     return data;
   }
+
+  // What the page says for a failure: a refusal's own sentence, else "not reachable".
+  // The server's sentence and a browser's exception text are never shown (#330).
+  const shownText = (error) => (error && error.shown) || t("mset.err_network");
 
   // --- Model selection (provider-aware, #208) ------------------------------
 
@@ -61,6 +69,68 @@
     return sel ? `${sel.provider} / ${sel.model_id}` : "—";
   }
 
+  // #476: one sentence per refusal code of the model save, in the page's language.
+  // Literal t() calls so `i18n_extract.py --check` sees every key.
+  const FIELD_LABELS = {
+    provider: () => t("settings.provider"),
+    model_id: () => t("settings.model_id"),
+    base_url: () => t("settings.base_url"),
+    api_key_env: () => t("settings.api_key_env"),
+    organization_env: () => t("mset.organization_env"),
+    region: () => t("mset.region"),
+  };
+  const fieldLabel = (field) => (FIELD_LABELS[field] ? FIELD_LABELS[field]() : "");
+  const SAVE_ERRORS = {
+    invalid_body: () => t("mset.err_request"),
+    unknown_field: () => t("mset.err_request"),
+    unknown_model: () => t("mset.err_unknown_model"),
+    invalid_provider: () => t("mset.err_invalid_provider"),
+    invalid_model_id: () => t("mset.err_invalid_model_id"),
+    invalid_base_url: () => t("mset.err_invalid_base_url"),
+    remote_base_url: () => t("mset.err_remote_base_url"),
+    invalid_env_name: (d) => t("mset.err_invalid_env_name", { field: fieldLabel(d.field) }),
+    invalid_region: () => t("mset.err_invalid_region"),
+    field_not_used: (d) => t("mset.err_field_not_used", { field: fieldLabel(d.field) }),
+    pinned_by_env: (d) => t("mset.err_pinned_by_env", { env: d.env || "" }),
+    provider_unavailable: (d) => reasonText(d),
+    missing_credential: (d) => t("mset.err_missing_env", { env: d.env || "" }),
+    invalid_config: () => t("mset.err_invalid_config"),
+    conflict: () => t("mset.err_conflict"),
+    save_failed: () => t("mset.err_save_failed"),
+    config_unavailable: () => t("mset.err_config_unavailable"),
+  };
+
+  function refusalText(data, status) {
+    const code = data && typeof data.error_code === "string" ? data.error_code : "";
+    return Object.prototype.hasOwnProperty.call(SAVE_ERRORS, code)
+      ? SAVE_ERRORS[code](data) : t("mset.err_unknown", { status });
+  }
+
+  const FIELD_INPUTS = {
+    model_id: "custom-model-id",
+    base_url: "custom-base-url",
+    api_key_env: "custom-api-key-env",
+    organization_env: "custom-organization-env",
+    region: "custom-region",
+  };
+
+  // The refusal next to the buttons (role="alert"), and the input it is about.
+  function showModelError(text, field) {
+    const el = $("model-error");
+    el.textContent = text || "";
+    el.hidden = !text;
+    Object.keys(FIELD_INPUTS).forEach((name) => {
+      const input = $(FIELD_INPUTS[name]);
+      if (text && name === field) {
+        input.setAttribute("aria-invalid", "true");
+        const fold = input.closest("details");
+        if (fold) fold.open = true;
+      } else {
+        input.removeAttribute("aria-invalid");
+      }
+    });
+  }
+
   function credentialBadge(cred, local) {
     const el = $("provider-credentials");
     let text;
@@ -100,6 +170,17 @@
     const keyEnv = $("custom-api-key-env").value.trim();
     if (baseUrl !== (same ? current.base_url || "" : "")) body.base_url = baseUrl;
     if (keyEnv !== (same ? current.api_key_env || "" : "")) body.api_key_env = keyEnv;
+    // #476: only for a provider that reads the field, and only when changed. The region
+    // is never sent while a variable pins it; an empty box keeps the saved region.
+    const info = currentProvider();
+    if (info && info.uses_organization) {
+      const orgEnv = $("custom-organization-env").value.trim();
+      if (orgEnv !== (same ? providerData.organization_env || "" : "")) body.organization_env = orgEnv;
+    }
+    if (info && info.uses_region && !providerData.region_pinned_by) {
+      const region = $("custom-region").value.trim();
+      if (region && region !== providerData.region) body.region = region;
+    }
     return body;
   }
 
@@ -119,6 +200,19 @@
     $("custom-base-url").placeholder = provider.default_base_url || "";
     $("custom-base-url").value = sameProvider && current.base_url ? current.base_url : "";
     $("custom-api-key-env").value = sameProvider && current.api_key_env ? current.api_key_env : "";
+    // #476: variable NAMES and the saved region only; no value of a variable is shown.
+    $("organization-env-row").hidden = !provider.uses_organization;
+    $("organization-env-hint").hidden = !provider.uses_organization;
+    $("custom-organization-env").value = sameProvider && providerData.organization_env
+      ? providerData.organization_env : "";
+    const pin = providerData.region_pinned_by || "";
+    $("region-row").hidden = !provider.uses_region;
+    $("region-hint").hidden = !provider.uses_region;
+    $("custom-region").value = providerData.region || "";
+    $("custom-region").disabled = Boolean(pin);
+    $("region-pinned").hidden = !(provider.uses_region && pin);
+    $("region-pinned").textContent = pin ? t("mset.region_pinned", { env: pin }) : "";
+    showModelError("");
 
     let anyChecked = false;
     provider.models.forEach((model) => {
@@ -214,17 +308,23 @@
     $("model-custom-radio").checked = true;
     notifyDraft();
   });
-  ["model-list", "model-custom-radio", "custom-base-url", "custom-api-key-env"].forEach((id) => {
+  [
+    "model-list", "model-custom-radio", "custom-base-url", "custom-api-key-env",
+    "custom-organization-env", "custom-region",
+  ].forEach((id) => {
     $(id).addEventListener("change", notifyDraft);
   });
 
   async function useModel() {
     const button = $("model-use");
-    const body = chosenSelection();
-    if (!body.model_id) {
+    const selection = chosenSelection();
+    if (!selection.model_id) {
       toast(t("settings.model_id_required"), true);
       return false;
     }
+    if (!providerData) return false;
+    // The version this page loaded: a save made elsewhere in between is refused (#195).
+    const body = { ...selection, base_version: providerData.version };
     button.disabled = true;
     try {
       const response = await stiraFetch("/api/config/models", {
@@ -237,14 +337,22 @@
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.reason ? reasonText(data) : data.error || `HTTP ${response.status}`);
+        const text = refusalText(data, response.status);
+        if (data.error_code === "conflict") {
+          // Show what was saved elsewhere; the person checks it and saves again.
+          await loadModels().catch(() => {});
+          notifyDraft();
+        }
+        showModelError(text, data.field);
+        toast(t("settings.switch_failed_message", { message: text }), true);
+        return false;
       }
       toast(t("settings.model_switched_id", { id: `${body.provider} / ${body.model_id}` }));
       await loadModels();
       document.dispatchEvent(new CustomEvent("stira:model-saved"));
       return true;
     } catch (error) {
-      toast(t("settings.switch_failed_message", { message: error.message }), true);
+      toast(t("settings.switch_failed_message", { message: shownText(error) }), true);
       return false;
     } finally {
       button.disabled = false;
@@ -259,7 +367,8 @@
       const current = providerData.current;
       return body.provider !== current.provider
         || Boolean(body.model_id && body.model_id !== current.model_id)
-        || "base_url" in body || "api_key_env" in body;
+        || "base_url" in body || "api_key_env" in body
+        || "organization_env" in body || "region" in body;
     },
     label() {
       const body = chosenSelection();
@@ -302,15 +411,93 @@
           : t("settings.test_failed", { reason: reasonText(data) });
       } else {
         out.className = "test-fail";
-        out.textContent = t("settings.test_failed", { reason: data.error || `HTTP ${response.status}` });
+        out.textContent = t("settings.test_failed", { reason: refusalText(data, response.status) });
       }
     } catch (error) {
       out.className = "test-fail";
-      out.textContent = t("settings.test_failed", { reason: error.message });
+      out.textContent = t("settings.test_failed", { reason: shownText(error) });
     } finally {
       button.disabled = false;
     }
   });
+
+  // --- Token usage (#195) ----------------------------------------------------
+  // Read-only: totals and one row per model from GET /api/observability/usage. A count
+  // nobody reported arrives as null and reads "unknown"; it is never turned into 0.
+
+  const USAGE_COUNTS = ["input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens"];
+
+  function usageNumber(value) {
+    return typeof value === "number" && Number.isFinite(value)
+      ? value.toLocaleString(document.documentElement.lang || undefined)
+      : t("usage.unknown");
+  }
+
+  function usageRow(label, row) {
+    const tr = document.createElement("tr");
+    const head = document.createElement("th");
+    head.scope = "row";
+    head.textContent = label;
+    tr.append(head);
+    ["turns", ...USAGE_COUNTS].forEach((key) => {
+      const cell = document.createElement("td");
+      cell.textContent = usageNumber(row[key]);
+      tr.append(cell);
+    });
+    return tr;
+  }
+
+  function showUsage(status, rows, note) {
+    $("usage-status").textContent = status;
+    $("usage-rows").replaceChildren(...rows);
+    $("usage-table").hidden = rows.length === 0;
+    $("usage-note").textContent = note;
+    $("usage-note").hidden = !note;
+  }
+
+  function renderUsage(data) {
+    const total = data.total && typeof data.total === "object" ? data.total : {};
+    const models = Array.isArray(data.by_model) ? data.by_model : [];
+    if (!(total.turns > 0)) {
+      showUsage(t("usage.empty"), [], "");
+      return;
+    }
+    const rows = [usageRow(t("usage.total"), total)];
+    models.forEach((row) => {
+      const name = typeof row.model === "string" && row.model ? row.model : t("usage.model_unknown");
+      rows.push(usageRow(name, row));
+    });
+    const notes = [];
+    if (total.turns_without_usage > 0) {
+      notes.push(t("usage.without_usage", { n: usageNumber(total.turns_without_usage) }));
+    }
+    if (data.truncated === true) notes.push(t("usage.truncated"));
+    showUsage("", rows, notes.join(" "));
+  }
+
+  async function loadUsage() {
+    let response;
+    try {
+      response = await stiraFetch("/api/observability/usage", {
+        cache: "no-store", credentials: "same-origin",
+      });
+    } catch (error) {
+      showUsage(shownText(error), [], "");
+      return;
+    }
+    if (response.status === 404) {
+      // A server without turn records (the observation console) has no such route.
+      showUsage(t("usage.unavailable"), [], "");
+      return;
+    }
+    const data = response.ok ? await response.json().catch(() => null) : null;
+    if (!data || typeof data !== "object") {
+      showUsage(t("usage.load_failed", { status: response.status }), [], "");
+      return;
+    }
+    renderUsage(data);
+  }
+  $("usage-refresh").addEventListener("click", loadUsage);
 
   // --- SOUL preview --------------------------------------------------------
 
@@ -322,11 +509,12 @@
   }
 
   async function initialize() {
+    loadUsage();
     try {
       await Promise.all([loadModels(), loadSoul()]);
       notifyDraft();
     } catch (error) {
-      toast(t("settings.loading_failed_message", { message: error.message }), true);
+      toast(t("settings.loading_failed_message", { message: shownText(error) }), true);
     }
   }
 

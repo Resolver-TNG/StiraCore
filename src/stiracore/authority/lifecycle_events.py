@@ -233,6 +233,7 @@ GRANT_REASONS = frozenset(
         "blocked_run_checks_unavailable",
         "blocked_iteration_timeout",
         "blocked_workspace_changed",
+        "blocked_axis_failed",  # ADR 0015 rev 6 (S5)
         "blocked_needs_decision",
         "blocked_out_of_scope",
         "blocked_missing_input",
@@ -269,6 +270,7 @@ ITERATION_REASONS = frozenset(
         "iteration_failed",
         "iteration_workspace_changed",
         "iteration_no_action",
+        "iteration_page_tools_unavailable",  # ADR 0015 rev 6 (S5)
     }
 )
 # W6d: the heartbeat start's codes (``stiracore.scheduler.grant_tick.EVENT_REASONS`` — a

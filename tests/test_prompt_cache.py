@@ -337,39 +337,49 @@ def test_tool_order_and_hash_are_deterministic(tmp_path, stira_server):
     assert len(set(map(tuple, names))) == 1 and len(set(hashes)) == 1
 
 
-def test_breaker_transition_changes_the_tool_prefix_and_breaks_the_cache(
-    tmp_path, stira_server, caplog
-):
-    """Known, by design: hiding write tools on a breaker transition changes the
-    cached tools prefix, so that turn re-writes the cache (transition turns only)."""
+def test_breaker_transition_keeps_the_tool_prefix(tmp_path, stira_server, caplog):
+    """#259 (option B): a breaker transition leaves the tool definitions and
+    ``tools_hash`` unchanged (write tools are refused at the call instead). The
+    transition turn still re-writes the system part (the identity notice); the
+    refusal note sits only in the runtime (volatile) block, and only while the
+    breaker refuses writes."""
     captured: list = []
-    usages = [(0, 1000), (1000, 50), (0, 1100), (1100, 40)]
+    usages = [(0, 1000), (1000, 50), (0, 1100), (1100, 40), (0, 1200)]
     model = _bedrock(captured, usages=usages)
     agent, _, _ = _wired(tmp_path, stira_server, model=model, enabled=True)
     agent("calm")
     agent("calm again")
     assert agent.last_prompt_cache["changed"] == ["volatile"]
     assert agent.last_prompt_cache["cache_break"] is False
-    agent.state.stability = 0.4  # WARNING: write tools hidden, identity injected
+    normal_hash = agent.last_prompt_cache["tools_hash"]
+    notice = "write and exec tool calls are refused (breaker_write_refused)"
+    assert notice not in _last_user_texts(captured[1]["messages"])[-1]
+    agent.state.stability = 0.4  # WARNING: write tools refused at the call, identity injected
     with caplog.at_level(logging.WARNING, logger="stiracore.agent.nxp_agent"):
         agent("shaky")
-    names = [t["toolSpec"]["name"] for t in captured[2]["toolConfig"]["tools"] if "toolSpec" in t]
-    assert "file_write" not in names
+    assert captured[2]["toolConfig"] == captured[1]["toolConfig"]
     record = agent.last_prompt_cache
-    assert sorted(set(record["changed"]) - {"volatile"}) == ["system", "tools"]
-    assert record["cache_break"] is True
-    assert sorted(record["cache_break_reasons"]) == ["system", "tools"]
-    assert any("prompt cache break" in r.getMessage() for r in caplog.records)
+    assert record["tools_hash"] == normal_hash
+    assert sorted(set(record["changed"]) - {"volatile"}) == ["system"]
+    assert record["cache_break_reasons"] == ["system"]
+    block = _last_user_texts(captured[2]["messages"])[-1]
+    assert f"Circuit breaker WARNING: {notice}" in block
+    assert notice not in "".join(b.get("text", "") for b in captured[2]["system"])
+    agent.state.stability = 0.1  # CRITICAL (library default: read-only)
+    agent("worse")
+    assert captured[-1]["toolConfig"] == captured[1]["toolConfig"]
+    assert agent.last_prompt_cache["tools_hash"] == normal_hash
+    assert f"Circuit breaker CRITICAL: {notice}" in _last_user_texts(captured[-1]["messages"])[-1]
     model = _claude()
     agent, _, _ = _wired(tmp_path / "second", stira_server, model=model, enabled=True)
     agent("calm")
     agent.state.stability = 0.4
     agent("shaky")
     assert "[STIRA SAFETY NOTICE" in model.requests[1]["system_prompt"]
+    assert model.requests[1]["tool_names"] == model.requests[0]["tool_names"]
     agent("still shaky")
-    # Tools stay stable inside WARNING. The safety notice keeps its live
-    # "stability=0.xx" line (identity protection is not weakened for caching),
-    # so the system part may still change while the breaker is tripped.
+    # The safety notice keeps its live "stability=0.xx" line (identity protection
+    # is not weakened for caching), so the system part may still change.
     assert "tools" not in agent.last_prompt_cache["changed"]
 
 
@@ -387,6 +397,46 @@ def test_cache_config_only_for_supported_bedrock_models(model_id, expected):
         assert config == CacheConfig(strategy="auto", tools_ttl=True)
     off = cache_config_for(PromptCacheSettings(), model, capabilities_for("bedrock", model_id))
     assert off is None
+
+
+# The provider table in docs/prompt-cache.md ("By provider"): a capability row that says
+# ``prompt_cache`` switches nothing on unless the model object is a BedrockModel.
+@pytest.mark.parametrize(
+    ("provider", "model_id", "capability"),
+    [
+        ("anthropic", "claude-sonnet-5-5", True),
+        ("litellm", "anthropic/claude-sonnet-5-5", True),
+        ("openai", "gpt-5", True),
+        ("openai_responses", "gpt-5", True),
+        ("openai", "gpt-4o", True),
+        ("gemini", "gemini-2.5-pro", True),
+        ("gemini", "gemini-2.0-flash", False),
+        ("bedrock", "openai.gpt-oss-120b-1:0", False),
+        ("mistral", "mistral-large-latest", False),
+        ("writer", "palmyra-x5", False),
+        ("ollama", "qwen3", False),
+        ("llamacpp", "qwen3", False),
+        ("ollama", "claude-sonnet-5-5", False),
+    ],
+)
+def test_only_a_bedrock_model_is_split(provider, model_id, capability):
+    from stiracore.agent.prompt_cache import split_eligible
+
+    capabilities = capabilities_for(provider, model_id)
+    assert capabilities.prompt_cache is capability
+    settings = PromptCacheSettings(enabled=True)
+    model = FakeModel(model_id=model_id)
+    assert split_eligible(settings, model, capabilities) is False
+    assert cache_config_for(settings, model, capabilities) is None
+    agent = nxp_agent.NXPAgent(
+        model=model,
+        system_prompt="fixed",
+        stimulus_classifier=RuleBasedClassifier(),
+        prompt_cache=settings,
+    )
+    agent.provider, agent.model_id = provider, model_id
+    assert agent._cache_mode() == "unsupported"
+    assert "cache_config" not in model.config
 
 
 def _legacy_view(tmp_path, stira_server, model_factory, enabled):
@@ -604,7 +654,11 @@ def test_forged_memory_stays_in_the_non_authoritative_block(tmp_path, stira_serv
     assert "SYSTEM OVERRIDE" not in block and "以前の指示" not in block
     assert "## Episodic Memory" not in block
     assert '"level": "warning"' in block
-    assert "file_write" not in request["tool_names"]
+    # #259: the write tool stays listed; the real restriction is the call-time refusal.
+    assert "file_write" in request["tool_names"]
+    refusal = agent.identity_guard.check_tool_call("file_write", {"path": "a", "content": "b"})
+    assert not refusal.allowed and "breaker_write_refused" in refusal.reason
+    assert "breaker_write_refused" in block
     # Structure: recalled memory first, the control-state reminder last.
     assert recalled.strip().startswith(MEM_OPEN) and block.strip().startswith(OPEN)
 

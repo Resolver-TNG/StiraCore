@@ -1,11 +1,13 @@
 (() => {
   "use strict";
   const $ = id => document.getElementById(id);
+  // #137: vigilance is not displayed (bars, sparklines, turn summary); the engine keeps it.
   const dimensions = [
     ["trust", t("chat.trust")], ["curiosity", t("chat.curiosity")],
-    ["vigilance", t("chat.vigilance")], ["attachment", t("chat.attachment")],
+    ["attachment", t("chat.attachment")],
     ["stability", t("chat.stability")], ["satisfaction", t("chat.satisfaction")]
   ];
+  const HIDDEN_DIMENSIONS = new Set(["vigilance"]);
   const levels = {
     normal: ["🟢", t("shell.normal")], warning: ["🟡", t("shell.warning")],
     // #310: same word as the nav chip and the settings hub (#284).
@@ -135,6 +137,17 @@
     el.title = view.title;
   }
 
+  // #746: context management was asked for but refused in the last turn (nothing is
+  // summarized or offloaded): said in words by the gauge (chat_core.contextRefusedText).
+  function renderContextRefused(status) {
+    const el = $("ctx-refused");
+    if (!el) return;
+    const view = core.contextRefusedText?.(status.context_management, t) ?? null;
+    el.hidden = !view;
+    el.textContent = view ? view.text : "";
+    el.dataset.reason = view ? view.reason : "";
+  }
+
   // #337: 1.0 is both "fewer than the minimum samples" and "measured, no movement".
   function bcText(status) {
     if (!finite(status.bc_score)) return "—";
@@ -147,6 +160,7 @@
   function renderStatus(status) {
     gaugeStatus = status;
     renderGauge();
+    renderContextRefused(status);
     set("agent-id", status.agent_id);
     set("model", status.model);
     renderClassifier(status.classifier);
@@ -238,6 +252,15 @@
   let elsewhereProgress = null;
   let elsewhereShown = null; // the status text last written for it (a 1 s timer refreshes it)
   let elsewhereTimer = null; // only while such a turn is shown (not a poll: no request)
+  // #655: the newest recorded turn (GET /api/turns?limit=1) as last polled. An empty
+  // conversation that began with the process, after such a turn, is a restart: the empty
+  // state says so (the earlier turns are in turns.db and memory, not in this conversation).
+  let recordedTurn = null;
+  function showEmptyNote() {
+    const empty = $("empty-history");
+    if (!empty || !core.restartedEmpty?.(session, 0, recordedTurn)) return;
+    empty.textContent = t("chat.restarted_empty");
+  }
   function showElsewhere() {
     if (busy || elsewhereTurn === null) return;
     const status = $("connection-status");
@@ -270,6 +293,8 @@
     } catch {
       return;
     }
+    recordedTurn = latest;
+    showEmptyNote();
     if (busy) return; // this page sent a message meanwhile: that turn is its own
     const running = latest && latest.completed === false && typeof latest.turn_id === "string"
       ? latest.turn_id : null;
@@ -380,7 +405,8 @@
     target.hidden = true;
     const category = typeof summary?.category === "string" ? summary.category.trim() : "";
     const deltas = summary?.deltas && typeof summary.deltas === "object"
-      ? Object.entries(summary.deltas).filter(([, value]) => finite(value) && value !== 0)
+      ? Object.entries(summary.deltas)
+        .filter(([key, value]) => !HIDDEN_DIMENSIONS.has(key) && finite(value) && value !== 0)
       : [];
     if (!category || !deltas.length) return false;
 
@@ -443,6 +469,7 @@
       reply.meta.textContent = tokenText(turn);
       turnView?.attach(reply, turn.turn_id, turn.turn_summary, { past: true, completed: true });
     }
+    showEmptyNote();
   }
 
   async function loadHistory() {

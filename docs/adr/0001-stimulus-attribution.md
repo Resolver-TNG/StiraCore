@@ -1,7 +1,12 @@
 # ADR 0001: Stimulus Attribution
 
 **Path:** `docs/adr/0001-stimulus-attribution.md`
-**Status:** Proposed
+**Status:** Accepted in part (2026-11-15; the operator delegated the decision, Leva checked the
+code). **Level 2** (conservative rules; abstain = no `post_turn`) is implemented
+(`agent/stimulus_detector.py`, `agent/stimulus_classifier.py`, `agent/ja_hybrid/`). **Level 1**
+(runtime-validated task outcomes) was not found in `src/`, and the decision router it names is not
+implemented (`docs/architecture.md`). **Level 3** (an independent judge) is not built and stays
+optional. History: Proposed.
 **Decision:** Hybrid architecture; metadata and conservative rules enabled by default in v0.1. Judge escalation is optional and disabled by default.
 
 ## Context

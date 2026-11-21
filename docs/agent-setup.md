@@ -28,8 +28,8 @@ English | [日本語](agent-setup_ja.md)
    `.venv/bin/python -m pytest -q tests/attack tests/test_server_startup_smoke.py`
 5. Start the chat server (ask which port; 5600 here):
    `STIRA_PORT=5600 .venv/bin/python dashboard/stira_server.py`
-6. Ask the human to open `http://127.0.0.1:5600/chat`. For the Stage view, restart with
-   `STIRA_STAGE=1` and open `/stage/`.
+6. Ask the human to open `http://127.0.0.1:5600/chat`. The Stage view is at `/stage/`
+   (on by default; Settings → Screens or `STIRA_STAGE=0` turns it off).
 7. Model choice is the human's: Bedrock needs their AWS credentials; llama.cpp and other
    providers are in [providers.md](providers.md). Point them there; do not configure keys.
 8. When done, stop the server you started (Ctrl+C in its terminal).

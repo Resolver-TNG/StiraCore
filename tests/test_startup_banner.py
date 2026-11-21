@@ -136,6 +136,21 @@ def test_status_soul_that_does_not_read_is_not_loaded(tmp_path, monkeypatch, cap
     assert view == {"loaded": False, "state": state, "source": "configured"}
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="#291 known rest: chat.js still falls back to soul.path for an unknown source",
+)
+def test_chat_page_has_no_fallback_that_would_show_a_soul_path():
+    """The server sends no path (above). The page must not show one if a response ever
+    carried it: an unknown ``source`` is "unknown", not ``soul.path``."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    js = (root / "dashboard" / "static" / "js" / "chat.js").read_text(encoding="utf-8")
+    assert "soul.source" in js
+    assert "soul.path" not in js
+
+
 @pytest.mark.skipif(os.name == "nt" or os.geteuid() == 0, reason="POSIX permissions")
 def test_status_unreadable_soul_is_not_loaded(tmp_path, monkeypatch, capsys):
     """exists() is true; the status must not call it loaded (it did before #291's rest)."""

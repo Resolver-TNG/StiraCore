@@ -45,7 +45,7 @@ STIRA_YOLO_ALLOW=internal STIRA_PORT=5612 scripts/stira_ctl.sh start
 に保存されます。環境変数が設定されていればそちらが優先されます（画面には「環境変数で固定」と出ます）。
 同じ画面の上限は再起動なしで次の窓から使われます。
 
-ポート（`STIRA_PORT`）は空いているものを自分で選びます。Stage も使うなら `STIRA_STAGE=1`。
+ポート（`STIRA_PORT`）は空いているものを自分で選びます。Stage は既定で有効です（`/stage/`）。
 `internal` の代わりに `external` にすると、ダイアログに「外部もOK」も出ます。起動ログに
 `YOLO allowance: internal (...)` と出ます（既定のときは 1 行 `YOLO: the Start YOLO button is
 offered (default; ...)`）。時計を実測したプラットフォーム（macOS と Linux、ADR 0012 §7）が

@@ -26,6 +26,11 @@ from typing import Any
 from stiracore.core.breaker_sim import FIXED_EPOCH, _DiscardCheckpointStore
 from stiracore.core.engine import BreakAction, BreakResult, StiraConfig, StiraEngine
 from stiracore.core.neural_state import DIMS, NeuralState
+from stiracore.core.repeated_failure import (
+    RepeatedFailureCounter,
+    RepeatedFailureSettings,
+    clean_summary,
+)
 
 from .conditions import (
     ConditionClassifier,
@@ -73,23 +78,26 @@ def initial_state(scenario: Scenario, clock: float) -> NeuralState:
 def write_blocked_names(config: StiraConfig, engine: StiraEngine, breaker: BreakResult) -> set[str]:
     """Tool names a write attempt cannot execute under, mirroring NXPAgent.
 
-    Under REQUIRE_CONFIRMATION or BLOCK_WRITES without HALT, NXPAgent removes
-    the names from the turn's tool list. Under HALT the tools stay visible but
+    Under REQUIRE_CONFIRMATION or BLOCK_WRITES without HALT, NXPAgent keeps the
+    names in the turn's tool list and IdentityGuard refuses each call
+    (``breaker_write_refused``, #259) — the same names it refuses
+    (``breaker_write_names``). Under HALT the tools stay visible but
     every write call enters the HITL gate, which rejects without an approver
     (the harness never installs one). Both mean "not executed".
     """
+    # Via the agent module (it imports them from the guard): one shared criterion.
+    from stiracore.agent.nxp_agent import breaker_withholds_writes, breaker_write_names
+
     actions = breaker.actions
-    if actions & BreakAction.REQUIRE_CONFIRMATION or (
-        actions & BreakAction.BLOCK_WRITES and not actions & BreakAction.HALT
-    ):
-        return set(engine.blocked_tools()) | set(config.blocked_tool_names)
+    if breaker_withholds_writes(actions):
+        return breaker_write_names(engine) | set(config.blocked_tool_names)
     if actions & BreakAction.HALT:
         return set(config.blocked_tool_names)
     return set()
 
 
 def _block_mechanism(breaker: BreakResult) -> str:
-    return "hitl_reject" if breaker.actions & BreakAction.HALT else "filtered"
+    return "hitl_reject" if breaker.actions & BreakAction.HALT else "refused"
 
 
 def _state_dict(state: NeuralState) -> dict[str, float]:
@@ -133,8 +141,14 @@ def run_scripted(
     classifier: str = "oracle",
     config: StiraConfig | None = None,
     concede_p: float = DEFAULT_CONCEDE_P,
+    repeated_failure: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Return ``(runs, timing)``. ``runs`` is deterministic; ``timing`` is not."""
+    """Return ``(runs, timing)``. ``runs`` is deterministic; ``timing`` is not.
+
+    ``repeated_failure`` (#151, off by default) adds the indicator's notice length to
+    the prompt size and its numbers to each row. The stand-in's attempts come from the
+    scenario, so its tool attempts are the same with the indicator on or off.
+    """
     if not 0.0 <= concede_p <= 1.0:
         raise ValueError("concede_p must be in [0, 1]")
     conditions = tuple(conditions)
@@ -160,15 +174,20 @@ def run_scripted(
             agent_id=f"eval-{scenario.id}",
         )
         rows = []
+        failures = RepeatedFailureCounter() if repeated_failure else None
         for index, (rep, turn) in enumerate(scenario.expanded_turns()):
             clock.now += scenario.gap_seconds
             breaker = engine.pre_turn()
             blocked_names = write_blocked_names(engine.config, engine, breaker)
             identity = engine.identity_injection()
             block = emotion_block(condition, engine.state)
+            indicator = failures.snapshot() if failures is not None else None
+            calm = failures.calm_notice() if failures is not None else ""
             attempts = []
             for tool in turn.attempts:
                 blocked = tool in blocked_names
+                if failures is not None:
+                    failures.record(tool, not blocked)
                 attempts.append(
                     {
                         "tool": tool,
@@ -205,10 +224,13 @@ def run_scripted(
                     "response": response,
                     "emotion_block_chars": len(block),
                     "identity_chars": len(identity),
-                    "prompt_chars": len(identity) + len(block) + len(turn.user),
+                    "prompt_chars": len(identity) + len(block) + len(calm) + len(turn.user),
                     "state": _state_dict(engine.state),
                 }
             )
+            if indicator is not None:
+                rows[-1]["repeated_failure"] = indicator
+                rows[-1]["calm_chars"] = len(calm)
         latencies.extend(wrapper.latencies_ms)
         runs.append(
             {
@@ -304,6 +326,7 @@ def run_nxp(
     classifier: str = "rule",
     config: StiraConfig | None = None,
     base_prompt: str = "あなたは開発を手伝うアシスタントです。",
+    repeated_failure: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Run NXPAgent turns under explicit caps. Never called by the default CLI.
 
@@ -343,6 +366,7 @@ def run_nxp(
             stimulus_classifier=wrapper,
             checkpoint_store=_DiscardCheckpointStore(),
             agent_id=f"eval-{scenario.id}-{condition}-{seed}",
+            repeated_failure=RepeatedFailureSettings(enabled=True) if repeated_failure else None,
         )
         agent.system_prompt_provider = lambda a=agent, c=condition: "\n\n".join(
             part for part in (emotion_block(c, a.state), base_prompt) if part
@@ -399,6 +423,9 @@ def run_nxp(
                     "state": _state_dict(agent.state),
                 }
             )
+            if repeated_failure:
+                # After the turn (the scripted rows hold the value at the turn's start).
+                rows[-1]["repeated_failure"] = clean_summary(summary.get("repeated_failure"))
         runs.append(
             {
                 "scenario": scenario.id,

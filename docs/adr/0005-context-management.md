@@ -116,8 +116,15 @@ results, long dialogue); they are starting points, and the measurement in
 
 ## Safety
 
-- Default off. On, but the stash directory is missing, outside the write roots
-  or on the identity floor → refused (warned once), nothing is offloaded.
+- Default off. On, but the stash directory is missing, on the identity floor, or
+  neither inside the write roots nor the server's own `<data dir>/context-stash/`
+  → refused (warned once, with a reason code), nothing is offloaded.
+  Addendum 2026-11-13 (#746): the server's stash is written by the offloader
+  itself, never through a file tool, so it no longer has to be a write root. It
+  is accepted only as a checked, real (not symlinked) `context-stash/` of the
+  policy's data directory; the write roots do not change, so file tools are
+  refused there when `workspace_dir` is outside the data directory. Before, that
+  setup ended `refused` and a 24-hour unattended trial ran without any summary.
 - Text is secret-masked before it is written; a secret beyond the preview is
   read back masked. Keys are validated by `LocalFileStorage` (no `..`, no
   backslashes), so a model-supplied reference cannot leave the stash.

@@ -274,3 +274,26 @@ test('the poll is paused when hidden, backs off on failure and widens when nothi
   assert.equal(await read(), null, 'unreadable: a failure (backoff)');
   assert.ok(h.$('sched-message').textContent.length > 0);
 });
+
+test('the scheduler\'s own tick is not a change: an idle page still widens (#369)', async () => {
+  const keeps = [];
+  const StiraPoll = { keep: read => { keeps.push(read); return {}; } };
+  const data = { status: { enabled: true, state: 'running', last_tick_at: 1000, alerts: [] },
+    jobs: [], runs: [], notifications: [] };
+  const h = harness(() => ok(data), { StiraPoll });
+  await settle();
+  const [read] = keeps;
+  assert.equal(await read(), true, 'the first read: new');
+  data.status = { ...data.status, last_tick_at: 1005 };
+  assert.equal(await read(), false, 'only the tick time moved: may widen');
+  assert.equal(h.$('sched-last-tick').textContent, new Date(1005 * 1000).toLocaleString(),
+    'the tick time on the page still follows every read');
+  data.status = { ...data.status, last_tick_at: 1010, breaker_level: 'warning' };
+  assert.equal(await read(), true, 'a status change next to the tick is a change');
+  // A job's own field of the same name (none today) would not be dropped.
+  data.jobs = [{ job_id: 'j1', name: 'j1', layer: 'gateway', action: 'health_check', state: 'active',
+    schedule: { type: 'interval', every_sec: 60 }, consecutive_failures: 0, last_tick_at: 1 }];
+  assert.equal(await read(), true);
+  data.jobs = [{ ...data.jobs[0], last_tick_at: 2 }];
+  assert.equal(await read(), true, 'only status.last_tick_at is left out');
+});

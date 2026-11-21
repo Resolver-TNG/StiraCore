@@ -543,6 +543,22 @@ body.stage-page { overflow: hidden; }
 .board .act-grant > * { margin: 0 0 4px; }
 .board .act-meter { width: 9em; height: 0.8em; vertical-align: middle; }
 .board .act-cue { font-size: 13px; font-weight: bold; color: var(--board-strong); }
+/* the denser grant panel: the headline is the state chip (a mark and the words: the tone only
+   adds the colour), "running low" in words, the waiting cue in a box, and the rounds strip
+   (a mark and the words in every cell). No animation: nothing to reduce. */
+.board .act-ico { display: inline-block; min-width: 1em; text-align: center; }
+.board .act-grant .act-state[data-tone] { width: fit-content; max-width: 100%; padding: 1px 8px; border: 2px solid currentColor; overflow-wrap: anywhere; }
+.board .act-grant .act-state[data-tone="go"] { color: var(--board-heading); }
+.board .act-grant .act-state[data-tone="hold"] { color: var(--board-amber-ink); background: var(--board-amber-bg); }
+.board .act-grant .act-state[data-tone="stop"] { color: var(--board-strong); }
+.board .act-grant .act-state[data-tone="muted"] { color: var(--board-ink-muted); }
+.board .act-low, .board .act-ledger { font-weight: bold; color: var(--board-strong); }
+.board .act-cue { border: 2px solid var(--board-strong); padding: 4px 8px; }
+.board .act-rounds { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 6px; padding: 0; font-size: 12px; line-height: 1.5; }
+.board .act-round { padding: 0 6px; border: 1px solid var(--board-rule-soft); color: var(--board-ink); overflow-wrap: anywhere; }
+.board .act-round[data-kind="new"] { border-color: var(--board-heading); }
+.board .act-round[data-kind="repeat"], .board .act-round[data-kind="none"], .board .act-round[data-kind="unknown"] { border-style: dashed; color: var(--board-ink-muted); }
+.board .act-round[data-kind="interrupted"] { border-color: var(--board-amber-ink); background: var(--board-amber-bg); color: var(--board-amber-ink); }
 /* W6c: the evidence of a completion claim; amber (with a "⚠" line in words) when its checks failed */
 .board .act-claim { border-left: 3px solid var(--board-rule-soft); padding: 2px 0 2px 8px; margin: 4px 0; }
 .board .act-claim > * { margin: 0 0 2px; }

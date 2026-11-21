@@ -134,7 +134,7 @@ test('the approval cue points to the card (never its content), the verification 
   const ended = A.grantView(grant({ state: 'revoked', live: false, card: true, awaiting_verification: true, headline: { subject: 'grant', state: 'revoked', reason: 'kill_switch' } }), NOW, NOW, t);
   assert.equal(ended.cue, null);
   assert.equal(ended.ttl, null);
-  assert.equal(ended.headline, `${t('stage.grant_state_revoked')} (kill_switch)`);
+  assert.equal(ended.headline, `${t('stage.grant_state_revoked')} (${t('stage.grant_reason_kill_switch')})`, 'the reason in words, never the code');
 });
 
 test('hostile values: codes only, a bad id is no id, unknown codes are shown as a code', async () => {
@@ -159,6 +159,27 @@ test('hostile values: codes only, a bad id is no id, unknown codes are shown as 
   assert.ok(g.outcomes[2].text.includes('other, editor'), 'a bad tool name is "other"');
   const many = A.grantView(grant({ outcomes: [{ what: 'done', tools: Array(20).fill('editor') }] }), NOW, NOW, t);
   assert.equal(many.outcomes[0].text.split('editor').length - 1, 8, 'at most 8 tool names');
+});
+
+test('#791: a self-development grant has a badge in words with a tooltip; the flag is a boolean only', async () => {
+  const A = await load('activity.js');
+  for (const lang of ['ja', 'en']) {
+    const t = tr(lang);
+    const g = A.grantView(grant({ self_development: true }), NOW, NOW, t);
+    assert.deepEqual(g.badge, { text: t('stage.grant_self_dev'), title: t('stage.grant_self_dev_title') });
+    assert.ok(g.badge.title.includes('docs/'));
+    assert.equal(g.announce, t('stage.grant_state_active'), 'not announced');
+    for (const odd of [undefined, false, 1, 'true', MARKER, { on: true }]) {
+      assert.equal(A.grantView(grant({ self_development: odd }), NOW, NOW, t).badge, null);
+    }
+    if (!JSDOM) continue;
+    const doc = new JSDOM('<!doctype html><body></body>').window.document;
+    const box = A.renderGrant(doc, g, t);
+    const badge = box.querySelector('.act-badge');
+    assert.equal(badge.textContent, t('stage.grant_self_dev'));
+    assert.equal(badge.getAttribute('title'), t('stage.grant_self_dev_title'));
+    assert.equal(A.renderGrant(doc, A.grantView(grant(), NOW, NOW, t), t).querySelector('.act-badge'), null);
+  }
 });
 
 test('every stage.grant_* key the panel uses is in both catalogs; no HTML sink in activity.js', async () => {
@@ -290,9 +311,9 @@ test('the panel: a labelled region, meters with names, the cue link, textContent
   assert.equal(box.querySelector('h3').textContent, `${t('stage.grant_h')} abababab`);
   assert.equal(box.dataset.state, 'running');
   const meters = box.querySelectorAll('meter');
-  assert.equal(meters.length, 2);
-  assert.deepEqual([...meters].map((x) => x.getAttribute('aria-label')), [t('stage.grant_ttl_label'), t('stage.grant_budget_label')]);
-  assert.deepEqual([...meters].map((x) => [x.getAttribute('value'), x.getAttribute('max')]), [['3600', '7200'], ['750', '1000']]);
+  assert.equal(meters.length, 3);
+  assert.deepEqual([...meters].map((x) => x.getAttribute('aria-label')), [t('stage.grant_iter_label'), t('stage.grant_ttl_label'), t('stage.grant_budget_label')]);
+  assert.deepEqual([...meters].map((x) => [x.getAttribute('value'), x.getAttribute('max')]), [['3', '10'], ['3600', '7200'], ['750', '1000']]);
   const cue = box.querySelector('.act-cue');
   assert.equal(cue.dataset.cue, 'approval');
   assert.equal(cue.querySelector('a').getAttribute('href'), '/approvals');

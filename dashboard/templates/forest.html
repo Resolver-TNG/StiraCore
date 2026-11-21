@@ -6,6 +6,7 @@
 {% endblock %}
 {% block head_extra %}
   <script defer src="{{ url_for('static', filename='js/forest.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/memory_table.js') }}"></script>
   <script defer src="{{ url_for('static', filename='js/confirm_dialog.js') }}"></script>
   <script defer src="{{ url_for('static', filename='js/procedural_review.js') }}"></script>
 {% endblock %}
@@ -35,6 +36,23 @@
       <div class="nodes"></div>
     </section>
   </div>
+  <section class="memtable" id="memory-table" aria-labelledby="memtable-title">
+    <h2 id="memtable-title"><span data-i18n="memtable.title">記憶の一覧（キー・重要度・保持期限）</span></h2>
+    <p class="muted"><span data-i18n="memtable.intro">層ごとに新しい順の一部を表示します。本文は表示しません。この表は読み取り専用です。保持タグを付けられるのは stira memory tag コマンドだけです。</span></p>
+    <p class="muted"><a href="/settings#sec-memory-retention" data-i18n="memtable.retention_link">ストアごとの保持の上限と対象件数のドライランは、設定の「記憶の保持期限」にあります</a></p>
+    <p id="memtable-status" role="status" aria-live="polite"></p>
+    <table class="table" id="memtable" aria-labelledby="memtable-title" hidden>
+      <thead>
+        <tr>
+          <th scope="col" data-i18n="memtable.col_layer">層</th>
+          <th scope="col" data-i18n="memtable.col_key">キー</th>
+          <th scope="col" data-i18n="memtable.col_importance">重要度</th>
+          <th scope="col" data-i18n="memtable.col_retention">保持期限</th>
+        </tr>
+      </thead>
+      <tbody id="memtable-body"></tbody>
+    </table>
+  </section>
   <section class="proposals" id="procedural-review" aria-labelledby="proposals-title">
     <h2 id="proposals-title"><span data-i18n="procreview.title">手続き記憶の提案（レビュー）</span> <span class="count" id="proposals-count"></span></h2>
     <p class="muted"><span data-i18n="procreview.intro">エージェントにできるのは提案だけです。規則にするか（承認）、捨てるか（却下）は人が決めます。</span></p>

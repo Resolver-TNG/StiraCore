@@ -235,6 +235,46 @@ Markdown の部分集合パーサを新しく作り、DOM は `createElement`/`t
 - `delta` ごとに解析し直す。**台詞→ボードへの昇格はあり、ボード→台詞への降格はしない**。
 - 台詞のタイプライターは受信済みの文字までしか進まない。
 
+### 5.5 表示ガイド（モデルへ伝える固定文、#366 — 文面のみ。プロンプトへはまだ入れていない）
+
+出し分けの基準（§5.1）をモデルが知らないと、ボードに長文が出ているのに台詞は挨拶だけ、ということが起きる
+（2026-10-17 の実機）。モデルへ伝える**固定文**を下に置く。数値と SVG の要素名は `markdown.js` の `LIMITS` と
+`svg_safe.js` の `ELEMENTS` / `SVG_LIMITS` から決まり、`tests/stage_display_guide_test.cjs` が一致を検査する
+（定数を変えたらこの文も直さないとテストが落ちる。二重定義にしない）。
+
+- **画面の種類で文面を変えない。** チャット画面でも Stage でも同じ 1 つの文（「最初の段落=一言の要約」は
+  チャットでも読みやすい）。設定やターンごとに変わる値（SVG 設定のオン/オフ、ブレーカー等）は**入れない**:
+  プロンプトの静的な接頭部とキャッシュ（#254 / #257）を変えないため。SVG は「設定がオフならコードのまま」と
+  書くだけにする（現在の設定状態の開示は #508）。
+- 台詞を分けるマーカー（`<say>` 等）は導入しない。判定は今まで通り `classify` だけ（決定的、サニタイズも不変）。
+- **未実装（ハーネス側の変更が要る）:** この文をシステムプロンプトの静的セクションへ入れる処理、設定
+  `ui.display_guide`、接頭部ハッシュが画面種別で変わらないことのテスト、実モデルでの有り/無しの比較。それまでは
+  この文はどこにも注入されない（SOUL・アンカー・感情系プロンプトには書かない）。
+
+<!-- stage-display-guide:begin -->
+```text
+## Display
+
+A reply is shown either as a short spoken line or, when it is long or structured, on a
+whiteboard beside the speaker. The screen decides from the text alone, so always write this way
+(it also reads well in a plain chat):
+
+- Short answer: one or two sentences in plain text, about 140 characters at most, no more than
+  3 paragraphs of up to 4 lines each. It is spoken as it is.
+- Longer answer, or one with a heading, code block, table, quote or a list of 3 or more items:
+  start with one short paragraph that sums up the answer (plain text without inline code, about
+  120 characters at most, up to 4 lines), then a blank line, then the details. The first
+  paragraph is spoken and the rest is written on the whiteboard, so do not spend the first
+  paragraph on a greeting alone.
+- Picture: only a closed ```svg code block is drawn (at most 4 per reply, 32 KB each), and only
+  while the operator keeps the board's SVG setting on; otherwise it is shown as code. Allowed
+  elements: svg, g, defs, path, rect, circle, ellipse, line, polyline, polygon, text, tspan,
+  linearGradient, radialGradient, stop, title, desc. Anything else is left out: no filter (such
+  as feGaussianBlur), script, style, image, animation or external reference. An inline <svg>
+  and a Markdown image (![](...)) stay literal text.
+```
+<!-- stage-display-guide:end -->
+
 ## 6. 安全
 
 1. **ボードと台詞に出すのは会話の返答（`/api/chat` の `delta` と `/api/chat/history` の `response`）だけ。**
@@ -432,10 +472,10 @@ SDK 自身の `latest_context_size` が読む値）ので、**最後の呼び出
 
 既定は `chat` のまま（フェーズ2 でも変えない）。Stage を主画面にするのは運用者の切り替え:
 
-1. チャットサーバーを `STIRA_STAGE=1` で起動する（`scripts/stira_ctl.sh` なら環境変数で渡す）。
+1. Stage ページは既定で有効（`stage_enabled`、設定 → 画面。`STIRA_STAGE=0` や `"stage_enabled": false` で無効にしていないこと）。
 2. ゲートウェイ設定 `gateway-config.json`（`stira_ctl.sh` で起動するなら `<repo>/.local/stira/`）に
    `"ui": {"home": "stage"}` を書き、再起動する（起動時に一度だけ読む）。`/` が Stage になり、サイドメニューの先頭が
-   「ステージ」になる。`STIRA_STAGE=1` が無いと `/` はチャットのまま（起動時に警告を出す）。不正な値もチャットに戻る。
+   「ステージ」になる。Stage が無効だと `/` はチャットのまま（起動時に警告を出す）。不正な値もチャットに戻る。
 3. 戻すときは `"home": "chat"`（または `ui` ごと消す）で再起動。
 
 フォールバック: `/chat` は常にある。JavaScript 無効 → `<noscript>` でチャットへのリンク。WebGL が使えない →

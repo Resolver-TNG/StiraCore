@@ -32,7 +32,7 @@
   const Pairs = window.StiraBreakerPairs;
   const SHELL_OPERATORS = /[\r\n;&|<>`$()]/;
   const INTERNAL_KEY = "stira.settings.showInternal";
-  const HUB_GROUPS = ["classifier", "tools", "breaker", "breaker_details", "write", "read", "board", "output", "cache", "context", "heartbeat", "delegation", "agent_jobs"];
+  const HUB_GROUPS = ["classifier", "tools", "breaker", "breaker_details", "write", "read", "board", "output", "cache", "context", "heartbeat", "delegation", "agent_jobs", "memory_retention", "screens"];
   // #470: the cost groups. Context options in the order of the page (rules come from the server).
   const CONTEXT_OPTIONS = [
     "offload_threshold_tokens", "preview_tokens", "compression_threshold", "summary_ratio",
@@ -171,6 +171,8 @@
     interval_out_of_range: (p) => t("hb.err_out_of_range", { min: fmtDuration(p.min), max: fmtDuration(p.max) }),
     floor_above_ceil: (p) => t("hb.err_floor_above_ceil", { limit: fmtDuration(p.limit) }),
     not_integer: () => t("hub.err_not_integer"),
+    // #477: "/" on the Stage needs the Stage on
+    stage_off: () => t("screens.home_stage_off"),
   };
   const PRESET_TEXT = {
     safe: () => [t("hub.preset_safe"), t("hub.preset_safe_desc")],
@@ -226,6 +228,41 @@
     floor_constraints: () => t("policy.reason_floor_constraints"),
     floor_none: () => t("policy.reason_floor_none"),
   };
+  // ADR 0015 rev 6 S4 (#773): why page_look's saved Always is read as Ask now. One text
+  // per fixed code of the row's always_cap_reason (page_look.CAP_CODES).
+  const CAP_TEXT = {
+    guard_pending: () => t("policy.cap_guard_pending"),
+    not_run: () => t("policy.cap_not_run"),
+    axis_stale: () => t("policy.cap_axis_stale"),
+    axis_unreadable: () => t("policy.cap_axis_unreadable"),
+    other: () => t("policy.cap_other"),
+    browser_guard_unverified: () => t("policy.cap_browser_guard_unverified"),
+    platform_unmeasured: () => t("policy.cap_platform_unmeasured"),
+    rules_locked: () => t("policy.cap_rules_locked"),
+    rules_changed: () => t("policy.cap_rules_changed"),
+    record_unhealthy: () => t("policy.cap_record_unhealthy"),
+    ledger_unhealthy: () => t("policy.cap_ledger_unhealthy"),
+    write_floor_changed: () => t("policy.cap_write_floor_changed"),
+    reviewer_changed: () => t("policy.cap_reviewer_changed"),
+    reviewer_remote: () => t("policy.cap_reviewer_remote"),
+    file_read_not_always: () => t("policy.cap_file_read_not_always"),
+    not_in_scope: () => t("policy.cap_not_in_scope"),
+    breaker_not_normal: () => t("policy.cap_breaker_not_normal"),
+    origin_not_covered: () => t("policy.cap_origin_not_covered"),
+    repeated_failure: () => t("policy.cap_repeated_failure"),
+    call_limit: () => t("policy.cap_call_limit"),
+    cap_unreadable: () => t("policy.cap_cap_unreadable"),
+  };
+  // A reason code of a row's stack as text. An unknown cap code is the general sentence.
+  function reasonText(code, row) {
+    if (code === "rule_always_capped" && row.name === "page_look") {
+      return t("policy.reason_page_look_always_capped", {
+        why: Object.hasOwn(CAP_TEXT, row.always_cap_reason)
+        ? CAP_TEXT[row.always_cap_reason]() : t("policy.cap_unknown"),
+      });
+    }
+    return (REASON_TEXT[code] || (() => code))();
+  }
   const ISOLATION_TEXT = {
     os_sandbox: () => [t("policy.isolation_os_sandbox"), "ok"],
     path_confined: () => [t("policy.isolation_path_confined"), "info"],
@@ -260,6 +297,7 @@
     restart: () => t("hub.timing_restart"),
     next_start: () => t("hub.timing_next_start"),
     reload: () => t("hub.timing_reload"),
+    on_run: () => t("surface.applies_on_run"),
   };
   const STATUS_TEXT = {
     saved: () => t("hub.status_saved"),
@@ -310,6 +348,8 @@
     "delegation.max_children_per_turn": () => t("hub.delegation_max_children"),
     "agent_jobs.enabled": () => t("hub.agent_jobs_enabled"),
     "agent_jobs.agent_daily_token_budget": () => t("hub.agent_jobs_budget"),
+    "screens.stage": () => t("screens.stage"),
+    "screens.home": () => t("screens.home"),
     "model.provider": () => t("settings.provider"),
     "model.model_id": () => t("settings.model"),
   };
@@ -377,7 +417,7 @@
     [...readAfter].filter((r) => !readBefore.has(r)).forEach((r) => out.push({ field: "read.roots", root: r, to: true }));
     [...readBefore].filter((r) => !readAfter.has(r)).forEach((r) => out.push({ field: "read.roots", root: r, to: false }));
     if (draft.board.svg !== saved.board.svg) out.push({ field: "board.svg", from: saved.board.svg, to: draft.board.svg });
-    ["output", "cache", "context", "heartbeat"].forEach((group) => {
+    ["output", "cache", "context", "heartbeat", "screens"].forEach((group) => {
       Object.keys(saved[group] || {}).forEach((key) => {
         if (!same(draft[group][key], saved[group][key])) {
           out.push({ field: `${group}.${key}`, from: saved[group][key], to: draft[group][key] });
@@ -389,6 +429,10 @@
     });
     ["enabled", "agent_daily_token_budget"].forEach((key) => {
       if (draft.agent_jobs[key] !== saved.agent_jobs[key]) out.push({ field: `agent_jobs.${key}`, from: saved.agent_jobs[key], to: draft.agent_jobs[key] });
+    });
+    Object.keys(saved.memory_retention || {}).forEach((key) => {
+      const from = saved.memory_retention[key], to = (draft.memory_retention || {})[key];
+      if (from !== to) out.push({ field: `memory_retention.${key}`, from, to });
     });
     return out;
   }
@@ -507,6 +551,16 @@
       if (!Number.isInteger(value)) err("agent_jobs.agent_daily_token_budget", "not_integer");
       else if (rule && (value < rule.min || value > rule.max)) err("agent_jobs.agent_daily_token_budget", "out_of_range", { min: rule.min, max: rule.max });
     }
+    // Mirror of settings_hub._validate_retention (#474): the schema's own rules.
+    Object.entries(retentionRules()).forEach(([key, rule]) => {
+      const field = `memory_retention.${key}`, value = (draft.memory_retention || {})[key];
+      if (rule.type === "boolean") {
+        if (typeof value !== "boolean") err(field, "not_boolean");
+      } else if (value === null && rule.type !== "integer") {
+        // no limit
+      } else if (!Number.isInteger(value)) err(field, "not_integer");
+      else if (value < rule.minimum || value > rule.maximum) err(field, "out_of_range", { min: rule.minimum, max: rule.maximum });
+    });
     const roots = draft.write.roots;
     if (roots.length > c.max_write_roots) err("write.roots", "too_many", { max: c.max_write_roots });
     const badRoots = roots.filter((root) => !validRoot(root));
@@ -521,6 +575,9 @@
     const badRead = readRoots.filter((root) => !validRoot(root));
     if (badRead.length) err("read.roots", "invalid_root", { roots: badRead });
     validateCost(err);
+    // Mirror of settings_hub._validate_screens (#477): choosing the Stage for "/" needs the
+    // Stage on at the next start; a pair already in the file is kept.
+    if (draft.screens.home === "stage" && moved("screens.home") && !stageWanted()) err("screens.home", "stage_off");
     // #472: the heartbeat minutes are rounded into the limits when typed (the other bound
     // follows), so the page has nothing left to refuse; the server re-checks every value.
     return errors;
@@ -633,6 +690,8 @@
       if (costInput) costInput.setAttribute("aria-invalid", "true");
       const hbInput = HB_INPUTS[error.field] && $(HB_INPUTS[error.field]);
       if (hbInput) hbInput.setAttribute("aria-invalid", "true");
+      const retInput = group === "memory_retention" && key && $(`ret-${key}`);
+      if (retInput) retInput.setAttribute("aria-invalid", "true");
     });
     return all.length;
   }
@@ -864,7 +923,7 @@
     why.className = "hint";
     why.textContent = t("policy.decided_by", {
       layers: eff.decided_by.map((key) => (LAYER_TEXT[key] || (() => key))()).join(" + "),
-      reasons: eff.reasons.map((code) => (REASON_TEXT[code] || (() => code))()).join(" / "),
+      reasons: eff.reasons.map((code) => reasonText(code, row)).join(" / "),
     });
     const nodes = [badge(decision, decisionState, "effective"), " ", why];
     const unsaved = draftPolicy !== row.policy;
@@ -1389,6 +1448,259 @@
     input.disabled = draft.agent_jobs.enabled !== true;
   }
 
+  // #474: memory retention limits. The inputs are built from the group's JSON Schema
+  // (state.schemas.memory_retention: one property per setting, x-section = its store), so a
+  // setting the server adds shows up with its internal name until it gets a label here.
+  // Saving removes nothing; the dry run shows counts only; --apply stays on the command line.
+  const RET_STORE_TEXT = {
+    episodic: () => t("ret.store_episodic"),
+    turns: () => t("ret.store_turns"),
+    tool_payloads: () => t("ret.store_tool_payloads"),
+    checkpoints: () => t("ret.store_checkpoints"),
+    memory_plans: () => t("ret.store_memory_plans"),
+    staging: () => t("ret.store_staging"),
+    scheduler_log: () => t("ret.store_scheduler_log"),
+    archive: () => t("ret.store_archive"),
+  };
+  const RET_FIELD_TEXT = {
+    episodic__max_age_days: () => t("ret.f_max_age_days"),
+    episodic__max_entries: () => t("ret.f_max_entries"),
+    episodic__keep_unharvested: () => t("ret.f_keep_unharvested"),
+    episodic__honour_expires_at: () => t("ret.f_honour_expires_at"),
+    turns__max_age_days: () => t("ret.f_max_age_days"),
+    tool_payloads__max_age_days: () => t("ret.f_max_age_days"),
+    checkpoints__max_age_days: () => t("ret.f_max_age_days"),
+    checkpoints__max_per_thread: () => t("ret.f_max_per_thread"),
+    memory_plans__max_age_days: () => t("ret.f_max_age_days"),
+    staging__warn_after_days: () => t("ret.f_warn_after_days"),
+    scheduler_log__warn_bytes: () => t("ret.f_warn_bytes"),
+    archive__warn_bytes: () => t("ret.f_warn_bytes"),
+  };
+  const RET_COUNT_TEXT = {
+    episodic: () => t("ret.count_episodic"),
+    turn_events: () => t("ret.count_turn_events"),
+    tool_payloads: () => t("ret.count_tool_payloads"),
+    checkpoints: () => t("ret.count_checkpoints"),
+    emotion_records: () => t("ret.count_emotion_records"),
+    memory_plans: () => t("ret.count_memory_plans"),
+  };
+  const RET_REASON_TEXT = {
+    no_data_directory: () => t("ret.dry_no_data_directory"),
+    config_unavailable: () => t("ret.dry_config_unavailable"),
+    report_failed: () => t("ret.dry_report_failed"),
+  };
+  let retDry = null; // last dry-run answer: { data, values (the saved limits it counted with) } or { failed }
+  let retDryBusy = false;
+  function retentionRules() {
+    const schema = state && state.schemas && state.schemas.memory_retention;
+    return (schema && schema.properties) || {};
+  }
+  const retStoreText = (store) => (RET_STORE_TEXT[store] || (() => store))();
+  // "<store>: <setting>" for the footer and the history; inside a store's fieldset the
+  // setting alone is the label.
+  function retentionLabel(key) {
+    const store = (retentionRules()[key] || {})["x-section"] || key.split("__")[0];
+    return `${retStoreText(store)}: ${(RET_FIELD_TEXT[key] || (() => key.split("__").slice(1).join("__") || key))()}`;
+  }
+  function buildRetentionFields(box, rules) {
+    const sections = new Map();
+    // The schema arrives with its keys sorted; the page keeps the order of the tables above
+    // (a setting they do not know comes last).
+    const order = Object.keys(RET_FIELD_TEXT);
+    const rank = (key) => (order.includes(key) ? order.indexOf(key) : order.length);
+    Object.entries(rules).sort(([a], [b]) => rank(a) - rank(b)).forEach(([key, rule]) => {
+      const store = rule["x-section"] || "";
+      if (!sections.has(store)) sections.set(store, []);
+      sections.get(store).push([key, rule]);
+    });
+    box.replaceChildren();
+    sections.forEach((fields, store) => {
+      const set = document.createElement("fieldset");
+      set.className = "ret-store";
+      const legend = document.createElement("legend");
+      legend.textContent = retStoreText(store);
+      const code = document.createElement("code");
+      code.className = "internal-name";
+      code.textContent = store;
+      legend.append(" ", code);
+      const grid = document.createElement("div");
+      grid.className = "delegation-fields";
+      set.append(legend, grid);
+      fields.forEach(([key, rule]) => {
+        const text = (RET_FIELD_TEXT[key] || (() => key.split("__").slice(1).join("__") || key))();
+        const error = document.createElement("p");
+        error.className = "field-error";
+        error.id = `err-memory_retention-${key}`;
+        error.hidden = true;
+        const input = document.createElement("input");
+        input.id = `ret-${key}`;
+        input.setAttribute("aria-describedby", error.id);
+        const strong = document.createElement("strong");
+        strong.textContent = text;
+        if (rule.type === "boolean") {
+          const row = document.createElement("label");
+          row.className = "choice switch-row";
+          row.htmlFor = input.id;
+          input.type = "checkbox";
+          input.className = "switch";
+          input.setAttribute("role", "switch");
+          const span = document.createElement("span");
+          span.append(strong);
+          row.append(input, span);
+          input.addEventListener("change", () => {
+            draft.memory_retention[key] = input.checked;
+            serverErrors = [];
+            update({ full: false });
+            renderRetentionDry();
+          });
+          set.append(row, error);
+          return;
+        }
+        const cell = document.createElement("div");
+        cell.className = "delegation-field";
+        const label = document.createElement("label");
+        label.htmlFor = input.id;
+        label.append(strong);
+        input.type = "number";
+        input.inputMode = "numeric";
+        input.min = String(rule.minimum);
+        input.max = String(rule.maximum);
+        input.step = "1";
+        // No default = the limit may be left unset; a setting with a default always has a value.
+        if (rule.type !== "integer") input.placeholder = t("ret.no_limit");
+        input.addEventListener("input", () => {
+          const typed = input.value.trim();
+          // An empty limit is "no limit"; anything else that is not digits stays as text so
+          // that validate() names it.
+          draft.memory_retention[key] = typed === "" && rule.type !== "integer" ? null
+            : /^[0-9]+$/.test(typed) ? Number(typed) : typed;
+          serverErrors = [];
+          update({ full: false });
+          renderRetentionDry();
+        });
+        cell.append(label, input, error);
+        grid.append(cell);
+      });
+      if (!grid.childElementCount) grid.remove();
+      box.append(set);
+    });
+  }
+  function renderRetention() {
+    const box = $("ret-fields");
+    if (!box || !draft.memory_retention) return;
+    const rules = retentionRules();
+    const built = `${document.documentElement.lang}|${Object.keys(rules).join(",")}`;
+    if (box.dataset.built !== built) { buildRetentionFields(box, rules); box.dataset.built = built; }
+    Object.entries(rules).forEach(([key, rule]) => {
+      const input = $(`ret-${key}`), value = draft.memory_retention[key];
+      if (rule.type === "boolean") input.checked = value === true;
+      else if (document.activeElement !== input) input.value = value === null || value === undefined ? "" : String(value);
+    });
+    renderRetentionDry();
+  }
+  function renderRetentionDry() {
+    const status = $("ret-dry-status"), facts = $("ret-dry-facts"), button = $("ret-dry-run");
+    if (!status || !facts || !button) return;
+    button.disabled = retDryBusy;
+    facts.replaceChildren();
+    facts.hidden = true;
+    if (retDryBusy) { status.textContent = t("ret.dry_counting"); return; }
+    if (!retDry) { status.textContent = ""; return; }
+    const data = retDry.data;
+    if (retDry.failed || !data) { status.textContent = t("ret.dry_failed"); return; }
+    if (data.available !== true) {
+      status.textContent = (RET_REASON_TEXT[data.reason] || RET_REASON_TEXT.report_failed)();
+      return;
+    }
+    const lang = document.documentElement.lang || undefined;
+    const notes = [t("ret.dry_at", { time: data.at ? new Date(data.at).toLocaleString(lang) : new Date(retDry.asked).toLocaleString(lang) })];
+    if (data.policy_configured !== true) notes.push(t("ret.dry_no_limits"));
+    if (data.not_inspected > 0) notes.push(t("ret.dry_not_inspected", { n: data.not_inspected }));
+    // Counted with the saved limits: say so when they changed since, or the draft differs.
+    if (!same(retDry.values, state.values.memory_retention)) notes.push(t("ret.dry_stale"));
+    else if (!same(draft.memory_retention, state.values.memory_retention)) notes.push(t("ret.dry_unsaved"));
+    notes.push(t("ret.dry_apply_cli"));
+    status.textContent = notes.join(" ");
+    Object.keys(RET_COUNT_TEXT).forEach((name) => {
+      const count = (data.will_remove || {})[name];
+      const row = document.createElement("div");
+      const dt = document.createElement("dt");
+      dt.textContent = RET_COUNT_TEXT[name]();
+      const dd = document.createElement("dd");
+      // A count the report did not give is unknown, never 0.
+      dd.textContent = Number.isInteger(count) && count >= 0 ? t("ret.count_n", { n: count.toLocaleString(lang) }) : t("ret.count_unknown");
+      row.append(dt, dd);
+      facts.append(row);
+    });
+    facts.hidden = false;
+  }
+  async function runRetentionDry() {
+    if (retDryBusy || !state) return;
+    retDryBusy = true;
+    renderRetentionDry();
+    const values = clone(state.values.memory_retention || {});
+    try {
+      const result = await request("/api/config/memory-retention/dry-run");
+      retDry = result.ok ? { data: result.data, values, asked: Date.now() } : { failed: true };
+    } catch {
+      retDry = { failed: true };
+    } finally {
+      retDryBusy = false;
+      renderRetentionDry();
+    }
+  }
+
+  // #477 / #809: the Stage switch and the page "/" opens (both read when the chat server
+  // starts), and the Stage's frame rate (this browser's localStorage; never sent anywhere).
+  const FPS_KEY = "stira.stage.fps"; // dashboard/stage/js/pacer.js FPS_KEY
+  let fpsNote = "";
+  function stagePinned() {
+    return Boolean((((state.surface && state.surface.fields) || {})["gateway.stage_enabled"] || {}).pinned_by);
+  }
+  // The switch the next start uses: STIRA_STAGE while it pins the field, else the draft.
+  function stageWanted() {
+    return stagePinned() ? state.stage_enabled === true : draft.screens.stage === true;
+  }
+  // Mirror of pacer.js parseFps: plain digits within the slider's limits, otherwise null.
+  function storedFps() {
+    const slider = $("screens-fps");
+    try {
+      const raw = window.localStorage.getItem(FPS_KEY);
+      if (typeof raw !== "string" || !/^\d{1,3}$/.test(raw.trim())) return null;
+      const n = Number(raw.trim());
+      return n >= Number(slider.min) && n <= Number(slider.max) ? n : null;
+    } catch {
+      return null;
+    }
+  }
+  function renderFps() {
+    const slider = $("screens-fps");
+    const stored = storedFps();
+    if (document.activeElement !== slider) slider.value = String(stored ?? slider.defaultValue);
+    $("screens-fps-value").textContent = t("screens.fps_value", { n: slider.value });
+    $("screens-fps-reset").disabled = stored === null;
+    showNote("screens-fps-note", fpsNote);
+  }
+  function renderScreens() {
+    const pinned = stagePinned();
+    const wanted = stageWanted();
+    // Pinned by STIRA_STAGE: settings_surface.js turns the switch off and names the variable;
+    // here only the value the next start uses (never the variable's text).
+    $("screens-stage").checked = wanted;
+    showNote("screens-stage-live", pinned ? t("screens.pinned_live") : "");
+    const home = draft.screens.home === "stage" ? "stage" : "chat";
+    $("screens-home-chat").checked = home === "chat";
+    $("screens-home-stage").checked = home === "stage";
+    // Not selectable while the Stage is off (the server refuses it too); a pair already
+    // saved stays shown, with what "/" does then.
+    $("screens-home-stage").disabled = !wanted && home !== "stage";
+    let note = "";
+    if (!wanted && home !== "stage") note = t("screens.home_stage_off");
+    else if (!wanted && !moved("screens.home")) note = t("screens.home_falls_back");
+    showNote("screens-home-note", note);
+    renderFps();
+  }
+
   function applyFilter() {
     const query = $("tool-filter").value.trim().toLowerCase();
     let shown = 0, total = 0;
@@ -1443,7 +1755,8 @@
   }
 
   function describeChange(change) {
-    const label = (FIELD_LABEL[change.field] || (() => change.field))();
+    const label = (FIELD_LABEL[change.field]
+      || (change.field.startsWith("memory_retention.") ? () => retentionLabel(change.field.slice(17)) : () => change.field))();
     if (change.field === "tools.policy") {
       return t("policy.diff", {
         name: toolText(change.tool)[0],
@@ -1476,6 +1789,8 @@
       if (change.field === "cache.ttl") return ({ "5m": () => t("cost.ttl_5m"), "1h": () => t("cost.ttl_1h") }[value] || (() => String(value)))();
       if (change.field.startsWith("context.")) return String(value);
       if (change.field.startsWith("heartbeat.interval_")) return fmtDuration(value);
+      if (change.field === "screens.home") return value === "stage" ? t("base.stage") : t("base.chat");
+      if (change.field.startsWith("memory_retention.")) return value === null ? t("ret.no_limit") : fmtTokens(value);
       return fmt(value);
     };
     return t("hub.diff_value", { label, from: show(change.from), to: show(change.to) });
@@ -1732,12 +2047,14 @@
       heartbeat: clone(state.defaults.heartbeat),
       delegation: clone(state.defaults.delegation),
       agent_jobs: clone(state.defaults.agent_jobs),
+      ...(state.defaults.memory_retention ? { memory_retention: clone(state.defaults.memory_retention) } : {}),
+      screens: clone(state.defaults.screens),
     };
   }
 
   function update({ full = true } = {}) {
     if (!state) return;
-    if (full) { renderClassifier(); renderBreaker(); renderTools(); renderWrite(); renderRead(); renderBoard(); renderCost(); renderHeartbeat(); renderDelegation(); renderAgentJobs(); }
+    if (full) { renderClassifier(); renderBreaker(); renderTools(); renderWrite(); renderRead(); renderBoard(); renderCost(); renderHeartbeat(); renderDelegation(); renderAgentJobs(); renderRetention(); renderScreens(); }
     renderPresets();
     renderProfiles();
     const errorCount = renderErrors(validate());
@@ -2178,6 +2495,43 @@
       costChanged();
     });
   });
+  // #477 / #809: screens. Saved with the footer's "Save", no confirmation (a page, not a
+  // permission); the frame rate is this browser's own and is stored as the slider moves.
+  const screensChanged = () => {
+    serverErrors = [];
+    update({ full: false });
+    renderScreens();
+  };
+  $("screens-stage").addEventListener("change", () => {
+    draft.screens.stage = $("screens-stage").checked;
+    screensChanged();
+  });
+  document.querySelectorAll('input[name="screens-home"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      if (!input.checked) return;
+      draft.screens.home = input.value;
+      screensChanged();
+    });
+  });
+  $("screens-fps").addEventListener("input", () => {
+    try {
+      window.localStorage.setItem(FPS_KEY, String(Math.round(Number($("screens-fps").value))));
+      fpsNote = t("screens.fps_saved");
+    } catch {
+      fpsNote = t("screens.fps_blocked");
+    }
+    renderFps();
+  });
+  $("screens-fps-reset").addEventListener("click", () => {
+    try {
+      window.localStorage.removeItem(FPS_KEY);
+      fpsNote = t("screens.fps_cleared");
+    } catch {
+      fpsNote = t("screens.fps_blocked");
+    }
+    $("screens-fps").value = $("screens-fps").defaultValue;
+    renderFps();
+  });
   // #472: heartbeat. Saved with the footer's "Save"; turning it on needs no confirmation
   // (a tick never calls a model). Minutes are rounded into the limits when the field is
   // left (or Enter); the other bound follows so the floor never passes the ceiling.
@@ -2254,6 +2608,7 @@
     serverErrors = [];
     update({ full: false });
   });
+  if ($("ret-dry-run")) $("ret-dry-run").addEventListener("click", runRetentionDry);
   $("write-roots").addEventListener("input", () => {
     draft.write.roots = $("write-roots").value.split("\n").map((line) => line.trim()).filter(Boolean);
     serverErrors = [];

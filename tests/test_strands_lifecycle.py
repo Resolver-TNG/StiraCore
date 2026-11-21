@@ -97,7 +97,8 @@ def test_halt_runs_model_with_write_tools_for_operation_level_hitl(lifecycle):
     }
 
 
-def test_agent_is_rebuilt_and_write_tools_recover(lifecycle):
+def test_agent_is_rebuilt_and_tool_list_stays_fixed(lifecycle):
+    """#259: the breaker no longer changes the tool list (writes are refused at the call)."""
     wrapper, engine, constructor, instances, _ = lifecycle
     engine.pre_turn.side_effect = [
         BreakResult(BreakLevel.NORMAL, BreakAction.NONE),
@@ -117,11 +118,7 @@ def test_agent_is_rebuilt_and_write_tools_recover(lifecycle):
         {nxp_agent._tool_name(tool) for tool in call.kwargs["tools"]}
         for call in constructor.call_args_list
     ]
-    assert tool_sets == [
-        {"file_read", "file_write"},
-        {"file_read"},
-        {"file_read", "file_write"},
-    ]
+    assert tool_sets == [{"file_read", "file_write"}] * 3
     assert engine.post_turn.call_count == 3
 
 

@@ -18,6 +18,10 @@
   {% if grants_ui %}<script defer src="{{ url_for('static', filename='js/settings_grants.js') }}"></script>{% endif %}
 {% endblock %}
 {% block content %}
+  {# #809: this server registered the Stage (its menu item exists), so links to it work. #}
+  {% set stage_nav = shell_nav is defined and (shell_nav | selectattr(0, 'equalto', 'stage') | list | length > 0) %}
+  {# #652: this server serves /memory (its menu item exists), so the link to its table works. #}
+  {% set memory_nav = shell_nav is defined and (shell_nav | selectattr(0, 'equalto', 'memory') | list | length > 0) %}
   <header class="page-header">
     <div>
       <h1><span data-i18n="base.settings">設定</span></h1>
@@ -51,9 +55,12 @@
         <li><a href="#sec-safety" data-i18n="hub.sec_safety">安全（ブレーカー・ツール）</a></li>
         <li><a href="#sec-yolo" data-i18n="yset.nav">YOLO（一時的な自動承認）</a></li>
         {% if grants_ui %}<li><a href="#sec-grants" data-i18n="grants.nav">目標グラント（ステージ C）</a></li>{% endif %}
+        <li><a href="#sec-screens" data-i18n="screens.sec">画面（Stage・最初に開くページ）</a></li>
         <li><a href="#sec-board" data-i18n="hub.sec_board">ボード（Stage）</a></li>
         <li><a href="#sec-delegation" data-i18n="hub.sec_delegation">サブエージェント（delegate）</a></li>
         <li><a href="#sec-agent-jobs" data-i18n="hub.sec_agent_jobs">定期実行のエージェントジョブ</a></li>
+        <li><a href="#sec-memory-retention" data-i18n="ret.sec">記憶の保持期限</a></li>
+        <li><a href="#sec-usage" data-i18n="usage.sec">トークン使用量</a></li>
         <li><a href="#sec-history" data-i18n="hub.sec_history">変更履歴</a></li>
         <li><a href="#sec-display" data-i18n="hub.sec_display">表示</a></li>
         <li><a href="#sec-diagnostics" data-i18n="hub.sec_diagnostics">診断</a></li>
@@ -95,7 +102,7 @@
         </div>
       </fieldset>
       <details class="endpoint-details">
-        <summary data-i18n="settings.endpoint_and_key">接続先と API キー（任意）</summary>
+        <summary data-i18n="settings.endpoint_and_key">接続先・API キー・リージョン（任意）</summary>
         <div class="field-row">
           <label for="custom-base-url" data-i18n="settings.base_url">接続先 URL</label>
           <input id="custom-base-url" type="url" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:8080">
@@ -106,7 +113,21 @@
                  maxlength="128" aria-describedby="api-key-env-hint">
         </div>
         <p id="api-key-env-hint" class="hint" data-i18n="settings.api_key_env_hint">キーの値ではなく、キーを入れた環境変数の名前（例: OPENAI_API_KEY）を入力します。値は保存も表示もされません。リモートの接続先 URL は gateway-config.json でのみ設定できます。</p>
+        <div class="field-row" id="organization-env-row" hidden>
+          <label for="custom-organization-env" data-i18n="mset.organization_env">組織 ID の環境変数名（OpenAI）</label>
+          <input id="custom-organization-env" type="text" autocomplete="off" spellcheck="false"
+                 maxlength="128" aria-describedby="organization-env-hint">
+        </div>
+        <p id="organization-env-hint" class="hint" data-i18n="mset.organization_env_hint">組織 ID の値ではなく、それを入れた環境変数の名前を入力します。値は保存も表示もされません。空にすると使いません。</p>
+        <div class="field-row" id="region-row" hidden>
+          <label for="custom-region" data-i18n="mset.region">リージョン（Bedrock）</label>
+          <input id="custom-region" type="text" autocomplete="off" spellcheck="false"
+                 maxlength="32" placeholder="ap-northeast-1" aria-describedby="region-hint">
+        </div>
+        <p id="region-hint" class="hint" data-i18n="mset.region_hint">Bedrock を呼び出す AWS リージョン（例: ap-northeast-1）です。gateway-config.json に保存され、Bedrock を使うほかの処理（蒸留など）にも使われます。</p>
+        <p id="region-pinned" class="notice warn" role="note" hidden></p>
       </details>
+      <p id="model-error" class="field-error" role="alert" hidden></p>
       <div class="save-row">
         <button id="model-use" type="button"><span data-i18n="settings.use_this_model">このモデルを使用</span></button>
         <button id="conn-test" type="button" class="secondary"><span data-i18n="settings.connection_test">接続テスト</span></button>
@@ -115,7 +136,7 @@
       <p class="hint" id="conn-test-note" data-i18n="settings.connection_test_note">接続テストは短いリクエストを 1 回だけ送ります（出力は数トークン、一定時間で打ち切り）。ローカルは無課金、API プロバイダではごく少額の課金が発生することがあります。</p>
       <details class="internals">
         <summary data-i18n="hub.details">詳細</summary>
-        <p class="hint" data-i18n="hub.model_internals">保存先: agent-config.json（provider / model_override / base_url / api_key_env）。環境変数 STIRA_PROVIDER・STIRA_MODEL などが設定されていると、そちらが優先されます。</p>
+        <p class="hint" data-i18n="hub.model_internals">保存先: agent-config.json（provider / model_override / base_url / api_key_env / organization_env）。リージョンだけは gateway-config.json（region）。環境変数 STIRA_PROVIDER・STIRA_MODEL・AWS_REGION などが設定されていると、そちらが優先されます。</p>
       </details>
     </section>
 
@@ -289,7 +310,7 @@
         <span class="timing-badge" data-group="classifier"></span>
         <span class="apply-status" data-group="classifier" role="status"></span>
       </div>
-      <p class="hint" data-i18n="hub.classifier_desc">あなたの発言がエージェントの感情（信頼・警戒など）をどう動かすかを判定する仕組みを選びます。</p>
+      <p class="hint" data-i18n="hub.classifier_desc">あなたの発言がエージェントの感情（信頼・安定など）をどう動かすかを判定する仕組みを選びます。</p>
       <fieldset class="choice-list" id="classifier-choices" aria-describedby="classifier-effective">
         <legend class="visually-hidden" data-i18n="hub.classifier_legend">分類の方式</legend>
       </fieldset>
@@ -611,7 +632,7 @@
         <details class="internals">
           <summary data-i18n="hub.details">詳細</summary>
           <p class="hint" data-i18n="hub.tools_internals">保存先: tool-config.json（mode = custom / trust_all、enabled_tools、shell_allowlist）。実行系（shell・batch・cron・use_agent・swarm・graph・think）は環境変数 STIRA_ENABLE_EXEC_TOOLS が無い限り公開されません。</p>
-          <p class="hint" data-i18n="policy.internals">「毎回確認」のツールは tool-config.json の ask_tools に入ります。enabled_tools に無いツールは「使わない」です。実行系と page_check（フェーズ 1）は「常に許可」にできません。</p>
+          <p class="hint" data-i18n="policy.internals">「毎回確認」のツールは tool-config.json の ask_tools に入ります。enabled_tools に無いツールは「使わない」です。実行系、page_check（フェーズ 1）、page_look（条件付き「常に許可」が入るまで。ADR 0015 rev 6）、page_review（スクリーンショットをレビュー用モデルに送るため）と propose_procedure は「常に許可」にできません。</p>
         </details>
       </div>
 
@@ -816,6 +837,7 @@
       <p class="hint" data-i18n="grants.desc">時間・予算・範囲を決めた「目標グラント」を発行・停止・確認します（アルファ版: 変わることがあります）。発行しただけでは何も動きません: 反復が動くのは、実行部のスイッチ（autonomy.stage_c_exec）が有効で、人が「1 反復だけ実行」を押したとき — または、ハートビート開始（既定オフ）付きで発行したグラントで、スケジューラーの確認が始めたときだけです。目標の文はここには表示されません（発行した本人だけが確認画面で見られます）。</p>
       {% if grants_exec_ui %}<p class="hint" data-i18n="grants.exec_desc">実行部が有効なとき、「1 反復だけ実行」を押すと、専用セッションでゴールの反復を 1 回だけ実行します（自動の次の反復はありません）。「ハートビートで反復を始めてよい」付きで発行したグラント（既定オフ。サーバーが許すときだけ選べます）は、スケジューラーの定期的な確認からも、1 回の確認につき最大 1 反復が始まります。モデル呼び出しとツール呼び出しの度にグラントを確認し、呼び出し前に予算を予約します。「毎回確認」のツールはあなたの承認カードを待ちます（ハートビートで始めた反復は待たずに止まります）。完了の主張はあなたの確認を待ち、確定できるのはあなただけです。アルファ版です。</p>{% endif %}
       <p id="grants-status" class="hint" role="status" aria-live="polite"><span data-i18n="tools.loading">読み込み中</span></p>
+      {% if stage_nav %}<p class="hint"><a class="hub-related-link" id="grants-open-stage" href="/stage/"><span data-i18n="grants.open_stage">Stage で見る（稼働状況 › 目標グラント）</span></a></p>{% endif %}
       <div id="grants-list"></div>
       <p><button id="grants-kill" type="button" class="btn btn-secondary"><span data-i18n="grants.kill">キルスイッチ（すべて停止）</span></button></p>
       <p id="grants-error" class="field-error" role="alert" hidden></p>
@@ -844,6 +866,11 @@
             <span><strong data-i18n="grants.heartbeat_start_label">ハートビートで反復を始めてよい</strong>
             <span class="hint" id="grants-heartbeat-start-desc" data-i18n="grants.heartbeat_start_desc">オンにすると、人が押さなくても、スケジューラーの定期的な確認（モデルを使わない）が 1 回の確認につき最大 1 反復を始めます。前の反復の終わりから最低間隔をあけ、あなたの会話中・確認待ち・停止中は始めません。承認が必要な操作は待たずに止まります。発行後は変えられません（取り消して新しく発行してください）。</span></span>
           </label>{% endif %}
+          {% if grants_self_dev_ui %}<label class="choice switch-row" for="grants-self-development">
+            <input id="grants-self-development" class="switch" type="checkbox" role="switch" aria-describedby="grants-self-development-desc">
+            <span><strong data-i18n="grants.self_development_label">このグラントは Stira のチェックアウトの中で作業できる（書けるのは docs/ だけ）</strong>
+            <span class="hint" id="grants-self-development-desc" data-i18n="grants.self_development_desc">作業ディレクトリが、このサーバー自身のものではない Stira のチェックアウト（それを含む・その内側も）のときだけ必要です。オンにして発行しても、このグラントの editor がそのチェックアウトの中で書けるのは docs/ の下だけです（docs/eval と境界文書 docs/proposer-edit-boundary.md は除く）。それ以外は読み取り専用です: ダッシュボード、承認・封じ込め・外部送信とマスク・評価・予算と上限・軸チェックのコード、テスト（新しいテストも書けません）、あとで実行されるファイル（.git、.github など）。既定: オフ。</span></span>
+          </label>{% endif %}
           <p class="hint" data-i18n="grants.verifier_hint">完了の確認者はあなたです（v1）。完了の主張があると「確認待ち」になり、ここで確定か差し戻しを選びます。</p>
           <p><label for="grants-confirm"><strong data-i18n="grants.confirm_label">確認のため ISSUE と入力</strong></label>
             <input id="grants-confirm" type="text" spellcheck="false" autocomplete="off"></p>
@@ -852,6 +879,54 @@
       </details>
     </section>
     {% endif %}
+
+    {# #477 / #809: the Stage switch and the page / opens (both read at start-up), and the
+       Stage's frame rate (this browser only). #}
+    <section class="card hub-section" id="sec-screens" aria-labelledby="screens-title" tabindex="-1">
+      <div class="section-head">
+        <h2 id="screens-title"><span data-i18n="screens.sec">画面（Stage・最初に開くページ）</span></h2>
+        <span class="timing-badge" data-group="screens"></span>
+        <span class="apply-status" data-group="screens" role="status"></span>
+      </div>
+      <p class="hint" data-i18n="screens.desc">Stage（エージェントの様子をピクセルアートで見る画面）を使うかどうかと、「/」で最初に開くページを決めます。どちらもページの追加・入れ替えだけで、エージェントの権限は変わりません。</p>
+      <label class="choice switch-row" for="screens-stage">
+        <input id="screens-stage" data-surface-field="gateway.stage_enabled" class="switch" type="checkbox" role="switch"
+               aria-describedby="screens-stage-desc pin-gateway-stage_enabled screens-stage-live err-screens-stage">
+        <span><strong data-i18n="screens.stage">Stage を使う</strong>
+        <span class="hint" id="screens-stage-desc" data-i18n="screens.stage_desc">オンにすると、メニューに「Stage」が加わり /stage/ で開けます。ターン・ツール・承認・稼働状況（目標グラントのパネルを含む）を 1 画面で見られます。既定: オフ。</span></span>
+      </label>
+      <p class="hint pin-note" id="pin-gateway-stage_enabled" hidden></p>
+      <p class="hint cost-pin" id="screens-stage-live" hidden></p>
+      <p class="field-error" id="err-screens-stage" hidden></p>
+      {% if stage_nav %}<p class="hint"><a class="hub-related-link" id="screens-open-stage" href="/stage/"><span data-i18n="screens.open_stage">Stage を開く</span></a></p>{% endif %}
+      <fieldset class="choice-list" id="screens-home" aria-describedby="screens-home-note err-screens-home">
+        <legend data-i18n="screens.home">「/」で最初に開くページ</legend>
+        <label class="choice" for="screens-home-chat">
+          <input id="screens-home-chat" type="radio" name="screens-home" value="chat">
+          <span><strong data-i18n="base.chat">チャット</strong></span>
+        </label>
+        <label class="choice" for="screens-home-stage">
+          <input id="screens-home-stage" type="radio" name="screens-home" value="stage">
+          <span><strong data-i18n="base.stage">ステージ</strong>
+          <span class="hint" data-i18n="screens.home_stage_desc">メニューの先頭にも Stage を置きます。チャットは /chat でいつでも開けます。</span></span>
+        </label>
+      </fieldset>
+      <p class="hint" id="screens-home-note" role="status" hidden></p>
+      <p class="field-error" id="err-screens-home" hidden></p>
+      <p class="hint" id="screens-restart-note" data-i18n="screens.restart_note">この 2 つは、保存してチャットサーバーを再起動したあとに反映されます。</p>
+      <div class="field-row">
+        <label for="screens-fps" data-i18n="screens.fps">Stage の描画回数（fps）</label>
+        <input id="screens-fps" type="range" min="15" max="120" step="1" value="30" aria-describedby="screens-fps-desc screens-fps-note">
+        <output id="screens-fps-value" for="screens-fps"></output>
+        <button id="screens-fps-reset" type="button" class="btn btn-secondary"><span data-i18n="screens.fps_reset">既定（30）に戻す</span></button>
+      </div>
+      <p class="hint" id="screens-fps-desc" data-i18n="screens.fps_desc">1 秒に描く回数です（15〜120、既定 30）。このブラウザにだけ保存され、サーバーには送りません。動かすとすぐ保存され（「保存」は不要）、Stage を開き直すと反映されます。</p>
+      <p class="hint" id="screens-fps-note" role="status" hidden></p>
+      <details class="internals">
+        <summary data-i18n="hub.details">詳細</summary>
+        <p class="hint" data-i18n="screens.internals">保存先: gateway-config.json の stage_enabled（オンのときだけ書かれます）と ui.home。チャットサーバーの起動時に読みます。環境変数 STIRA_STAGE（1 / 0）があるとスイッチはそちらが優先されます。Stage が増やすのはページの GET ルート 3 つだけで、API や権限は増えません。fps はブラウザの localStorage（stira.stage.fps）に入ります。</p>
+      </details>
+    </section>
 
     <section class="card hub-section" id="sec-board" aria-labelledby="board-title" tabindex="-1">
       <div class="section-head">
@@ -936,6 +1011,55 @@
         <summary data-i18n="hub.details">詳細</summary>
         <p class="hint" data-i18n="hub.agent_jobs_internals">保存先: gateway-config.json の agent_jobs（既定と違う値だけが書かれます）。チャットサーバーの次の起動から反映されます。STIRA_SCHEDULER=0 のときはスケジューラー全体が止まります。ジョブの結果は信頼しないデータとして枠に入れて記録します。中断した実行は再起動後に続きから再開しません。</p>
       </details>
+    </section>
+
+    <section class="card hub-section" id="sec-memory-retention" aria-labelledby="memory-retention-title" tabindex="-1">
+      <div class="section-head">
+        <h2 id="memory-retention-title"><span data-i18n="ret.sec">記憶の保持期限</span></h2>
+        <span class="timing-badge" data-group="memory_retention"></span>
+        <span class="apply-status" data-group="memory_retention" role="status"></span>
+      </div>
+      <p class="hint" data-i18n="ret.desc">ストアごとの保持の上限です。空欄は「上限なし」。ここで保存しても何も消えません。上限を読むのは stira memory retention コマンドだけです。</p>
+      <p class="notice" id="ret-apply-cli" data-i18n="ret.apply_cli">適用（削除）は CLI だけです。この画面からは実行できません: stira memory retention --data-dir &lt;データディレクトリ&gt; --apply（チャットサーバーを止めてから実行します。消したものは退避され、stira memory restore &lt;id&gt; で戻せます）。</p>
+      {% if memory_nav %}<p class="hint"><a class="hub-related-link" id="ret-open-memory" href="/memory#memory-table"><span data-i18n="ret.open_memory">各記憶のキー・重要度・保持期限は「記憶」ページの表で見られます</span></a></p>{% endif %}
+      <div id="ret-fields" class="ret-fields"></div>
+      <p class="field-error" id="err-memory_retention" hidden></p>
+      <div class="ret-dry">
+        <h3 id="ret-dry-title" data-i18n="ret.dry_title">ドライラン（対象件数）</h3>
+        <p class="hint" id="ret-dry-desc" data-i18n="ret.dry_desc">保存済みの上限で --apply が退避して消す件数を数えます（読み取り専用）。表示するのは件数だけで、記憶の本文・キー・パスは表示しません。</p>
+        <button type="button" class="btn btn-secondary" id="ret-dry-run" aria-describedby="ret-dry-desc" data-i18n="ret.dry_button">件数を数える</button>
+        <p class="hint" id="ret-dry-status" role="status" aria-live="polite"></p>
+        <dl id="ret-dry-facts" class="facts" aria-labelledby="ret-dry-title" hidden></dl>
+      </div>
+      <details class="internals">
+        <summary data-i18n="hub.details">詳細</summary>
+        <p class="hint" data-i18n="ret.internals">保存先: agent-config.json の memory_retention（既定と違う値だけが書かれます）。コマンドが走るたびに読まれます。整数は 1〜1,000,000（バイト数は 10^15 まで）。タイマーやスケジューラーのジョブはありません。ストアごとの扱いは docs/memory-maintenance_ja.md を参照してください。</p>
+      </details>
+    </section>
+
+    <section class="card hub-section" id="sec-usage" aria-labelledby="usage-title" tabindex="-1">
+      <div class="section-head">
+        <h2 id="usage-title"><span data-i18n="usage.sec">トークン使用量</span></h2>
+        <button type="button" class="btn btn-secondary" id="usage-refresh"><span data-i18n="usage.refresh">更新</span></button>
+      </div>
+      <p class="hint" data-i18n="usage.desc">このサーバーが記録したターンのトークン数の累計と、モデル別の内訳です（読み取り専用）。プロバイダが報告しなかった値は「不明」と表示し、0 にはしません。</p>
+      <p id="usage-status" class="hint" role="status" aria-live="polite"></p>
+      <div class="usage-scroll">
+        <table id="usage-table" class="usage-table" aria-labelledby="usage-title" hidden>
+          <thead>
+            <tr>
+              <th scope="col" data-i18n="usage.col_model">モデル</th>
+              <th scope="col" data-i18n="usage.col_turns">ターン数</th>
+              <th scope="col" data-i18n="usage.col_input">入力</th>
+              <th scope="col" data-i18n="usage.col_output">出力</th>
+              <th scope="col" data-i18n="usage.col_cache_read">キャッシュ読み取り</th>
+              <th scope="col" data-i18n="usage.col_cache_write">キャッシュ書き込み</th>
+            </tr>
+          </thead>
+          <tbody id="usage-rows"></tbody>
+        </table>
+      </div>
+      <p id="usage-note" class="hint" hidden></p>
     </section>
 
     <section class="card hub-section" id="sec-history" aria-labelledby="history-title" tabindex="-1">

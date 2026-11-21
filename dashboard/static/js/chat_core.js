@@ -353,6 +353,16 @@
     return time ? tr(t, "chat.new_started_at", { time }) : tr(t, "chat.new_started");
   }
 
+  // #655: an empty page after a restart. true when the conversation began with the process
+  // (not /new), shows no turn, and the newest recorded turn (GET /api/turns) began before
+  // it: the earlier conversation is in turns.db and memory, not in this one.
+  function restartedEmpty(session, shownTurns, latestTurn) {
+    if (!session || session.reason !== "start" || shownTurns !== 0) return false;
+    const began = session.startedAt;
+    const earlier = latestTurn && typeof latestTurn === "object" ? latestTurn.started_at : null;
+    return Number.isFinite(began) && typeof earlier === "number" && Number.isFinite(earlier) && earlier < began;
+  }
+
   // Providers whose input count already includes the cached tokens (the same list as
   // stiracore/providers/usage.py INPUT_INCLUDES_CACHE; chat_api passes Strands' raw
   // inputTokens through).
@@ -425,6 +435,18 @@
     if (g.source === "default") lines.push(tr(t, "chat.ctx_title_default"));
     if (g.window) lines.push(g.managed ? tr(t, "chat.ctx_title_summary", { percent: Math.round(g.threshold * 100) }) : tr(t, "chat.ctx_title_summary_off"));
     return { text, title: lines.join("\n") };
+  }
+
+  // #746: context management that was asked for but refused (nothing is summarized or
+  // offloaded), from /api/gateway/status `context_management` { enabled, mode, reason }.
+  // -> null (not refused) | { text, reason }. The reasons are the server's fixed codes
+  // (context_management.REFUSAL_REASONS); anything else reads "unknown", never echoed.
+  const CONTEXT_REFUSALS = Object.freeze(["no_stash_dir", "agent_id_not_plain",
+    "stash_outside_write_roots", "stash_unusable"]);
+  function contextRefusedText(info, t) {
+    if (!info || typeof info !== "object" || info.enabled !== true || info.mode !== "refused") return null;
+    const reason = CONTEXT_REFUSALS.includes(info.reason) ? info.reason : "unknown";
+    return { text: tr(t, "chat.ctx_refused", { reason: tr(t, `chat.ctx_refused_${reason}`) }), reason };
   }
 
   // #367: which classifier drives Neural State, from /api/gateway/status `classifier`.
@@ -556,7 +578,8 @@
   const api = { MAX_IMAGE_BYTES, MAX_IMAGES, IMAGE_TYPES, NO_EFFECT_STATUS, newKey, isSendKey,
     imageError, readImages, payloadOf, readSSE, createSender, cancelTurn, fetchHistory, fetchConversation,
     commandOf, newSessionBlock, confirmNewSession, createSessionStarter, requestDigest, sessionNote,
-    INPUT_INCLUDES_CACHE, promptTokens, contextOf, contextGauge, gaugeText,
+    restartedEmpty, INPUT_INCLUDES_CACHE, promptTokens, contextOf, contextGauge, gaugeText,
+    CONTEXT_REFUSALS, contextRefusedText,
     classifierText, NO_UPDATE_REASONS, emotionUpdatesText,
     LONG_GENERATION_SEC, generationOf, generationText, turnProgressOf, elsewhereText };
   root.StiraChatCore = api;

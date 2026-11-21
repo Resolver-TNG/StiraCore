@@ -189,3 +189,42 @@ plus:
   heartbeat on, with tripwires on the memory executor, its model factory, Strands `Agent` and
   the model;
 * the fixed `MODEL_CALLING_KINDS` list (exactly the two kinds above).
+
+## Phase 1 slice plan
+
+The commander's go (2026-11-16) covers ADR 0018 **phase 1, propose-only**: the only new writes
+are proposals in `semantic/staging/` and the review queue; nothing is applied without a person
+and phase 2 (reversible auto-apply) stays out. Measurement:
+[eval/memory-autonomy-prereg.md](eval/memory-autonomy-prereg.md) (merged first, not edited
+after results exist).
+
+**Where phase 0 stands** (read in code): the settings loader refuses every `phase` but `0`;
+`memory_rate` binds ratings in `memory_ratings` and `effect_of` (the §1d B formula) has no
+caller; the three job kinds write plan files only; semantic staging has a backend
+(`control/staging_review.py`: list, approve, reject, rejection ledger) and the operator CLI
+`staging_cli`, but **no review screen** — `/memory` has the procedural panel (#463) only;
+`harvest_stage_auto` still exists (default `true`); there is no invariant proposal path and no
+`idle` trigger. Not yet from ADR 0018 §2e: "3 failed runs → paused", `held_for_review`, the
+throttling back-off.
+
+**Rules for every slice.** One pull request each, in this order. Until the last enabling slice
+the loader keeps refusing `"phase": 1`; slices S2–S4 test the phase-1 path with settings built
+in the test. Phase-1 behaviour is reached only with `memory_autonomy` on, `phase: 1` and the
+kind enabled; with it off nothing changes (a test per slice). **⚑ = authority-adjacent**
+(writes, approval, a scheduler job kind, breaker linkage): it gets an independent review.
+
+| Slice | Content | Depends on | Acceptance (tests) |
+|---|---|---|---|
+| **S0** | This prereg and this plan (docs only) | — | `tests/test_docs_sync.py`; ADR 0018 unchanged |
+| **S1** ⚑ | #193 review screen for `semantic/staging/`: list and show (rating, trust, `rated_by`, sources, untrusted badge), approve / reject through `StagingReview`, rejection ledger. Same gates as the procedural panel: a person, `confirm: true`, the entry's SHA-256, approve only at breaker NORMAL (no breaker wired → refused), reject at any level, no approval while a turn or a tool call runs | S0 | route approve / reject writes exactly what `staging_cli` writes; approve refused outside NORMAL; stale SHA-256 refused; the ledger row stops a re-proposal; audit rows carry no text or key in clear; ja / en catalogs |
+| **S2** ⚑ | `memory_consolidate` proposal path: one proposal per cluster into `semantic/staging/` with `sources`, `supersedes` (keys + text SHA-256), minimum trust and maximum rule score of its sources, deterministic id; sources untouched (`superseded_by` only after approval, by the person's approve) | S1 | write-set test: only `semantic/staging/`, plan files and the ledger change, `procedural/`, SOUL, Identity Anchors, emotion records, `neural-state.json` and every source byte-identical; re-run skips existing ids; a rejected proposal is not re-proposed without new evidence; breaker not NORMAL → no write, `stopped_by: breaker`; token cap → stops, the reason in the run report; masked secrets: a canary key and body appear in no proposal, audit row, log or status |
+| **S2b** ⚑ | `memory_tidy` proposals into the review queue (duplicate groups, stale candidates, forgetting stages): proposals only, never applied | S1 | the same write-set test; 0 applied steps; backlog > 50 or older than 14 days → notification only |
+| **S3** ⚑ | Routing §1d B: Harvest and recall read `effect_of` on the bound row (`max(rule, agent)` for routing; the agent's value, capped at 0.5 for `untrusted` / `unknown`, for recall); `memory_rate_backfill` binds rows `rated_by: agent_job` | S1 | routing never below the rule score; trust cap on recall; a stale row is absent; front matter ignored; replay of recorded cases unchanged with the switch off |
+| **S3b** ⚑ | Invariant proposals (§1f ii): the agent proposes, a person approves in the S1 screen; refused for `untrusted` / `unknown` turns; at most 3 pending, 1 per day; never answered by YOLO | S1, S3 | refused codes per case; no path binds `retention: invariant` without a person; YOLO test |
+| **S4** ⚑ | Q6: remove `harvest_stage_auto: false` (the automatic band is always staged); docs and settings tables; the loader accepts `"phase": 1` (enabling slice) | S1–S3b | `distillation_cli` and the job stage the 0.4–0.7 band; `false` refused with a clear message; docs-sync tests |
+| **S5** | Evaluation by the prereg: fixtures (labelled episodes, adversarial set), offline harness with a fake model for mechanical rows, then 2 weeks live; results in a report, with "met / not met" per row | S4 | the prereg's rows; report has counts and rates only |
+
+Out of this plan: phase 2 (whitelisted reversible applies, undo window, automatic demotion in
+code — until it exists, a person lowers the phase when a demotion rule of the prereg fires),
+procedural writes (stay #463: propose → a person approves), SOUL / IPD (read-only, #96), the
+`idle` trigger, outbound reports.

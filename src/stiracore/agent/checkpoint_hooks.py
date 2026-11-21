@@ -35,8 +35,13 @@ from stiracore.core.approval import (
     args_hash,
     operation_key,
 )
-from stiracore.core.engine import HITL_APPROVED_TOOL_IDS_KEY, HITLDecision
+from stiracore.core.engine import (
+    HITL_APPROVED_TOOL_IDS_KEY,
+    RULE_ALWAYS_TOOL_IDS_KEY,
+    HITLDecision,
+)
 from stiracore.observability.hooks import PROGRESS_DECLARED_KEY
+from stiracore.self_protect import person_required
 
 # toolUseId -> (rule, generation) an approval was given under (#190, ADR 0010 §6).
 HITL_POLICY_GENERATIONS_KEY = "stira.hitl.policy_generations"
@@ -129,6 +134,44 @@ def _is_delegate(tool_name: str) -> bool:
     return tool_name == DELEGATE_TOOL_NAME
 
 
+def _conditional_always(tool_name: str) -> bool:
+    from stiracore.tools.tool_policy import CONDITIONAL_ALWAYS_TOOLS
+
+    return tool_name in CONDITIONAL_ALWAYS_TOOLS
+
+
+def _other_agents_turn(agent_id: Any, tool_name: str) -> bool:
+    """ADR 0015 rev 6 (S4, origin class ``child``): the rule of an origin-bound conditional
+    Always read ``always`` under a live turn mark, but this gate's agent is not the one the
+    route ran. Anything unreadable counts as another agent's turn (fail closed)."""
+    from stiracore.tools.tool_policy import ORIGIN_BOUND_ALWAYS_TOOLS
+    from stiracore.yolo import origin
+
+    if tool_name not in ORIGIN_BOUND_ALWAYS_TOOLS:
+        return False
+    try:
+        return origin.origin_class(agent_id) not in origin.COVERED_CLASSES
+    except Exception:  # noqa: BLE001
+        return True
+
+
+def _reserved(tool_name: str, tool_use_id: str) -> bool:
+    """ADR 0015 rev 6 (S4): before the rule answers a call, its slot in the turn's bound of
+    rule answers is taken. ``False`` (the bound is reached, or unreadable): a card."""
+    try:
+        from stiracore.tools.tool_policy import reserve_rule_answer
+
+        return reserve_rule_answer(tool_name, tool_use_id) is True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _release(tool_name: Any, tool_use_id: str) -> None:
+    from stiracore.tools.tool_policy import release_rule_answer
+
+    release_rule_answer(tool_name, tool_use_id)
+
+
 def _ledgered(engine: StiraEngine, tool_name: str) -> bool:
     """ADR 0024 §5: calls that get an operation-ledger entry before they run, approved or
     not — every write-capable call and ``delegate`` (a child: new model calls, tokens).
@@ -179,6 +222,15 @@ class CheckpointHooks(HookProvider):
         # folder, containment and limits under ``plan``), so the card shows it and the
         # approval's argument hash binds it. A function that raises cancels the call.
         self.input_preparers: dict[str, Any] = {}
+        # ADR 0015 rev 6 (S5): conditional-Always tools whose rule the caller answers
+        # itself. Only ``create_grant_child`` fills it (for ``page_look`` in a grant
+        # scope): the grant executor's own checks (scope, user setting, axis, subtree,
+        # per-round bound, permit) stand before the call instead of a turn's origin and
+        # slot. Empty everywhere else — never set from a request, a setting or a tool.
+        self.grant_answered: frozenset[str] = frozenset()
+        # #259: the names the breaker refused as of this turn's start (set by
+        # ``NXPAgent._turn_tools``), so a tool closed mid-turn is still refused before a card.
+        self.turn_write_names: frozenset[str] = frozenset()
         # ADR 0024 §7: toolUseIds a resume replays on a person's approval. Such a call
         # always goes through the gate (answered from the store), whatever the rule and
         # the breaker say at replay time, so an approved EDIT never runs the original.
@@ -475,6 +527,29 @@ class CheckpointHooks(HookProvider):
             # #508: the reason code and who can enable it; the refusal itself is unchanged.
             event.cancel_tool = NEVER_REFUSAL
             return
+        # #791: a write to a run-later file (git hooks, CI workflows, editor tasks) is
+        # never approved automatically — a card even when the rule is Always, and neither
+        # YOLO nor a session allowance answers it (below).
+        person = policy is not None and person_required(
+            tool_name, event.tool_use.get("input"), self.scope_policy
+        )
+        if person and policy == "always":
+            policy = "ask"
+        if (
+            policy == "always"
+            and _conditional_always(tool_name)
+            and tool_name not in self.grant_answered
+        ):
+            if _other_agents_turn(self.engine.agent_id, tool_name) or not _reserved(
+                tool_name, tool_use_id
+            ):
+                # A card (refused where no approver exists), never the rule: another
+                # agent's turn, or the turn's bound of rule answers is reached.
+                policy = "ask"
+            elif tool_use_id:
+                # ADR 0015 rev 6 (S4): the rule answers this call (unless a person's card
+                # does, below: halt, a resume). The tool checks its conditions again.
+                event.invocation_state.setdefault(RULE_ALWAYS_TOOL_IDS_KEY, set()).add(tool_use_id)
         resumed = self._gated_by_resume(tool_use_id)
         ask = policy == "ask" or resumed
         write = _write_capable(self.engine, tool_name)
@@ -491,7 +566,7 @@ class CheckpointHooks(HookProvider):
             return
         if (
             not halt
-            and write
+            and (write or tool_name in self.turn_write_names)
             and (
                 self.engine.is_write_blocked()
                 or breaker.actions & (BreakAction.REQUIRE_CONFIRMATION | BreakAction.BLOCK_WRITES)
@@ -499,7 +574,10 @@ class CheckpointHooks(HookProvider):
         ):
             # The Ask rule's approval answers the rule layer only: it never lifts the
             # breaker's write block (monotonic stack, ADR 0010 §2).
-            event.cancel_tool = "Writes are blocked by the circuit breaker; not sent for approval."
+            event.cancel_tool = (
+                "Writes are blocked by the circuit breaker [breaker_write_refused]; "
+                "not sent for approval."
+            )
             return
         if self.path_check is not None:
             denial = self.path_check(tool_name, event.tool_use.get("input", {}))
@@ -508,11 +586,17 @@ class CheckpointHooks(HookProvider):
                 return
 
         decision = None
-        if not halt and not resumed and self.auto_approver is not None:
+        if not halt and not resumed and not person and self.auto_approver is not None:
             # Reason RULE_ASK only: CRITICAL_HALT, Never, the breaker and the floors
             # were decided above and are never answered by YOLO (ADR 0012 §2, §5).
             decision = self._auto_decision(event, tool_name, tool_use_id, breaker.level, read)
-        if decision is None and not halt and not resumed and self.allow_approver is not None:
+        if (
+            decision is None
+            and not halt
+            and not resumed
+            and not person
+            and self.allow_approver is not None
+        ):
             # ADR 0025 §2: YOLO first, then the session allowance, then the person's card.
             decision = self._allow_decision(event, tool_name, tool_use_id)
             if decision is not None and self.auto_approver is not None:
@@ -606,6 +690,10 @@ class CheckpointHooks(HookProvider):
         tool_use_id = str(event.tool_use.get("toolUseId", ""))
         approved = event.invocation_state.get(HITL_APPROVED_TOOL_IDS_KEY, set())
         approved.discard(tool_use_id)
+        ruled = event.invocation_state.get(RULE_ALWAYS_TOOL_IDS_KEY)
+        if isinstance(ruled, set):
+            ruled.discard(tool_use_id)
+        _release(event.tool_use.get("name"), tool_use_id)
         event.invocation_state.get(HITL_BINDINGS_KEY, {}).pop(tool_use_id, None)
         with self._response_lock:
             response = self._response_text.pop(tool_use_id, None)

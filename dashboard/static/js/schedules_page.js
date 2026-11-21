@@ -417,7 +417,9 @@
       renderRuns(data.runs || [], data.jobs || []);
       renderNotes(data.notifications || []);
       loaded = true;
-      const key = JSON.stringify(data);
+      // The scheduler stamps every tick (status.last_tick_at): shown above on every read,
+      // but not a change, or an idle page would never widen its interval (#369).
+      const key = JSON.stringify({ ...data, status: { ...(data.status || {}), last_tick_at: undefined } });
       const changed = key !== lastKey;
       lastKey = key;
       return changed;

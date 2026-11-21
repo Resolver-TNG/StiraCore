@@ -26,16 +26,29 @@ restart) stops it.
 | W4 / W4.5 | **Grants and goals**: the store `grants.json` (`0600`, chained records, a live grant is never stored as active), the grant / goal **state machine**, the **human control plane** (issue / pause / resume / revoke / verify, host-confirmed loosenings) | [grants](grants.md#human-control-plane) |
 | W5 | **The supervised iteration executor**: one iteration per press in a dedicated child session; one permit per effect (model call, tool call, approval wait, report); budget reserved before each provider request; an Ask is answered only by a person's card | [grants](grants.md#the-goal-iteration-executor-w5) |
 | W5b | **Stage whiteboard display**: the activity mode shows the newest grant, read-only | [stage](stage.md#the-goal-grant-on-the-board-adr-0011-stage-c-w5b-of-296) |
-| W6a | **Outcome-based progress and loop detection**: progress is decided from what an iteration changed (a keyed fingerprint of the files the grant wrote and the check results), not from activity; no model-based judge | [grants](grants.md#progress-by-outcome-w6a) |
+| W6a | **Outcome-based progress and loop detection**: progress is decided from what an iteration changed (a keyed fingerprint of the files the grant wrote and the check results), not from activity; no model-based judge. Files the person listed at issue as report files are left out (ADR 0028 §4) | [grants](grants.md#progress-by-outcome-w6a) |
 | W6b | **Pre-emption by every turn holder**: every taker of the shared turn lock (a chat message, a webhook turn, the automatic continue, a restored card's resume, `/new`, a procedure approval) signals first; a running iteration yields | [grants](grants.md#known-limits) ("Other turns") |
 | W6-H | Hardening before unattended runs (one-step validate-and-count, oversize files, the turn-lock enumeration test) | [CHANGELOG](../CHANGELOG.md) |
 | W6c | **Claim evidence**: at a completion claim the harness records codes and counters it measured (checks, workspace changed, progress class, tokens / TTL at the claim) — never model text; a "still waiting for you" cue | [grants](grants.md#completion-claims-evidence-and-the-waiting-state-w6c) |
 | W6d | **Heartbeat-driven start**: the scheduler's model-free `grant_tick` may start **at most one iteration per wake** through the same `step` as a press — only with the gateway switch **and** the grant's own flag | [grants](grants.md#heartbeat-start-w6d) |
+| ADR 0028 step 2 | **The round ledger**: one allow-listed, hash-chained record per ended grant iteration in `grant-rounds.jsonl` (codes and counts only); read by `GET /api/grants/<id>/rounds` and a host CLI. Observation only: it never latches the authority service; when it cannot record, a heartbeat start is skipped (`tick_skipped(ledger_unhealthy)`) and a press still runs | [grants](grants.md#heartbeat-start-w6d) ("The round ledger") |
 | W6e / W6-F | **A supervised real-model smoke** (one run, 2026-10-26) and the fixes it led to (#640–#645): a stop during a model call is charged the call's reported usage when it completes; a workspace venv is read for its own `pytest`; the tools view shows `run_checks` as `os_sandbox` on a verified host; a stopped iteration counts the same whatever stopped it; the heartbeat spacing also counts from a resume | [grants](grants.md#known-limits), §4 below |
 
 Not built: stages A and B of ADR 0011 (proposals, self-scheduling), a verifier other than
 the person, YOLO auto-approval inside an iteration (W7), taint / episodic origin for
 iterations (W8), a shared day budget pool. See [Roadmap](#5-roadmap).
+
+### Where do I find it (#809)
+
+| What | URL | How to turn it on | What you see |
+|---|---|---|---|
+| Goal grants (the controls) | `/settings#sec-grants` (Settings → Goal grants) | gateway `autonomy.stage_c` (section 2) | issue / pause / resume / revoke / verify, the kill switch, the grant's state; "See it on the Stage" while the Stage is on |
+| Goal grant panel (display only) | `/stage/` → **Activity** | the Stage (on by default; off with Settings → **Screens**, `/settings#sec-screens`, or `STIRA_STAGE=0`) and `autonomy.stage_c` | the newest grant: state, iteration n / max, time and budget left, the cues; links to Settings → Goal grants and to the approvals page |
+| Approvals | `/approvals` (menu item) | always there | the cards an iteration waits for, and the history; "See it on the Stage" while the Stage is on |
+| Tool permissions | `/settings#sec-tools` | always there | Always / Ask / Never per tool (section 2) |
+
+The `/autonomy` page of ADR 0030 does not exist yet. Details of the Stage's pages:
+[stage.md](stage.md#where-do-i-find-it-809).
 
 ## 2. How to try it, step by step
 
@@ -103,6 +116,16 @@ Use a throwaway working directory. The labels below are the English UI labels
    host (elsewhere it is read as Ask). Pressed iterations need no Always: you answer the
    cards (step 5).
 
+   **`page_look` in a grant (optional, ADR 0015 rev 6 S5):** set
+   `{"autonomy": {"page_look_unattended": true}}` (default off) and restart; a browser must
+   be found (so `page_look` is registered), the grant's tools must include `file_read`, **`file_read`'s
+   rule must be Always** (a page can read workspace files), and
+   the axis check must pass at issue and at every round. The grant then opens its own page
+   files inside its subtree without a card, and `view_image` (named together with
+   `page_look`) shows only that grant's own screenshots. A failing check refuses the round;
+   a sticky one blocks the goal (`blocked(axis_failed)`). Details:
+   [grants](grants.md#page-tools-in-a-grant-adr-0015-rev-6-s5).
+
    **`run_checks` in a grant (optional):** the tool must be registered (gateway
    `{"run_checks": {"phase": 1}}`, off by default, not on Windows or as root;
    `STIRA_RUN_CHECKS=0` forces it off),
@@ -135,6 +158,11 @@ Use a throwaway working directory. The labels below are the English UI labels
    5,000,000), *Limit per tick* (form default 200,000), *Lifetime* (minutes, form default 120,
    at most 360), *Maximum iterations* (default 10, at most 20), optionally *Let the heartbeat
    start iterations* (shown only with the gateway switch on; it cannot be changed later).
+   **Report files** (optional, [grants](grants.md#report-files-adr-0028-4)): if the goal
+   tells the model to keep a notes file, list it as `report_files` (at most 8 relative
+   paths, e.g. `["NOTES.md"]`) so that a round that only rewrites its notes is not counted
+   as progress; the form has no field for it yet, so send it in the body of
+   `POST /api/grants/issue`. It is fixed at issue.
    Type `ISSUE` and press **Issue**. With the host channel (the default) the page then shows
    "Confirm operation <short> on the host (stira approvals decide <short>, or the desktop
    dialog)" and waits: confirm there. **Browser flow (weaker, optional):** a configured
@@ -162,7 +190,8 @@ Use a throwaway working directory. The labels below are the English UI labels
    writes, a `run_checks` run; measured in the smoke). An API client approves with the
    card's `args_hash` (without it the answer is refused with 400 and the card waits until
    it expires).
-6. **Read the board.** Open the Stage (`STIRA_STAGE=1`, `/stage/`) and its **Activity** mode:
+6. **Read the board.** Open the Stage (`/stage/`; on by default, off with Settings →
+   Screens or `STIRA_STAGE=0`) and its **Activity** mode:
    the "Goal grant" panel shows the state, *Iteration n / max*, time and budget left, the
    last end in words, the last five iterations and the cues ("Waiting for your approval",
    "A completion is claimed: waiting for your verification"). It is display only; the
@@ -252,6 +281,34 @@ Collected from [grants](grants.md#known-limits), [authority-service](authority-s
 and the review rounds of #296; open items are tracked in #618, #620, #623, #636 and #638.
 None widens authority; each fails closed or is a display / latency issue unless stated.
 
+* **A grant on Stira's own code (#791).** A subtree that overlaps the protected part of a
+  Stira checkout (or holds one) is refused at issue (`grant_subtree_protected`); the
+  checkout's data places (`.local/`, `workspace/`: the default data layout) take ordinary
+  grants. The opt-in `autonomy.grant_self_development` plus a separate confirmation lifts
+  the refusal for a checkout other than the running server's
+  (`grant_subtree_running_checkout` otherwise), and such a grant's `editor` writes only
+  the allow-list (`docs/`): the rest of the checkout, the whole `dashboard/` included, is
+  read-only for it ([grants](grants.md#protected-subtrees-and-paths-791)). Limits: a
+  checkout is recognised by its marker `src/stiracore/__init__.py` (a copy without it,
+  e.g. a renamed package or a flat layout, is an ordinary project; any directory with
+  that file is treated as a checkout — it over-refuses); the running server's tree is its
+  package directory and the checkouts that hold it — an interpreter prefix outside it
+  (`.pth`, `sitecustomize.py` of a virtual environment elsewhere) is not recognised; the
+  allow-list is narrow on purpose (code changes to Stira itself are ordinary development
+  in a separate worktree); a subtree with more than 200 000 directories is refused (not
+  judged, with the same code); the subtree is judged when the grant is issued (at the
+  press and again at the confirmed re-send) and not again at each round — a checkout that
+  appears inside an ordinary grant's subtree later is covered by the per-write rules
+  (the allow-list), not by a whole-grant stop; each check is at one instant (no defence
+  against a concurrent rename, as the write floor); `run_checks` and other code a person
+  runs in the workspace are not covered. The run-later list matches a path component
+  anywhere in the path, so a workspace that itself lies under such a directory (for
+  example `~/.cursor/…`) gets a card for every write in a chat and no grant. The
+  always-a-person rule covers `editor`, `file_write` and `speak`'s `output_path` (not
+  exec tools or MCP tools, which have their own rules); a card for such a write may still
+  offer "allow again", which the gate then does not honour; `Makefile`, `package.json`
+  scripts, `AGENTS.md` / `CLAUDE.md` and a virtual environment's `activate` are not on
+  the list.
 * **Final instruction window.** A stop (heartbeat loss, scheduler stop, a person's turn,
   TTL) that lands after the last check before an HTTP request leaves is not
   seen by that request; it is seen at the next boundary. Accepted residual (#638).

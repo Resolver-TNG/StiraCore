@@ -13,9 +13,9 @@ The tool list of a chat server turn is built in this order (`dashboard/stira_ser
 
 | Step | Removes | When it changes |
 |---|---|---|
-| `get_tools` | exec class unless `STIRA_ENABLE_EXEC_TOOLS` (#163); a file tool whose consent bridge does not hold (#242); `memory` without a knowledge base; `perplexity_search` without a key; `page_check` without a browser (ADR 0015) or without the workspace write policy | at start-up (the bridge is re-checked per call, fail-closed) |
+| `get_tools` | exec class unless `STIRA_ENABLE_EXEC_TOOLS` (#163); a file tool whose consent bridge does not hold (#242); `memory` without a knowledge base; `perplexity_search` without a key; `page_check` and `page_look` without a browser (ADR 0015; rev 6 S3) or without the workspace write policy | at start-up (the bridge is re-checked per call, fail-closed) |
 | `filter_tools_by_config` | every tool whose saved rule is **Never** (OFF); everything while the rules are locked | when a rule is saved (ADR 0010) |
-| breaker filter | write/exec tools at WARNING, CRITICAL read-only | on a breaker transition (#259, unchanged) |
+| breaker (no filter since #259) | nothing — the list is the same at every level (ADR 0010 addendum): `_stira_tools` no longer passes the level to `get_tools`, and `NXPAgent._turn_tools` does not remove write tools. A write/exec call at WARNING or CRITICAL read-only is refused at the call with `breaker_write_refused`; under CRITICAL + `halt` it goes to the person's card. Kept out: `delegate` at CRITICAL (under `halt` its call would reach a card, not a refusal), and while writes are withheld a tool whose name cannot be resolved | `delegate` on entering / leaving CRITICAL |
 
 So **the chat server already does not send Never or hidden exec tools**, before and after #368.
 Measured on the real server: in the fresh-install rules the external-send tools

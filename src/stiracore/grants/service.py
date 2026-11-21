@@ -140,6 +140,8 @@ _AUTONOMY_KEYS = frozenset(
         "claim_stale_sec",
         "heartbeat_start",
         "tick_min_spacing_sec",
+        "page_look_unattended",
+        "grant_self_development",
     }
 )
 
@@ -164,7 +166,15 @@ class AutonomySettings:
     scheduler's model-free ``grant_tick`` (at most one iteration per wake); otherwise off
     (``heartbeat_start_needs_stage_c_exec``). ``tick_min_spacing_sec`` (W6d): the shortest
     time from an iteration's end to a heartbeat-started one (30–86400 s, default 300);
-    anything else is the default (with a warning code)."""
+    anything else is the default (with a warning code).
+    ``page_look_unattended`` (ADR 0015 rev 6 S5, default off): exactly ``true`` lets a
+    grant's scope name ``page_look`` (and the narrowed ``view_image``) — a grant then
+    opens its own workspace pages without a card, while the axis check passes; anything
+    else is off (a non-boolean with a warning code).
+    ``grant_self_development`` (#791, ADR 0029 B6b, default off): exactly ``true`` lets a
+    person issue a grant whose subtree is a Stira checkout — only with the separate
+    confirmation ``self_development`` in the issue body; the never-editable list stays
+    unwritable for that grant. Anything else is off (a non-boolean with a warning code)."""
 
     stage_c: bool = False
     run_checks_unattended: bool = True
@@ -177,6 +187,8 @@ class AutonomySettings:
     claim_stale_sec: int = CLAIM_STALE_DEFAULT_SEC
     heartbeat_start: bool = False
     tick_min_spacing_sec: int = TICK_SPACING_DEFAULT_SEC
+    page_look_unattended: bool = False
+    grant_self_development: bool = False
 
 
 def settings_from(section: Any) -> AutonomySettings:
@@ -219,6 +231,12 @@ def settings_from(section: Any) -> AutonomySettings:
     if type(spacing) is not int or not TICK_SPACING_MIN_SEC <= spacing <= TICK_SPACING_MAX_SEC:
         warnings.append("tick_min_spacing_sec_invalid")
         spacing = TICK_SPACING_DEFAULT_SEC
+    page_look = section.get("page_look_unattended", False)
+    if type(page_look) is not bool:
+        warnings.append("page_look_unattended_invalid")
+    self_development = section.get("grant_self_development", False)
+    if type(self_development) is not bool:
+        warnings.append("grant_self_development_invalid")
     if set(section) - _AUTONOMY_KEYS:
         warnings.append("autonomy_unknown_key")
     return AutonomySettings(
@@ -231,6 +249,8 @@ def settings_from(section: Any) -> AutonomySettings:
         stale,
         tick is True and exec_on,
         spacing,
+        page_look is True,
+        self_development is True,
     )
 
 
@@ -244,6 +264,16 @@ class GrantConfirmation(Exception):
 
 
 _NEWEST = object()  # board_view(): the newest record
+
+
+def _default_page_axis(tools: frozenset) -> str | None:
+    """The server's own readers (``page_look``'s wired scope): ``None`` when ``page_look``
+    is not registered, else the code of a full axis check for a grant with ``tools``."""
+    from stiracore.tools import page_look
+
+    if not page_look.wired():
+        return None
+    return page_look.grant_axis(tools, None, full=True)
 
 
 def _now_or_none(clock: Callable[[], Any]):
@@ -274,8 +304,12 @@ class GrantService:
         write_policy: Callable[[], Any] | None = None,
         operations: HostOperations | None = None,
         tool_call_running: Callable[[], bool] | None = None,
+        page_axis: Callable[[frozenset], str | None] | None = None,
     ) -> None:
         self._authority = authority
+        # ADR 0015 rev 6 (S5): the full axis check for a scope that names ``page_look``
+        # (``None``: ``page_look`` is not registered on this server).
+        self._page_axis = page_axis or _default_page_axis
         self._recorder = recorder
         self.settings = settings or AutonomySettings(stage_c=True)
         self._clock = clock
@@ -286,6 +320,7 @@ class GrantService:
         # No tracker: every operation step is refused (host_channel_unavailable).
         self._tool_call_running = tool_call_running
         self._store = GrantStore(data_dir)
+        self._data_dir = None if data_dir is None else Path(data_dir)
         self._lock = threading.Lock()  # leaf: memory only
         self._grants: OrderedDict[str, Grant] = OrderedDict()
         self._goals: dict[str, str] = {}
@@ -313,6 +348,11 @@ class GrantService:
         )
         self.instance = instance_ref(authority.incarnation)
         self._started = False
+
+    @property
+    def data_dir(self) -> Path | None:
+        """The data directory of the grant store (``None``: memory only). Read-only."""
+        return self._data_dir
 
     @property
     def channel(self) -> str:
@@ -909,7 +949,12 @@ class GrantService:
         replayed = self._replay("grant_issue", route, body, op_id)
         if replayed is not None:
             return replayed
-        request = parse_issue(body, roots=self._roots(), policy=self._policy())
+        request = parse_issue(
+            body,
+            roots=self._roots(),
+            policy=self._policy(),
+            self_development=self.settings.grant_self_development is True,
+        )
         if request.heartbeat_start and not self.settings.heartbeat_start:
             # W6d: the per-grant flag needs the global switch (and so stage_c_exec).
             raise GrantRefused("grant_heartbeat_start_off")
@@ -919,6 +964,26 @@ class GrantService:
                 raise GrantRefused("grant_run_checks_setting_off")
             if not self._contained():
                 raise GrantRefused("grant_run_checks_not_contained")
+        if "page_look" in request.tools:
+            # ADR 0015 rev 6 (S5), fail closed: the user setting, the tool registered (a
+            # browser), and the full axis check ``pass`` for this scope (A9: ``file_read``
+            # must be in it and its live rule Always). The executor checks all of it again
+            # at every round and call.
+            if not self.settings.page_look_unattended:
+                raise GrantRefused("grant_page_look_setting_off")
+            try:
+                code = self._page_axis(frozenset(request.tools))
+            except Exception:  # noqa: BLE001 - unreadable: not pass
+                code = "axis_unreadable"
+            if code is None:
+                raise GrantRefused("grant_page_look_unavailable")
+            if code != "pass":
+                from .round_ledger import AXIS_CODES
+
+                known = type(code) is str and code in AXIS_CODES
+                raise GrantRefused(
+                    "grant_page_look_axis", reason=code if known else "axis_unreadable"
+                )
         self._loosening_preconditions()
         if state.halt_reason_for(self._breaker_level()) is not None:
             raise GrantRefused("grant_breaker_not_normal")
@@ -940,6 +1005,21 @@ class GrantService:
             # W6d: the host-confirmed view names the heartbeat start (the body, and so the
             # flag, is bound to the operation's digest as well).
             summary["source"] = "heartbeat_start"
+        if request.report_files:
+            # ADR 0028 §4: the host-confirmed view names the report files (how many — a
+            # code and a count, never a path; the list itself is in the bound body).
+            summary["changes"] = [f"report_files:{len(request.report_files)}"]
+        if request.self_development:
+            # #791 (ADR 0029 B6b): the host-confirmed view names the loosening — this grant
+            # may edit Stira's own code (a code, never a path).
+            summary["changes"] = [*summary.get("changes", []), "loosen:self_development"]
+        if request.done_when:
+            # #683: the host-confirmed view names the completion checks (kind codes; the
+            # list itself is in the bound body, so it cannot be added or widened later).
+            summary["changes"] = [
+                *summary.get("changes", []),
+                *(f"done_when:{kind}" for kind in request.done_when),
+            ]
 
         def apply() -> dict:
             return self._issue_now(request, generation, epoch0)
@@ -1407,6 +1487,12 @@ class GrantService:
         }
         if grant.heartbeat_start:
             view["heartbeat_start"] = True  # W6d: only a flagged grant carries the key
+        if grant.report_files:
+            view["report_files"] = len(grant.report_files)  # how many, never a path
+        if grant.self_development:
+            view["self_development"] = True  # #791: only a self-development grant carries it
+        if grant.done_when:
+            view["done_when"] = list(grant.done_when)  # #683: kind codes only
         return view
 
     def _claim_view(self, grant: Grant, now: Any) -> dict | None:
@@ -1437,6 +1523,8 @@ class GrantService:
             "authority_killed": self._authority.killed,
             "authority_healthy": self._authority.unhealthy_reason is None,
             "run_checks_unattended": self.settings.run_checks_unattended,
+            "page_look_unattended": self.settings.page_look_unattended,
+            "grant_self_development": self.settings.grant_self_development,
             "max_live": 1,
             "tools": sorted(TOOLS),
             "instance": self.instance,
@@ -1457,6 +1545,18 @@ class GrantService:
             raise BoardBusy()
         try:
             return next(reversed(self._grants.values()), None)
+        finally:
+            self._lock.release()
+
+    def round_record(self, grant_id: Any, *, wait: float = 1.0) -> Grant | None:
+        """This grant's record (immutable; not only the newest one), for the round ledger's
+        record at an iteration's end (#761). Memory only — no look, no store read or write,
+        no event — and bounded: it waits at most ``wait`` seconds for the memory lock.
+        ``None``: an unknown id, or the lock was not free in that time."""
+        if not self._lock.acquire(timeout=wait):
+            return None
+        try:
+            return self._grants.get(grant_id) if type(grant_id) is str else None
         finally:
             self._lock.release()
 

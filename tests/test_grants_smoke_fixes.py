@@ -129,12 +129,13 @@ def test_a_user_turn_during_a_model_call_charges_its_usage(tmp_path):
 
 class _CancelSpy(ScriptedProvider):
     """Records the cancel event the provider request was given, and whether it was set
-    when the call answered."""
+    when the call answered and when its response ended (the request is over then)."""
 
     def __init__(self, *a, **k) -> None:
         super().__init__(*a, **k)
         self.cancels: list = []
         self.set_at_answer: list[bool] = []
+        self.set_at_end: list[bool] = []
 
     async def stream(self, messages, tool_specs=None, system_prompt=None, **kwargs):
         cancel = kwargs.get("cancel_signal")
@@ -143,6 +144,7 @@ class _CancelSpy(ScriptedProvider):
             if "messageStart" in event:
                 self.set_at_answer.append(bool(cancel is not None and cancel.is_set()))
             yield event
+        self.set_at_end.append(bool(cancel is not None and cancel.is_set()))
 
 
 @pytest.mark.parametrize("stall", [False, True])
@@ -166,9 +168,43 @@ def test_the_provider_request_is_cancelled_only_when_the_call_is_given_up(tmp_pa
     if stall:
         assert cancel.is_set() and grant(env).used_tokens == RESERVED
     else:
-        # The child's own cancel was set by the stop; the provider's was not: it answered.
-        assert env.provider.set_at_answer == [False] and not cancel.is_set()
+        # The child's own cancel was set by the stop; the provider's was not while the
+        # request ran: it answered. After the response the event may be set (#724: the
+        # iteration thread saw the stop only then — no call is reading, so it does not
+        # drain and marks the call given up; nothing is left to cancel), so its state is
+        # read at the response's end, not after the iteration.
+        assert env.provider.set_at_answer == [False] and env.provider.set_at_end == [False]
+        assert not env.executor.view(env.grant_id)["abandoned"]
         assert grant(env).used_tokens == SPENT
+
+
+def test_a_stop_seen_after_the_answer_never_cancels_the_request_in_flight(tmp_path):
+    """#724, the order a slow host produced: the call answers before the iteration thread
+    looks at the stop. The provider's cancel is then set after the response (no drain: no
+    call is reading) — never while the request ran — and the call is charged its usage."""
+    env = make_env(tmp_path, stop_drain_sec=5.0)
+    env.provider = _CancelSpy()
+    await_call = env.executor._await_call
+
+    def late(it):
+        assert it.call_done.wait(10)
+        return await_call(it)
+
+    env.executor._await_call = late
+    release = _held_call(env)
+    try:
+        env.service.revoke(env.grant_id)
+        release.set()
+        assert env.executor.wait_idle(10)
+    finally:
+        release.set()
+        assert env.executor.wait_abandoned(10)
+    cancel = env.provider.cancels[0]
+    assert cancel is not None and cancel.is_set()  # after the response: nothing to cancel
+    assert env.provider.set_at_answer == [False] and env.provider.set_at_end == [False]
+    view = env.executor.view(env.grant_id)
+    assert not view["abandoned"] and "abandoned_call" not in view["residual"]
+    assert grant(env).used_tokens == SPENT and env.executor.status()["abandoned_calls"] == 0
 
 
 @pytest.mark.parametrize("stop", ["shutdown", "wall_time"])

@@ -24,6 +24,8 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import stack_beacon
+import stack_folder
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -703,6 +705,8 @@ def build() -> dict:
         "hourglass": hourglass(),
         "bell": bell(),
     }
+    sprites.update(stack_beacon.frames(Sprite))  # sprite-stack beacon: 16 paddle angles
+    sprites.update(stack_folder.frames(Sprite))  # sprite-stack binders: 1..3 binders x 4 swings
     col, fx, rects = pack(sprites)
     OUT.mkdir(parents=True, exist_ok=True)
     Image.fromarray(col).save(OUT / "gadgets.png", optimize=True)

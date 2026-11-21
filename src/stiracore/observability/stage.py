@@ -1,6 +1,9 @@
-"""Stage (#341): the opt-in pixel-art view of the agent, served by the chat server.
+"""Stage (#341): the pixel-art view of the agent, served by the chat server.
 
-Off by default. ``STIRA_STAGE=1`` registers three GET page routes:
+On by default (``/`` stays the chat: ``ui.home``). Gateway ``stage_enabled`` (settings page,
+section "Screens", #477; ``false`` turns it off) or ``STIRA_STAGE=1`` registers three GET
+page routes when the chat server starts (``STIRA_STAGE=0`` keeps them off whatever the file
+says):
 
 - ``/stage`` redirects to ``/stage/``;
 - ``/stage/`` renders ``templates/stage.html`` inside the dashboard shell (base.html: side
@@ -21,9 +24,8 @@ default off) only adds ``data-board-svg="on"`` to the page.
 
 from __future__ import annotations
 
-import os
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from flask import abort, redirect, render_template, send_from_directory
@@ -47,10 +49,17 @@ _MIMETYPES = {
 }
 
 
-def stage_enabled() -> bool:
-    """Opt-in only: ``STIRA_STAGE=1`` (or true/yes/on) turns the page on."""
-    raw = os.environ.get(STAGE_ENV, "")
-    return raw.strip().lower() in ("1", "true", "yes", "on")
+def stage_enabled(gateway=None, environ: Mapping[str, str] | None = None) -> bool:
+    """Gateway-config ``stage_enabled`` (#477, default on), or ``STIRA_STAGE``.
+
+    ``STIRA_STAGE=1`` (or true/yes/on) turns the page on and any other non-empty value
+    turns it off, whatever the file says; unset or empty leaves it to ``gateway`` (a
+    ``GatewayConfig``; none given = off). One rule with the settings page
+    (``settings_hub.effective_stage_enabled``), which shows the switch as pinned.
+    """
+    from stiracore.observability import settings_hub
+
+    return settings_hub.effective_stage_enabled(gateway, environ)
 
 
 def stage_asset_allowed(path: str) -> bool:

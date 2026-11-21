@@ -13,6 +13,36 @@
 |---|---|---|
 | `tool_summary` | `web_fetch(url, summarize=True, focus=…)`（#585、[tools/web-fetch.md](tools/web-fetch.md)）。出力は未信頼のデータ。会話のモデルを引き継ぐときも記録する。 | なし |
 | `context_summary` | コンテキスト管理の会話要約（#258、オプトインの `context_management`）。 | なし |
+| `visual_review` | `page_review(run)`（ADR 0015 rev 6、#774、[verification_ja.md](verification_ja.md)）: ページを開いた 1 回分のスクリーンショットへの指摘。**未設定はオフ**（下記）。`vision` のあるモデルが必要。出力は未信頼のデータ。会話のモデルを引き継ぐときも記録する。 | なし |
+
+### `visual_review`: 設定しない限りオフ
+
+ほかの処理と違い、`visual_review` は未設定だと **`inherit` ではなくオフ**です: モデルは作られず、
+ツール `page_review` は登録されず（会話のモデルに渡すツール定義は 1 バイトも変わりません）、何も送らず、
+設定画面にも行は出ません。
+
+* 会話のモデルをレビュー役にするには、`inherit` を明示的に書きます。会話のモデルの能力表に `vision` が
+  あるときだけ受け付けます。サーバーを動かしたまま設定画面で会話のモデルを切り替えた場合、新しい
+  モデルが同じプロバイダで `vision` を持つときだけ、レビューもそのモデルに従います
+  （`agent-config.json` の能力の上書きは、起動時のモデルにだけ効きます）。そうでなければ
+  `page_review` は `reviewer_changed` で拒否され、元に戻すか再起動するまで何も送りません。
+* 別のモデルを指定するときも `vision` が必要です。無ければ起動を拒否します（`no_vision`）。
+* **画像の行き先:** このモデルのプロバイダだけです。ローカルのモデル（例:
+  `ollama:llama3.2-vision:11b`、またはローカルの vision 会話モデルでの `inherit`）なら、画像はこの
+  マシンの外に出ません。リモートのモデルには、ページが描いたものがそのまま届きます。ワークスペースの
+  文字が写っていることがあり、画像はマスクできません。
+* 予算も必要です: `gateway-config.json` の `visual_review.daily_tokens`（正の整数。**既定値なし**）。
+  無ければ `page_review` の呼び出しはすべて `review_budget` で拒否します。
+* この処理のために作るモデルの出力は 800 トークンまでです。`inherit` のときは会話のモデルの
+  トークン上限のままです。どちらの場合も、答えが 3,200 文字を超えた時点で Stira は受信を打ち切ります
+  （`review_unparsable`）。
+* 切り替えはしません: レビュー役が失敗した・時間切れ（60 秒。プロバイダが何をしていても Stira は
+  そこで待つのをやめます）になった・決まった形で答えなかったときは
+  `review: {status: "error", code}` を返します。代わりに会話のモデルを呼ぶことはありません。
+
+```json
+{"task_models": {"visual_review": "ollama:llama3.2-vision:11b"}, "visual_review": {"daily_tokens": 200000}}
+```
 
 ルーティングに載せないもの（独自の設定がある、または会話のモデルが要る）:
 
@@ -51,7 +81,8 @@ STIRA_TASK_MODEL_TOOL_SUMMARY=global.anthropic.claude-haiku-4-5-20251001-v1:0
 * 起動時、次の場合はサーバーが起動しません（終了コード 2。固定のコードと処理名だけを出し、値は出さない）:
   処理名または `STIRA_TASK_MODEL_*` の変数が未知の処理（`unknown_task`）、モデルが能力表に無い
   （`unknown_model`）、プロバイダの SDK が無い（`provider_unavailable`）、認証情報が未設定
-  （`credentials_not_configured`）。
+  （`credentials_not_configured`）、`visual_review` のモデルに `vision` が無い（`no_vision`。
+  `inherit` なら会話のモデル）。
 * 指定したモデルが呼び出し時に失敗したら、**その処理**を失敗にします（`model_failed` と理由コード）。
   会話のモデルや別のモデルで再試行しません: 費用とデータの行き先が、利用者の知らないうちに変わらない
   ようにするためです。`context_summary` では SDK の要約失敗時の挙動どおり、会話は短くなりません
@@ -68,7 +99,9 @@ STIRA_TASK_MODEL_TOOL_SUMMARY=global.anthropic.claude-haiku-4-5-20251001-v1:0
 
 指定したモデルへの呼び出し1回ごと（`tool_summary` は会話のモデルを引き継ぐときも）に、ターンイベント
 `task_model.call`（`/observability` に表示）、監査行 `audit.task_model.call`、ログ1行を残します: 処理名・プロバイダ・モデル ID・入出力トークン・状態（`success` / `error` /
-`refused`）・理由コード。本文や URL は残しません。
+`refused`）・理由コード。本文や URL は残しません。`visual_review` の呼び出し（`inherit` のときも記録）
+には数値を 3 つ足します: `images`（枚数）、`bytes`（合計サイズ）、`rubric_version`。画像や指摘の文は
+残しません。
 
 ## 設定画面
 

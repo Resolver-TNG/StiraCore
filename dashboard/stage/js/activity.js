@@ -206,20 +206,20 @@ const END_KEY = {
   run_checks_unavailable: 'stage.grant_end_run_checks', timeout: 'stage.grant_end_timeout', model_error: 'stage.grant_end_model_error',
   tool_refused: 'stage.grant_end_tool_refused', stopped: 'stage.grant_end_stopped', shutdown: 'stage.grant_end_shutdown',
   failed: 'stage.grant_end_failed', workspace_changed: 'stage.grant_end_workspace_changed',
-  no_action: 'stage.grant_end_no_action',
+  no_action: 'stage.grant_end_no_action', page_tools_unavailable: 'stage.grant_end_page_tools',
 };
 // ✓ / ✗ / · of an iteration's end (as the rows): finished as planned, failed, or stopped
 const END_OK = new Set(['done', 'claimed']);
-const END_FAILED = new Set(['failed', 'model_error', 'timeout', 'tool_refused', 'budget_refused', 'token_count_unavailable', 'approval_timeout', 'run_checks_unavailable', 'workspace_changed', 'permit_stale']);
+const END_FAILED = new Set(['failed', 'model_error', 'timeout', 'tool_refused', 'budget_refused', 'token_count_unavailable', 'approval_timeout', 'run_checks_unavailable', 'page_tools_unavailable', 'workspace_changed', 'permit_stale']);
 
 // The fixed code sets of the grant state machine and the executor (W5b fix round 1: an
 // allow-list of values, not of shapes; tests/test_activity_grant.py keeps them equal to the
 // server's). A value outside its set is never drawn: a state or an end is "other", a reason
 // or a detail is left out, a tool name is "other".
 const GRANT_REASONS = new Set(['breaker_critical', 'breaker_warning', 'clock_anomaly', 'complete', 'goal_blocked', 'goal_budget_limited', 'goal_paused', 'kill_switch', 'restart', 'session_reset', 'ttl', 'unhealthy', 'user']);
-const GOAL_REASONS = new Set(['approval_timeout', 'expired_ttl', 'iteration_timeout', 'loop_detected', 'max_iterations', 'missing_input', 'needs_decision', 'no_progress', 'out_of_scope', 'revoked_clock_anomaly', 'revoked_kill_switch', 'revoked_restart', 'revoked_session_reset', 'revoked_unhealthy', 'revoked_user', 'run_checks_unavailable', 'same_blocker', 'user', 'verification', 'verified', 'workspace_changed']);
-const DETAIL_CODES = new Set(['authority_unhealthy', 'breaker', 'child_error', 'clock', 'containment_unverified', 'count_failed', 'disabled', 'goal_not_active', 'grant_not_active', 'grant_total', 'in_flight_cancelled', 'killed', 'max_tokens_unknown', 'no_counter', 'no_formatter', 'not_contained', 'not_in_scope', 'outside_subtree', 'path_invalid', 'per_tick', 'permit_refused', 'pool', 'provider_error', 'provider_unsupported', 'report_refused', 'setting_off', 'store_unhealthy', 'tick_stale', 'ttl']);
-const SCOPE_TOOLS = new Set(['current_time', 'editor', 'file_read', 'memory_list', 'memory_read', 'memory_search', 'run_checks']);
+const GOAL_REASONS = new Set(['approval_timeout', 'axis_failed', 'expired_ttl', 'iteration_timeout', 'loop_detected', 'max_iterations', 'missing_input', 'needs_decision', 'no_progress', 'out_of_scope', 'revoked_clock_anomaly', 'revoked_kill_switch', 'revoked_restart', 'revoked_session_reset', 'revoked_unhealthy', 'revoked_user', 'run_checks_unavailable', 'same_blocker', 'user', 'verification', 'verified', 'workspace_changed']);
+const DETAIL_CODES = new Set(['protected_path', 'authority_unhealthy', 'axis_stale', 'axis_unreadable', 'breaker_not_normal', 'browser_guard_unmeasured', 'browser_guard_unverified', 'file_read_not_always', 'guard_pending', 'ledger_unhealthy', 'other', 'platform_unmeasured', 'record_unhealthy', 'reviewer_changed', 'reviewer_remote', 'rules_changed', 'rules_locked', 'write_floor_changed', 'breaker', 'child_error', 'clock', 'containment_unverified', 'count_failed', 'disabled', 'goal_not_active', 'grant_not_active', 'grant_total', 'in_flight_cancelled', 'killed', 'max_tokens_unknown', 'no_counter', 'no_formatter', 'not_contained', 'not_in_scope', 'outside_subtree', 'path_invalid', 'per_tick', 'permit_refused', 'pool', 'provider_error', 'provider_unsupported', 'report_refused', 'setting_off', 'store_unhealthy', 'tick_stale', 'ttl']);
+const SCOPE_TOOLS = new Set(['current_time', 'editor', 'file_read', 'memory_list', 'memory_read', 'memory_search', 'page_look', 'run_checks', 'view_image']);
 // W6c: the claim evidence's codes (the same sets as the server's: grants/schema.py)
 const CLAIM_CHECKS = new Set(['fail', 'not_run', 'pass', 'unknown']);
 const CLAIM_WORKSPACE = new Set(['changed', 'unchanged', 'unknown']);
@@ -240,8 +240,41 @@ const CHECK_STATUS_KEY = {
   passed: 'stage.grant_check_passed', failed: 'stage.grant_check_failed', error: 'stage.grant_check_error', limited: 'stage.grant_check_limited',
 };
 // W6d: the heartbeat start's skip reasons (the server's: scheduler/grant_tick.py SKIP_REASONS)
-const TICK_SKIPS = new Set(['abandoned_call', 'authority_unhealthy', 'awaiting_verification', 'breaker', 'budget', 'clock', 'executor_refused', 'executor_unavailable', 'flood', 'goal_state', 'grant_state', 'heartbeat_unhealthy', 'iteration_running', 'kill', 'max_iterations', 'min_spacing', 'narrowed', 'no_action', 'no_grant', 'not_enabled', 'repeated_failure', 'scheduler_stopped', 'shutdown', 'store_unhealthy', 'ttl', 'turn_busy']);
+const TICK_SKIPS = new Set(['abandoned_call', 'authority_unhealthy', 'awaiting_verification', 'axis_breaker_not_normal', 'axis_guard_pending', 'axis_rules_changed', 'axis_stale', 'breaker', 'budget', 'clock', 'executor_refused', 'executor_unavailable', 'flood', 'goal_state', 'grant_state', 'heartbeat_unhealthy', 'iteration_running', 'kill', 'ledger_unhealthy', 'max_iterations', 'min_spacing', 'narrowed', 'no_action', 'no_grant', 'not_enabled', 'repeated_failure', 'scheduler_stopped', 'shutdown', 'store_unhealthy', 'ttl', 'turn_busy']);
 const own = (map, c) => Object.prototype.hasOwnProperty.call(map, c);
+// Why a grant or a goal is in its state, in words (the code itself is never drawn; a code
+// outside the sets above is left out). Some goal reasons are an iteration's end: its words.
+const GRANT_REASON_KEY = {
+  user: 'stage.grant_reason_user', goal_paused: 'stage.grant_reason_goal_paused', goal_blocked: 'stage.grant_reason_goal_blocked',
+  goal_budget_limited: 'stage.grant_reason_goal_budget_limited', breaker_warning: 'stage.grant_reason_breaker_warning',
+  breaker_critical: 'stage.grant_reason_breaker_critical', kill_switch: 'stage.grant_reason_kill_switch',
+  restart: 'stage.grant_reason_restart', session_reset: 'stage.grant_reason_session_reset',
+  clock_anomaly: 'stage.grant_reason_clock_anomaly', unhealthy: 'stage.grant_reason_unhealthy',
+  ttl: 'stage.grant_reason_ttl', complete: 'stage.grant_reason_complete',
+};
+const GOAL_REASON_KEY = {
+  user: 'stage.grant_reason_user', no_progress: 'stage.grant_why_no_progress', loop_detected: 'stage.grant_why_loop_detected',
+  max_iterations: 'stage.grant_why_max_iterations', same_blocker: 'stage.grant_why_same_blocker',
+  approval_timeout: 'stage.grant_end_approval_timeout', verification: 'stage.grant_why_verification',
+  run_checks_unavailable: 'stage.grant_end_run_checks', iteration_timeout: 'stage.grant_end_timeout',
+  workspace_changed: 'stage.grant_end_workspace_changed', axis_failed: 'stage.grant_why_axis_failed',
+  needs_decision: 'stage.grant_why_needs_decision', out_of_scope: 'stage.grant_why_out_of_scope',
+  missing_input: 'stage.grant_why_missing_input', verified: 'stage.grant_why_verified',
+};
+// The headline's mark and tone, so that a state is never told by colour alone: [mark, tone]
+// (tone: go | hold | stop | done | muted — stage.css).
+const GRANT_MARK = {
+  active: ['▶', 'go'], paused: ['‖', 'hold'], halted: ['■', 'stop'], revoked: ['✕', 'stop'], expired: ['◷', 'stop'], ended: ['✓', 'done'],
+};
+const GOAL_MARK = {
+  active: ['▶', 'go'], paused: ['‖', 'hold'], blocked: ['⚠', 'stop'], budget_limited: ['⚠', 'stop'],
+  awaiting_verification: ['?', 'hold'], complete: ['✓', 'done'], unmet: ['✗', 'stop'],
+};
+// A round of the round ledger (ADR 0028 §5, activity.rounds_view): its mark by what it
+// brought, or "interrupted" when it ended for somebody else (your turn, a stop, a shutdown).
+const ROUND_MARK = { new: '●', repeat: '○', none: '–', unknown: '?', interrupted: '↯' };
+const ROUND_INTERRUPTED = new Set(['yielded_user_turn', 'stopped', 'shutdown']);
+export const LOW_SHARE = 0.1; // "running low": a tenth of the TTL or of the budget is left
 
 // W6d: a grant issued with the heartbeat start — how many iterations the scheduler's
 // model-free tick started, the last tick's outcome, the skips by reason (the most frequent
@@ -285,11 +318,38 @@ function withReason(text, reason, known) {
   return r && known.has(r) ? `${text} (${r})` : text;
 }
 
+// kind: 'grant' | 'goal' -> the reason in words, or '' (no reason, or one outside the sets)
+function reasonWords(reason, kind, t) {
+  const r = code(reason);
+  if (!r) return '';
+  if (kind === 'grant') return GRANT_REASONS.has(r) && own(GRANT_REASON_KEY, r) ? t(GRANT_REASON_KEY[r]) : '';
+  if (!GOAL_REASONS.has(r)) return '';
+  if (own(GOAL_REASON_KEY, r)) return t(GOAL_REASON_KEY[r]);
+  // an unmet goal's reason is its grant's end: "<state>_<reason>" (grants/state.py)
+  const m = /^(revoked|expired)_([a-z_]+)$/.exec(r);
+  return m && own(GRANT_REASON_KEY, m[2]) ? `${t(GRANT_STATE_KEY[m[1]])}: ${t(GRANT_REASON_KEY[m[2]])}` : '';
+}
+
+const withWords = (text, words) => (words ? `${text} (${words})` : text);
+
 export function endText(end, t) {
   return codeText(END_KEY, end, t);
 }
 
-// -> null (nothing to draw) | { code, unknown, title, headline, lines, ttl, budget, cue, outcomes, announce }
+// One cell of the rounds strip: { kind, mark, text } — the round's number, what it brought
+// in words, and the counts the server sent (a count that is absent is not drawn).
+export function roundView(row, t) {
+  const i = row && typeof row === 'object' ? row : {};
+  const progress = typeof i.progress === 'string' && CLAIM_PROGRESS.has(i.progress) ? i.progress : 'unknown';
+  const kind = ROUND_INTERRUPTED.has(code(i.end_code)) ? 'interrupted' : progress;
+  const n = int(i.round);
+  const parts = [n === null ? '' : `#${n}`, kind === 'interrupted' ? t('stage.grant_round_interrupted') : t(CLAIM_PROGRESS_KEY[progress])];
+  if (int(i.writes) !== null) parts.push(t('stage.grant_round_writes', { n: i.writes }));
+  if (int(i.files_changed) !== null) parts.push(t('stage.grant_round_files', { n: i.files_changed }));
+  return { kind, mark: ROUND_MARK[kind], text: parts.filter(Boolean).join(' · ') };
+}
+
+// -> null (nothing to draw) | { code, unknown, title, headline, chip, lines, iter, ttl, budget, cue, rounds, ledger, outcomes, announce }
 // now: server seconds (the TTL counts down between reads from the answer's server_time).
 // stale (W5b round 2): ``grant`` is the last readable block, shown because this answer was
 // grant_busy (a change was being written): the same panel, marked as the last read's values
@@ -299,24 +359,35 @@ export function grantView(grant, now, serverTime, t, offline = false, stale = fa
   const title = t('stage.grant_h');
   if (offline || typeof grant !== 'object' || code(grant.error)) {
     const text = t(offline ? 'stage.grant_unknown_offline' : 'stage.grant_unknown');
-    return { code: 'unknown', unknown: true, title, headline: text, lines: [], ttl: null, budget: null, cue: null, outcomes: [], announce: text };
+    return { code: 'unknown', unknown: true, title, headline: text, chip: null, lines: [], iter: null, ttl: null, budget: null, cue: null, rounds: [], ledger: '', outcomes: [], announce: text };
   }
   const id = typeof grant.id === 'string' && /^[0-9a-f]{8}$/.test(grant.id) ? grant.id : null;
   const head = grant.headline && typeof grant.headline === 'object' ? grant.headline : {};
   const state = own(GRANT_STATE_KEY, code(grant.state)) ? grant.state : 'other';
   let headline;
-  if (head.subject === 'goal') headline = withReason(codeText(GOAL_STATE_KEY, head.state, t), head.reason, GOAL_REASONS);
-  else headline = withReason(codeText(GRANT_STATE_KEY, head.state || state, t), head.reason || grant.reason, GRANT_REASONS);
+  let mark;
+  if (head.subject === 'goal') {
+    headline = withWords(codeText(GOAL_STATE_KEY, head.state, t), reasonWords(head.reason, 'goal', t));
+    mark = own(GOAL_MARK, code(head.state)) ? GOAL_MARK[head.state] : null;
+  } else {
+    headline = withWords(codeText(GRANT_STATE_KEY, head.state || state, t), reasonWords(head.reason || grant.reason, 'grant', t));
+    mark = own(GRANT_MARK, code(head.state || state)) ? GRANT_MARK[head.state || state] : null;
+  }
+  const chip = mark ? { mark: mark[0], tone: mark[1] } : { mark: '·', tone: 'muted' };
   const lines = [];
   const goal = codeText(GOAL_STATE_KEY, grant.goal_state, t);
-  if (goal) lines.push(t('stage.grant_goal', { state: withReason(goal, grant.goal_reason, GOAL_REASONS) }));
+  // (the goal's reason is in the headline when the headline is the goal's: said once)
+  if (goal) lines.push(t('stage.grant_goal', { state: head.subject === 'goal' ? goal : withWords(goal, reasonWords(grant.goal_reason, 'goal', t)) }));
   const it = grant.iteration && typeof grant.iteration === 'object' ? grant.iteration : null;
   const run = it ? (own(RUN_KEY, code(it.run)) ? it.run : 'other') : null;
   // while one runs, its own number (the grant counts an iteration at its end)
   const done = run === 'running' && int(it.number) ? it.number : int(grant.iterations);
   const max = int(grant.max_iterations);
+  let iter = null;
   if (max !== null) {
     const count = t('stage.grant_iterations', { n: done === null ? '–' : done, max });
+    // the bar beside the count (which of the lines it is: the DOM draws a meter there)
+    if (max > 0 && done !== null) iter = { line: lines.length, value: Math.min(done, max), max };
     lines.push(run ? `${count} · ${codeText(RUN_KEY, run, t)}` : count);
   }
   if (it && run !== 'running' && code(it.end)) lines.push(t('stage.grant_last_stop', { reason: withReason(endText(it.end, t), it.detail, DETAIL_CODES) }));
@@ -328,14 +399,14 @@ export function grantView(grant, now, serverTime, t, offline = false, stale = fa
   if (live && left0 !== null) {
     const passed = elapsed(serverTime, now) || 0;
     const left = Math.max(0, left0 - passed);
-    ttl = { left, total, text: t('stage.grant_ttl', { time: duration(left, t) }) };
+    ttl = { left, total, text: t('stage.grant_ttl', { time: duration(left, t) }), low: Boolean(total) && left <= total * LOW_SHARE };
   }
   let budget = null;
   const bLeft = int(grant.budget_left);
   const bTotal = int(grant.budget_total);
   if (bLeft !== null && bTotal !== null) {
     const n = (v) => v.toLocaleString('en-US');
-    budget = { left: bLeft, total: bTotal, text: t('stage.grant_budget', { n: n(bLeft), total: n(bTotal) }) };
+    budget = { left: bLeft, total: bTotal, text: t('stage.grant_budget', { n: n(bLeft), total: n(bTotal) }), low: bTotal > 0 && bLeft <= bTotal * LOW_SHARE };
     const tick = it ? int(it.tick_used) : null;
     const per = int(grant.budget_per_tick);
     if (tick !== null && per !== null) budget.tick = t('stage.grant_budget_tick', { n: n(tick), total: n(per) });
@@ -348,10 +419,17 @@ export function grantView(grant, now, serverTime, t, offline = false, stale = fa
   else if (waiting && claim && claim.stale) cue = { kind: 'verify_stale', text: t('stage.grant_cue_verify_stale'), link: t('stage.grant_link'), href: GRANTS_LINK };
   else if (waiting) cue = { kind: 'verify', text: t('stage.grant_cue_verify'), link: t('stage.grant_link'), href: GRANTS_LINK };
   const outcomes = (Array.isArray(grant.outcomes) ? grant.outcomes : []).slice(-5).reverse().map((o) => outcomeView(o, t));
+  // the round ledger's last rounds, oldest first (a strip read left to right); only an answer
+  // that has the key, and a ledger that is not "ok" says so in words
+  const hasRounds = Array.isArray(grant.rounds);
+  const rounds = hasRounds ? grant.rounds.slice(-5).map((r) => roundView(r, t)) : [];
+  const ledger = hasRounds && typeof grant.ledger === 'string' && grant.ledger !== 'ok' ? t('stage.grant_ledger_warn') : '';
   const runText = run === 'running' ? codeText(RUN_KEY, run, t) : '';
   const announce = [headline, runText, cue ? cue.text : '', waiting && claim && claim.amber ? claim.warn : ''].filter(Boolean).join(' · ');
   if (stale) lines.push(t('stage.grant_stale'));
-  return { code: run === 'running' ? 'running' : state, unknown: false, stale, title: id ? `${title} ${id}` : title, headline, lines, ttl, budget, cue, claim, outcomes, announce };
+  // #791: a self-development grant (the flag is a boolean only) is marked in words, with a tooltip
+  const badge = grant.self_development === true ? { text: t('stage.grant_self_dev'), title: t('stage.grant_self_dev_title') } : null;
+  return { code: run === 'running' ? 'running' : state, unknown: false, stale, title: id ? `${title} ${id}` : title, headline, chip, lines, iter, ttl, budget, cue, claim, rounds, ledger, outcomes, announce, badge };
 }
 
 // W6c: the evidence of the agent's completion claim (codes and observed counts only, no
@@ -423,7 +501,7 @@ function outcomeView(o, t) {
   const what = own(END_KEY, code(i.what)) ? i.what : 'other';
   const ms = int(i.duration_ms);
   const n = int(i.number);
-  const tools = (Array.isArray(i.tools) ? i.tools : []).map((x) => (SCOPE_TOOLS.has(code(x)) ? x : 'other')).slice(0, 8);
+  const tools = (Array.isArray(i.tools) ? i.tools : []).map((x) => (SCOPE_TOOLS.has(code(x)) ? x : 'other')).slice(0, 10);
   const parts = [n === null ? '' : `#${n}`, withReason(endText(what, t), i.detail, DETAIL_CODES), ms === null ? '' : duration(Math.round(ms / 1000), t), tools.join(', ')];
   return { time: clock(i.ts), ok: END_OK.has(what) ? true : END_FAILED.has(what) ? false : null, text: parts.filter(Boolean).join(' · ') };
 }
@@ -762,33 +840,73 @@ export function renderGrant(doc, g, t) {
   box.setAttribute('aria-labelledby', 'act-grant-h');
   const h = el(doc, 'h3', 'act-h', g.title);
   h.id = 'act-grant-h';
-  box.append(h, el(doc, 'p', 'act-state', g.headline));
-  for (const line of g.lines) box.append(el(doc, 'p', 'act-line', line));
-  const bar = (cls, label, value, max, text) => {
+  const mark = (text) => {
+    const s = el(doc, 'span', 'act-ico', text);
+    s.setAttribute('aria-hidden', 'true'); // the words beside it say the same
+    return s;
+  };
+  const meter = (label, value, max) => {
+    const m = el(doc, 'meter', 'act-meter');
+    m.setAttribute('min', '0');
+    m.setAttribute('max', String(max));
+    m.setAttribute('value', String(Math.min(value, max)));
+    m.setAttribute('aria-label', label);
+    return m;
+  };
+  // the headline is the state chip: a mark and the words (the tone only adds the colour)
+  const head = el(doc, 'p', 'act-state');
+  if (g.chip) {
+    head.dataset.tone = g.chip.tone;
+    head.append(mark(g.chip.mark), doc.createTextNode(' '));
+  }
+  head.append(doc.createTextNode(g.headline));
+  box.append(h);
+  if (g.badge) {
+    const badge = el(doc, 'p', 'act-line act-badge', g.badge.text);
+    badge.setAttribute('title', g.badge.title);
+    box.append(badge);
+  }
+  box.append(head);
+  g.lines.forEach((line, n) => {
+    const p = el(doc, 'p', 'act-line');
+    if (g.iter && g.iter.line === n) p.append(meter(t('stage.grant_iter_label'), g.iter.value, g.iter.max), doc.createTextNode(' '));
+    p.append(doc.createTextNode(line));
+    box.append(p);
+  });
+  const bar = (cls, label, value, max, text, low) => {
     const p = el(doc, 'p', `act-line ${cls}`);
-    if (max) {
-      const m = el(doc, 'meter', 'act-meter');
-      m.setAttribute('min', '0');
-      m.setAttribute('max', String(max));
-      m.setAttribute('value', String(Math.min(value, max)));
-      m.setAttribute('aria-label', label);
-      p.append(m, doc.createTextNode(' '));
-    }
+    if (max) p.append(meter(label, value, max), doc.createTextNode(' '));
     p.append(doc.createTextNode(text));
+    if (low) {
+      p.dataset.low = '1';
+      p.append(doc.createTextNode(' '), el(doc, 'span', 'act-low', t('stage.grant_low')));
+    }
     return p;
   };
-  if (g.ttl) box.append(bar('act-ttl', t('stage.grant_ttl_label'), g.ttl.left, g.ttl.total, g.ttl.text));
+  if (g.ttl) box.append(bar('act-ttl', t('stage.grant_ttl_label'), g.ttl.left, g.ttl.total, g.ttl.text, g.ttl.low));
   if (g.budget) {
-    box.append(bar('act-budget', t('stage.grant_budget_label'), g.budget.left, g.budget.total, g.budget.text));
+    box.append(bar('act-budget', t('stage.grant_budget_label'), g.budget.left, g.budget.total, g.budget.text, g.budget.low));
     if (g.budget.tick) box.append(el(doc, 'p', 'act-line act-muted', g.budget.tick));
   }
   if (g.cue) {
-    const cue = el(doc, 'p', 'act-cue', g.cue.text);
+    const cue = el(doc, 'p', 'act-cue');
     cue.dataset.cue = g.cue.kind;
-    cue.append(doc.createTextNode(' '), link(doc, g.cue.link, g.cue.href));
+    cue.append(mark('!'), doc.createTextNode(` ${g.cue.text} `), link(doc, g.cue.link, g.cue.href));
     box.append(cue);
   }
   if (g.claim) box.append(renderClaim(doc, g.claim));
+  if (g.ledger) box.append(el(doc, 'p', 'act-line act-ledger', g.ledger));
+  if (g.rounds.length) {
+    const ol = el(doc, 'ol', 'act-rounds');
+    ol.setAttribute('aria-label', t('stage.grant_rounds'));
+    for (const r of g.rounds) {
+      const li = el(doc, 'li', 'act-round');
+      li.dataset.kind = r.kind;
+      li.append(mark(r.mark), doc.createTextNode(` ${r.text}`));
+      ol.append(li);
+    }
+    box.append(el(doc, 'p', 'act-line act-muted', t('stage.grant_rounds')), ol);
+  }
   if (g.outcomes.length) {
     const ol = el(doc, 'ol', 'act-list act-outcomes');
     ol.setAttribute('aria-label', t('stage.grant_outcomes'));
@@ -804,6 +922,12 @@ export function renderGrant(doc, g, t) {
   if (!g.unknown && !(g.cue && g.cue.href === GRANTS_LINK)) {
     const p = el(doc, 'p', 'act-line act-muted');
     p.append(link(doc, t('stage.grant_link'), GRANTS_LINK));
+    box.append(p);
+  }
+  // #809: the approvals page (its queue and history) is one press away, as the cue's link is
+  if (!g.unknown && !(g.cue && g.cue.href === APPROVALS_LINK)) {
+    const p = el(doc, 'p', 'act-line act-muted');
+    p.append(link(doc, t('stage.grant_cue_approval_link'), APPROVALS_LINK));
     box.append(p);
   }
   return box;

@@ -117,6 +117,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     if len(args.seeds) < 2:
         _err("note: the pre-registration requires >= 2 seeds for reported runs")
     standin: dict[str, Any] = {}
+    repeated_failure = args.repeated_failure == "on"
     if args.runner == "scripted":
         standin = {"concede_p": args.concede_p}
         runs, timing = run_scripted(
@@ -126,6 +127,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             classifier=args.classifier,
             config=config,
             concede_p=args.concede_p,
+            repeated_failure=repeated_failure,
         )
     else:
         from stiracore.providers import ModelSpec, create_model
@@ -147,10 +149,15 @@ def cmd_run(args: argparse.Namespace) -> int:
                 pricing=pricing_from(args.price_in, args.price_out),
                 classifier=args.classifier,
                 config=config,
+                repeated_failure=repeated_failure,
             )
         except BudgetError as exc:
             _err(f"error: {exc}")
             return EXIT_USAGE
+    if repeated_failure:
+        # Recorded only when on, so a default run's result keeps its shape. A diff of an
+        # on run against an off run names this setting in its warnings (#151).
+        standin["repeated_failure"] = "on"
     result = build_result(
         runs=runs,
         timing=timing,
@@ -262,6 +269,12 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--bootstrap-seed", type=int, default=0)
     run.add_argument("--concede-p", type=float, default=DEFAULT_CONCEDE_P)
     run.add_argument("--critical-action", choices=("readonly", "halt"), default="readonly")
+    run.add_argument(
+        "--repeated-failure",
+        choices=("off", "on"),
+        default="off",
+        help="repeated-failure indicator and its notice (#151); compare an on run with an off run",
+    )
     run.add_argument("--print-report", action="store_true")
     llm = run.add_argument_group("nxp runner (calls a real model; all required)")
     llm.add_argument("--allow-llm", action="store_true")

@@ -51,6 +51,8 @@ WHERE = {
 # The tool-specific place, shown on the tool's line (short).
 WHERE_FOR = {
     ("page_check", DEPENDENCY_MISSING): "Chrome/Chromium or STIRA_BROWSER_PATH",
+    ("page_look", DEPENDENCY_MISSING): "Chrome/Chromium or STIRA_BROWSER_PATH",
+    ("page_review", DEPENDENCY_MISSING): "Chrome/Chromium or STIRA_BROWSER_PATH",
     ("run_checks", NOT_CONFIGURED): 'gateway-config.json "run_checks": {"phase": 1}',
     ("memory_rate", NOT_CONFIGURED): "agent-config.json memory_autonomy",
     ("web_search", NOT_CONFIGURED): "STIRA_WEB_SEARCH_ENDPOINT",
@@ -60,6 +62,8 @@ WHERE_FOR = {
 PURPOSE = {
     "page_check": "open your own page in a disposable browser and check it (console errors, "
     "assertions, a screenshot)",
+    "page_look": "open a workspace page file in a disposable browser and check it (no localhost)",
+    "page_review": "send one run's screenshots to the reviewer model for remarks on how they look",
     "propose_procedure": "propose a procedure for procedural memory (a person reviews it)",
     "memory_rate": "rate how important this turn is to remember",
     "run_checks": "run the project's tests and linters on a throwaway copy of the workspace",

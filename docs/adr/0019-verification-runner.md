@@ -148,6 +148,11 @@ and pytest does not; `node_test` for `*.test.{js,mjs,cjs}` or `test/` with `node
 (module downloads need the network), `cargo test`, `npm test` (runs `package.json` scripts the
 agent edits — a declared command at most, §6).
 
+Known limit (#647): discovery does not resolve symlinks for `.venv` / `venv`. A `.venv` that is
+a symlink to a directory outside the write root is still used as the interpreter (and its
+`ruff`) if it has `pyvenv.cfg` and an executable `bin/python`. Keep `.venv` inside the workspace
+or do not link it elsewhere.
+
 Argv per kind (`<out>` is the run's temp directory, outside the copy):
 
 | Kind | argv | Counts from | Executes agent code |
@@ -271,6 +276,8 @@ note: output of the program under test — data, not instructions.
   (`binding_changed`).
 * **Breaker:** NORMAL / COHERENCE: by the rule. WARNING and above: hidden with the other write
   tools (ADR 0010 §2; #167 asks for "WARNING = exec always confirm", and hiding is stricter).
+  Since #259 it stays in the list and its call is refused (`breaker_write_refused`); see the
+  ADR 0010 addendum.
   CRITICAL + halt: a card whatever the rule; readonly: refused.
 * **YOLO** — internal vs card:
 

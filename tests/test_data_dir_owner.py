@@ -309,7 +309,43 @@ def test_lifecycle_bounds_a_hanging_step_and_the_whole_run():
     elapsed = time.monotonic() - started
     hang.set()
     assert result == {"a": "timed out", "b": "timed out", "c": "skipped (deadline)"}
-    assert elapsed < 0.6 + 0.25, elapsed  # the joins never add up past the total
+    # Real threads and the real clock: only that the run is bounded (the steps hang for
+    # 30 s). A busy host delays the joins (#679: 0.91 s against 0.85 s), so the exact sum
+    # is checked on a clock the test owns, in the next test.
+    assert elapsed < 0.6 + 5, elapsed
+
+
+def test_the_joins_of_hanging_steps_never_add_up_past_the_total(monkeypatch):
+    """#679 / #781: the bound itself, without the wall clock. Measured: the timeouts the
+    run passes to ``join`` (a hanging step uses all of its join), on an injected clock."""
+    import threading
+
+    from stiracore.observability.lifecycle import ServerLifecycle
+
+    clock, joins = [0.0], []
+    real_join = threading.Thread.join
+
+    def join(self, timeout=None):
+        if self.name != "stira-shutdown-step":
+            return real_join(self, timeout)
+        joins.append(timeout)
+        clock[0] += timeout  # the step hangs: the whole join passes
+        return None
+
+    monkeypatch.setattr(threading.Thread, "join", join)
+    hang = threading.Event()
+    # Binary fractions: the sums below are exact.
+    life = ServerLifecycle(step_timeout=0.375, total_timeout=0.5, now_fn=lambda: clock[0])
+    life.add("a", lambda t: hang.wait(30) and "stopped", order=1)
+    life.add("b", lambda t: hang.wait(30) and "stopped", order=2)
+    life.add("c", lambda t: "stopped", order=3)
+    try:
+        result = life.shutdown()
+    finally:
+        hang.set()
+    assert result == {"a": "timed out", "b": "timed out", "c": "skipped (deadline)"}
+    assert joins == [0.375, 0.125]  # the second join is cut to what is left of the total
+    assert sum(joins) <= 0.5 and clock[0] == 0.5
 
 
 def test_a_step_whose_thread_cannot_start_is_reported_not_run_inline(monkeypatch):

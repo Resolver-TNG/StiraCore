@@ -83,7 +83,14 @@ async def test_message_offloaded_and_embed(bot):
     bot.agent.assert_called_once_with("hello")
     assert msg.channel.send.call_args_list[0].args == ("reply",)
     embed = msg.channel.send.call_args_list[1].kwargs["embed"]
-    assert len(embed.fields) == 6
+    # #137: five fields; vigilance is in the status but not in the embed.
+    assert [field["name"] for field in embed.fields] == [
+        "trust",
+        "curiosity",
+        "attachment",
+        "stability",
+        "satisfaction",
+    ]
     assert embed.color == discord_bot.COLORS["normal"]
     assert all("█" in field["value"] and "░" in field["value"] for field in embed.fields)
     assert bot.client.options["intents"].message_content

@@ -65,6 +65,13 @@ export const GADGET_STEPS = [
     say: { ja: '覚えておく。付箋を貼っておくね。', en: 'Noting this down. A sticky note on the shelf.' },
   },
   {
+    key: 'f',
+    id: 'memory-read',
+    label: { ja: '記憶の読み込み（3冊同時）', en: 'Memory reads (three at once)' },
+    events: [N(BASE), T, start('r1', 'memory', 'memory_search', { layer: 'episodic' }), start('r2', 'file', 'file_read'), start('r3', 'memory', 'memory_read', { layer: 'semantic' })],
+    say: { ja: '三つ同時に引く。ファイルが三冊、棚から出てくる。', en: 'Three reads at once. Three binders come off the shelf.' },
+  },
+  {
     key: 'k',
     id: 'forget',
     label: { ja: '忘却（箱に詰めて棚の奥へ）', en: 'Forgetting (boxed, restorable)' },

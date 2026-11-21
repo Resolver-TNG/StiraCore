@@ -1,7 +1,9 @@
 # ADR 0011: Bounded agent self-scheduling and grant-scoped autonomous goal loops
 
 **Path:** `docs/adr/0011-agent-self-scheduling.md`
-**Status:** Proposed (revision 5, after design review rounds 1–4; needs an operator
+**Status:** Accepted for stage C as implemented through W6d (operator, 2026-11-15); stages A and
+B, W7 and W8 are not built and are **not covered** by this acceptance. History: Proposed
+(revision 5, after design review rounds 1–4; needs an operator
 decision before any implementation; open points are collected at the end). Operator
 decisions of 2026-10-16 are recorded in "Operator decisions" at the end; they do not
 change the text above.
@@ -11,8 +13,8 @@ are not built; stage C exists as an **alpha, off by default**:
 one iteration per person's press (W5) or, opt-in twice, at most one per scheduler wake
 started by the model-free `grant_tick` (W6d), with progress by outcome (W6a), pre-emption by
 every turn holder (W6b) and claim evidence (W6c); the person verifies every completion.
-The **Status** above stays Proposed (decision 2026-10-26: kept Proposed until the operator
-accepts the ADR; nothing above records that acceptance). Part
+The operator accepted the implemented scope (stage C, W1–W6d) on 2026-11-15 (it had been kept
+Proposed since 2026-10-26 until that acceptance); stages A and B, W7 and W8 each need their own decision. Part
 of the common foundation (§13 item 2) exists and is **shared**, see
 [authority-service](../authority-service.md). Component map:
 * *shared, process-wide* (`src/stiracore/authority/`): one incarnation (also the
@@ -44,7 +46,9 @@ of the common foundation (§13 item 2) exists and is **shared**, see
   `autonomy.stage_c`, default off; [grants](../grants.md)): the grant + goal record (§2 /
   §8 fields; v1 caps TTL default 2 h / cap 6 h, `max_iterations` 10 / 20, verifier `user`
   only; `run_checks` in the scope only with `autonomy.run_checks_unattended` **and** a
-  verified `os_sandbox`), the §8 / §11 goal × grant state machine as pure functions, the
+  verified `os_sandbox`; `page_look` and the narrowed `view_image` in the scope only with
+  `autonomy.page_look_unattended` (default off) **and** the axis check of ADR 0015 rev 6
+  passing at issue, at every round boundary and at every call (A9 in a grant: `file_read` in the scope with its live rule Always) — "S5 as built", #784), the §8 / §11 goal × grant state machine as pure functions, the
   `grants.json` store (`0600`, chained; the goal text only there; never persisted as
   active, so every start revokes: `revoked(restart)`), the human control plane (issue:
   typed confirmation + a host operation of `yolo/host_ops.py`; revoke / pause / resume /
@@ -566,8 +570,11 @@ check first; a second consecutive failure revokes the grant (`revoked(identity)`
   #292 / #293.
 * **Stops (decided, not open):** breaker `WARNING` / `COHERENCE` →
   `halted(breaker_warning)`; `CRITICAL` → `halted(breaker_critical)` with in-flight work
-  cancelled; `stability`, `trust` or `vigilance` beyond the **existing breaker
-  thresholds** → `halted(emotional)`. No new formula; `bcScore` is not used. Every halt
+  cancelled; `stability` beyond the **existing breaker thresholds** →
+  `halted(emotional)`. The Breaker reads only `stability` and `bc_score` (the
+  `COHERENCE` level above); it has no `trust` or `vigilance` threshold. `vigilance` is
+  not connected to the Breaker (#137, decided 2026-11-16). No new formula; `bcScore` is
+  not used for `halted(emotional)`. Every halt
   advances the authority epoch.
 * **Every halt — breaker (including WARNING) and emotional — is released only by an
   explicit resume of the authenticated user** in the dashboard with typed confirmation.
@@ -889,3 +896,52 @@ the one process-wide service in `src/stiracore/authority/`, injected into the YO
   NORMAL (ADR 0012 Open (1), as implemented; a fourth pause within an hour ends it). This
   does **not** apply to grants: §9's "no automatic resume" stays for goal grants and their
   loops.
+
+
+## Addendum (#683): `done_when` — completion checks as a gate before the person
+
+**Decision** (commander, 2026-11-16, option A: approved, kept simple). A grant may declare
+`done_when`: a closed list of `run_checks` kinds (`pytest`, `unittest`, `node_test`, `ruff`,
+`compileall`), optional, with no tuning knob (no threshold, weight, retry count, path or
+text). The verifier gains a stage: `verifier: "checks"` (exactly together with `done_when`)
+means **checks → user** — the harness's deterministic checks first, then the person, who
+still decides every completion (§8: nothing becomes `complete` automatically). Without
+`done_when` the grant is `verifier: "user"` and nothing changes (store, views, ledger). An
+independent model reviewer is not part of this (ADR 0006 / this ADR's boundary: it would be
+a separate decision).
+
+**Design.**
+
+* *Issue* (`grants/schema.py`): `done_when` is checked strictly (a non-empty list of distinct
+  known kinds, stored sorted) and needs `run_checks` in `scope.tools`, so the grant can run
+  checks only where its scope already allowed them — no new tool, write target or scope.
+  The issue body is bound to the host-confirmed operation's digest and its summary names
+  every kind (`changes: done_when:<kind>`): the model cannot add or widen a declaration.
+  The record carries the key only when declared; the reader refuses a key that does not
+  match the verifier, the scope or the sorted form.
+* *Claim* (`grants/executor.py`): at `goal_report(claim_complete)` the executor reads the
+  declaration from the grant record (never from the model) and runs the kinds itself in one
+  `run_checks` call on the subtree — the same scope checks as a model's call (setting,
+  verified containment, subtree; a failure stops the iteration as it would stop that call)
+  and the same runner and isolation. `progress.done_when_verdict` is `met` only when the
+  result is a `pass` (fail closed, `claim_checks`) and every declared kind has a passed
+  row. `met` → the claim proceeds unchanged. Otherwise the claim is refused **without
+  stopping the iteration**: the model receives `not_proven` and the unmet kinds; the round
+  ledger's row carries `done_when: {result, unmet}` (codes only, an optional key). A
+  `run_checks` whose live rule is not Always (Ask would need a person's card per call, which
+  the claim path does not show; Never), or that left the round's tools, runs nothing and
+  proves nothing.
+
+**Risks and limits.** The run happens under the claim's report permit, authorised by the
+person's issue-time declaration and only while `run_checks`' live rule is Always (no rule is
+bypassed: under Ask a declared grant's claims stay `not_proven`). Checks the person did not
+declare are not
+considered. A model may claim repeatedly; a refused claim runs the checks once more only
+after an editor write (with none since, the last refusal read as a failure is returned; a
+runner error or an unreadable result runs again), bounded by the
+iteration's wall time, the TTL and `run_checks`' own call limit. At most four kinds (one
+`run_checks` call's limit). After the run and before the claim is recorded the
+iteration's stops are read again (a stop meanwhile records nothing), and an editor write of
+the same turn that overlapped the run makes it `not_proven`. A store or
+ledger with the new key is refused by an older build (as with `report_files`). The
+dashboard's issue form has no field yet (API only).

@@ -55,7 +55,6 @@
         <div id="turn-neural" class="sparkline-grid">
           <div class="spark-cell"><div class="spark-label"><span data-i18n="chat.trust">信頼</span><span class="spark-val" id="sv-trust">—</span></div><div id="spark-trust"></div></div>
           <div class="spark-cell"><div class="spark-label"><span data-i18n="chat.curiosity">好奇心</span><span class="spark-val" id="sv-curiosity">—</span></div><div id="spark-curiosity"></div></div>
-          <div class="spark-cell"><div class="spark-label"><span data-i18n="chat.vigilance">警戒</span><span class="spark-val" id="sv-vigilance">—</span></div><div id="spark-vigilance"></div></div>
           <div class="spark-cell"><div class="spark-label"><span data-i18n="chat.attachment">愛着</span><span class="spark-val" id="sv-attachment">—</span></div><div id="spark-attachment"></div></div>
           <div class="spark-cell"><div class="spark-label"><span data-i18n="chat.stability">安定</span><span class="spark-val" id="sv-stability">—</span></div><div id="spark-stability"></div></div>
           <div class="spark-cell"><div class="spark-label"><span data-i18n="chat.satisfaction">満足</span><span class="spark-val" id="sv-satisfaction">—</span></div><div id="spark-satisfaction"></div></div>
@@ -97,6 +96,8 @@
         <button id="new-session" type="button" class="new-session" disabled aria-describedby="new-session-reason"><span data-i18n="chat.new_button">新しい会話</span></button>
         <span id="new-session-reason" class="sr-only"></span>
       </div>
+      {# #746: context management asked for but refused (chat_core.contextRefusedText) #}
+      <p id="ctx-refused" class="ctx-refused" role="status" hidden></p>
       <div id="unsettled-send" class="unsettled-send" role="alert" hidden>
         <p><span data-i18n="chat.unsettled_notice">前の送信の結果が不明です。同じ内容を再送するか、破棄してください。</span></p>
         <p id="unsettled-preview" class="unsettled-preview"></p>

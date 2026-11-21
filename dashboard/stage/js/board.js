@@ -204,6 +204,8 @@ export function createBoard(ctx) {
         return action;
       }
       if (action === 'keep') return action;
+      // #623: the pin belongs to the content; an explicit switch to another one clears it
+      if (explicit && action !== 'update') setPinned(false);
       const same = action === 'update';
       setMode('reply');
       st.current = entry;
@@ -220,6 +222,7 @@ export function createBoard(ctx) {
       const open = st.target === 1;
       if (open && st.pinned && st.mode === 'reply' && !explicit) return 'held';
       const same = open && st.mode === 'activity';
+      if (explicit && st.mode !== 'activity') setPinned(false); // #623: see show()
       setMode('activity');
       st.current = { key: ACTIVITY_KEY, text: '' };
       el.title.textContent = t('stage.act_title');

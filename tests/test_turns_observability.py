@@ -676,7 +676,11 @@ FOREIGN = (
     {"Origin": "http://[::1"},
     {"Sec-Fetch-Site": "cross-site"},
 )
-OBSERVABILITY_READS = ("/api/observability/snapshot", "/api/observability/events")
+OBSERVABILITY_READS = (
+    "/api/observability/snapshot",
+    "/api/observability/events",
+    "/api/observability/usage",
+)
 
 
 @pytest.mark.parametrize("path", OBSERVABILITY_READS)
@@ -726,6 +730,7 @@ def test_no_route_is_registered_twice_in_stira(stira):
     assert owners == {
         "/api/observability/events": "observability.stream_events",
         "/api/observability/snapshot": "observability.snapshot",
+        "/api/observability/usage": "observability.usage",  # #195: the settings usage card
     }
 
 

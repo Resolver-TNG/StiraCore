@@ -57,6 +57,10 @@ EXPECTED = {
     "lsp_hover": (N, K, K),
     "page_check": (N, K, K),  # ADR 0015 §9 (registered only when a browser is found)
     "run_checks": (N, K, K),  # ADR 0019 (registered only when gateway run_checks is on)
+    # ADR 0015 rev 6 (S3): with page_check's browser; no profile writes Always.
+    "page_look": (N, K, K),
+    # ADR 0015 rev 6 (S6): a send; registered only while task visual_review is configured.
+    "page_review": (N, K, K),
     "diagram": (N, N, N),
     "web_fetch": (N, N, K),
     "web_search": (N, N, K),
@@ -82,6 +86,15 @@ def test_each_profile_is_pinned_as_a_tool_by_rule_table():
     for index, profile in enumerate(tool_profiles.PROFILE_IDS):
         table = dict(tool_profiles.PROFILE_TABLES[profile])
         assert table == {name: rules[index] for name, rules in EXPECTED.items()}, profile
+
+
+def test_page_look_profiles_never_write_always():
+    """ADR 0015 rev 6 (S3): Never / Ask / Ask, like page_check; no profile writes Always."""
+    rows = tuple(tool_profiles.PROFILE_TABLES[p]["page_look"] for p in tool_profiles.PROFILE_IDS)
+    assert rows == ("never", "ask", "ask")
+    assert rows == tuple(
+        tool_profiles.PROFILE_TABLES[p]["page_check"] for p in tool_profiles.PROFILE_IDS
+    )
 
 
 def test_the_table_covers_every_built_in_tool_and_never_grants_a_write_always():
@@ -206,7 +219,7 @@ def test_the_hub_state_shows_each_profile_before_it_is_applied(tmp_path):
     # exposed, so "Include exec" adds nothing.
     # page_check (when a browser is found) is Ask but stays a person's card (ADR 0015).
     # propose_procedure (#463) is Ask in dev and also a person's card in every window.
-    person = {"shell", "page_check", "propose_procedure", "run_checks"}
+    person = {"shell", "page_check", "page_look", "page_review", "propose_procedure", "run_checks"}
     local = len([n for n in names if EXPECTED[n][1] == K and n not in person])
     assert local >= 5
     assert _profile(state, "dev")["yolo"] == {"internal": local, "external": local, "exec": local}

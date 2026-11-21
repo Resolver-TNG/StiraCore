@@ -123,6 +123,7 @@
     breaker_stricter: "approvals.resolution_breaker_stricter",
     job_restart: "approvals.resolution_job_restart",
     grant_stopped: "approvals.resolution_grant_stopped",
+    turn_auto_stopped: "approvals.resolution_turn_auto_stopped",
   };
   const RESOLUTION_TEXT = {
     expired: ["approval expired", "expired"],
@@ -134,6 +135,7 @@
     breaker_stricter: ["circuit breaker stricter than at request time"],
     job_restart: ["job runs do not survive a restart"],
     grant_stopped: ["the grant iteration stopped"],
+    turn_auto_stopped: ["the turn was stopped automatically"],
   };
   function resolutionText(item) {
     const sentence = typeof item.resolution_reason === "string" ? item.resolution_reason : null;

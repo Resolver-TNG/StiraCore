@@ -4,7 +4,8 @@ The child is an ``NXPSubagent`` (``create_nxp_subagent``): its own ``CheckpointH
 ``IdentityGuard``, engine and breaker, the parent's live rule reader, the parent's write
 floor and roots, and only tools the parent may use **without asking right now** — the
 running parent turn's (breaker-filtered) tools whose rule is Always, never an exec-class
-tool, ``delegate`` itself, ``subagent``, ``handoff_to_agent`` or ``handoff_to_user``.
+tool, ``delegate`` itself, ``subagent``, ``handoff_to_agent``, ``handoff_to_user`` or
+``run_checks`` (#768: refused by name even when its conditional Always is effective).
 
 Limits (ADR 0016 §3, values from :class:`DelegationSettings`): depth 1 (a child cannot
 delegate: not given, blocked, and refused when called from anything but the parent's
@@ -69,8 +70,23 @@ _DISTINCT_MAX = 32
 _OTHER_NAMES = "(other names)"
 _MONITOR_SEC = 0.2
 # Never given to a child, whatever the parent's rules say (ADR 0016 §2, §9).
+# ``run_checks`` (#768): its Always is conditional (``tool_policy.CONDITIONAL_ALWAYS_TOOLS``)
+# and reads Always on a verified ``os_sandbox`` host; a child is refused it by name.
+# ``page_look`` (ADR 0015 rev 6, S3): by name too, before S4 gives it a conditional Always.
+# ``page_review`` (S6): by name too — a child never sends screenshots to the reviewer.
 NOT_FOR_CHILDREN = (
-    frozenset({DELEGATE_TOOL_NAME, "subagent", "handoff_to_agent", "handoff_to_user"}) | EXEC_TOOLS
+    frozenset(
+        {
+            DELEGATE_TOOL_NAME,
+            "subagent",
+            "handoff_to_agent",
+            "handoff_to_user",
+            "run_checks",
+            "page_look",
+            "page_review",
+        }
+    )
+    | EXEC_TOOLS
 )
 _PATH_ARGUMENTS = {"file_write": "path", "editor": "path"}
 

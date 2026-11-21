@@ -382,7 +382,8 @@ def test_get_tools_never_hands_out_the_unbound_copy():
         unbound_propose_procedure(key="k", body="b", rationale="r")
 
 
-def test_the_server_offers_one_bound_tool_and_hides_it_at_warning(env):
+def test_the_server_offers_one_bound_tool_and_keeps_it_at_warning(env):
+    """#259: the list is the same at WARNING; the call is refused (breaker_write_refused)."""
     from dashboard.stira_server import _stira_tools
 
     bound = (*create_memory_tools(env.store), env.tool)
@@ -390,4 +391,4 @@ def test_the_server_offers_one_bound_tool_and_hides_it_at_warning(env):
     normal = [getattr(t, "tool_name", None) for t in _stira_tools(bound, names, "normal")]
     assert normal.count(PROPOSE_PROCEDURE_TOOL_NAME) == 1
     warning = [getattr(t, "tool_name", None) for t in _stira_tools(bound, names, "warning")]
-    assert PROPOSE_PROCEDURE_TOOL_NAME not in warning
+    assert warning == normal

@@ -23,6 +23,8 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from stiracore.core.repeated_failure import clean_summary as clean_repeated_failure
+
 from .hooks import TOOL_DENY_CODES, TOOL_ERROR_CLASSES, ObservabilityEvent
 from .masking import MASK
 from .memory_injected import validate_memory_injected
@@ -89,7 +91,18 @@ DROP_NO_ACTIVE_TURN = "no_active_turn"  # emit() while no turn is active
 DROP_INVALID_EVENT = "invalid_event"  # the contract refused it (a ValueError)
 DROP_RECORD_FAILED = "record_failed"  # the store failed for any other reason
 DROP_NO_CALL_ID = "no_call_id"  # UIEventSink: a model event without a usable call id
-DROP_REASONS = (DROP_NO_ACTIVE_TURN, DROP_INVALID_EVENT, DROP_RECORD_FAILED, DROP_NO_CALL_ID)
+DROP_SINK_FAILED = "sink_failed"  # UIEventSink raised while it converted an event
+# Not an event: a tool payload (#188) the store failed to keep. Its event is written
+# without ``input_stored`` / ``output_stored``.
+DROP_PAYLOAD_FAILED = "payload_failed"
+DROP_REASONS = (
+    DROP_NO_ACTIVE_TURN,
+    DROP_INVALID_EVENT,
+    DROP_RECORD_FAILED,
+    DROP_NO_CALL_ID,
+    DROP_SINK_FAILED,
+    DROP_PAYLOAD_FAILED,
+)
 PREVIEW_LIMIT = 2000
 PREVIEW_LINES = 200
 # Tool payload detail (#188): retained masked text, served in pages of <= 200 lines / 100 KiB.
@@ -554,6 +567,10 @@ class TurnEventStore:
                         item["started_at"] = row["ts"]
                     elif row["type"] == "turn.summary":
                         item["summary"] = {key: data.get(key) for key in _SUMMARY_KEYS}
+                        # #151: present only when the indicator was on for that turn.
+                        repeated = clean_repeated_failure(data.get("repeated_failure"))
+                        if repeated is not None:
+                            item["summary"]["repeated_failure"] = repeated
                     elif row["type"] == "turn.completed":
                         item["completed"] = True
                         item["error"] = data.get("error")
@@ -620,9 +637,9 @@ class TurnEventRecorder:
     An event that cannot be written is dropped (``emit`` returns None, a warning at most)
     and counted by reason (#705, ``drop_counts``): plain integers of this process, zero
     again after a restart. ``no_active_turn`` also counts events that arrive outside any
-    chat turn, which are never written. Not counted: a failing subscriber (the event is
-    in the store) and a tool payload that was not stored (its event then has no
-    ``input_stored`` / ``output_stored``).
+    chat turn, which are never written. ``payload_failed`` is a tool payload the store
+    failed to keep (its event is still written, without ``input_stored`` /
+    ``output_stored``). Not counted: a failing subscriber (the event is in the store).
     """
 
     def __init__(
@@ -656,9 +673,21 @@ class TurnEventRecorder:
         try:
             self.store.put_payload(turn_id, tool_use_id, kind, captured)
         except Exception:  # noqa: BLE001 - never break a turn on telemetry
+            self._count_drop(DROP_PAYLOAD_FAILED)
             logger.warning("UI tool payload dropped")
             return False
         return True
+
+    def append_to(self, turn_id: str, event_type: str, data: Mapping | None = None) -> dict | None:
+        """Write an event of a named turn (one that may have ended: the answer to its
+        progress report). As ``emit``: None and a count when it cannot be written. The
+        subscribers are not called."""
+        try:
+            return self.store.append(turn_id, event_type, data or {})
+        except Exception as error:  # noqa: BLE001 - the caller decides what still holds
+            refused = isinstance(error, ValueError)
+            self._count_drop(DROP_INVALID_EVENT if refused else DROP_RECORD_FAILED)
+            return None
 
     def _count_drop(self, reason: str) -> None:
         with self._lock:
@@ -757,6 +786,14 @@ class UIEventSink:
         return fields
 
     def emit(self, event: ObservabilityEvent) -> None:
+        try:
+            self._emit(event)
+        except Exception:
+            # The caller (``DashboardHookProvider._emit``) logs and drops, as before.
+            self.recorder._count_drop(DROP_SINK_FAILED)
+            raise
+
+    def _emit(self, event: ObservabilityEvent) -> None:
         if event.event_type in ("model.started", "model.completed"):
             self._model_event(event)
         elif event.event_type == "tool.started":

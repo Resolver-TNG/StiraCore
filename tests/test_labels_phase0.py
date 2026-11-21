@@ -102,3 +102,18 @@ def test_local_writes_are_not_egress():
     tainted = labels.context_label([_use("web_fetch")], origin="operator")
     for name in ("file_write", "editor", "memory_write", "journal", "file_read"):
         assert labels.flow_would_hold(name, {"path": "x"}, tainted) is None
+
+
+def test_page_review_is_counted_as_a_send():
+    """ADR 0015 rev 6 S6: ``page_review`` sends screenshots to the reviewer's provider. It
+    is a person's tool (never the external class), and the observer counts it as a send."""
+    clean = labels.context_label([], origin="operator")
+    tainted = labels.context_label([_use("page_look")], origin="operator")
+    assert tainted.trust == "untrusted"
+    assert labels.egress_tool("page_review") and labels.is_send("page_review", {"run": "r"})
+    assert labels.flow_would_hold("page_review", {"run": "r"}, clean) is None
+    assert labels.flow_would_hold("page_review", {"run": "r"}, tainted) == "untrusted_send"
+    assert labels.tool_source("page_review") == "program"  # its result stays untrusted
+    for local in ("page_check", "page_look"):  # these two send nothing out
+        assert not labels.egress_tool(local)
+        assert labels.flow_would_hold(local, {"target": "x"}, tainted) is None

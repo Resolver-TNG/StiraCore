@@ -5,10 +5,41 @@ import { ENUM_CHANNELS } from './catalog.js';
 
 const smooth = (x) => x * x * (3 - 2 * x);
 
+// Lattice value in [-1, 1) for an integer position and a seed (integer hash, no state).
+function lattice(i, seed) {
+  let h = (Math.imul(i | 0, 0x9e3779b1) ^ Math.imul((seed | 0) + 1, 0x85ebca6b)) >>> 0;
+  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
+  h = Math.imul(h ^ (h >>> 12), 0x297a2d39);
+  return ((h ^ (h >>> 15)) >>> 0) / 2147483648 - 1;
+}
+
+// Smooth 1-D value noise in [-1, 1] (#669): a pure function of x and the seed, so it never
+// repeats and never needs a clock of its own. Each octave is twice as fast and half as strong,
+// on its own lattice (shifted, so the octaves do not turn at the same moments).
+export function valueNoise(x, seed = 0, octaves = 1) {
+  let sum = 0;
+  let norm = 0;
+  let gain = 1;
+  let freq = 1;
+  for (let o = 0; o < octaves; o += 1) {
+    const p = x * freq + o * 0.381966;
+    const i = Math.floor(p);
+    const a = lattice(i, seed + o * 7919);
+    const b = lattice(i + 1, seed + o * 7919);
+    sum += gain * (a + (b - a) * smooth(p - i));
+    norm += gain;
+    gain *= 0.5;
+    freq *= 2;
+  }
+  return sum / norm;
+}
+
 export function evalCurve(c, t) {
   switch (c.fn) {
     case 'const':
       return c.value;
+    case 'noise':
+      return c.offset + c.amp * valueNoise(t / c.scale, c.seed, c.octaves);
     case 'sine':
       return c.offset + c.amp * Math.sin(2 * Math.PI * (t / c.period + c.phase));
     case 'pulse':
@@ -111,7 +142,10 @@ export class Animator {
     this.lastNow = now;
     const always = [...this.catalog.values()].filter((e) => (e.scope === 'idle' || e.scope === 'ambient') && e.trigger.always);
     for (const e of always) {
-      const rate = e.rateFrom && typeof pose[e.rateFrom] === 'number' ? Math.min(3, Math.max(0.2, pose[e.rateFrom])) : 1;
+      const base = e.rateFrom && typeof pose[e.rateFrom] === 'number' ? Math.min(3, Math.max(0.2, pose[e.rateFrom])) : 1;
+      // the tempo drifts a little around the state's rate (seeded noise of the time, #669)
+      const j = e.rateJitter;
+      const rate = j ? base * (1 + j.amp * valueNoise(now / j.scale, j.seed)) : base;
       this.clocks.set(e.id, (this.clocks.get(e.id) || 0) + step * rate);
     }
     const runs = [...always.map((e) => ({ entry: e, start: now - this.clocks.get(e.id), end: Infinity })), ...this.active];
@@ -119,12 +153,14 @@ export class Animator {
     for (const a of runs) {
       const e = a.entry;
       if (!this.allowed(e, pose)) continue;
-      let t = now - a.start;
+      const elapsed = now - a.start;
+      let t = elapsed;
       if (e.loop) t %= e.duration;
       let env = e.fade > 0 ? Math.min(1, (now - a.start) / e.fade) : 1;
       if (a.fadeOutAt !== undefined) env *= Math.max(0, 1 - (now - a.fadeOutAt) / Math.max(e.fade, 0.01));
       for (const [ch, curve] of Object.entries(e.channels)) {
-        const v = evalCurve(curve, t);
+        // noise has no period: it reads the time since the start, not the looped time
+        const v = evalCurve(curve, curve.fn === 'noise' ? elapsed : t);
         if (v === null) continue;
         if (ch in ENUM_CHANNELS) {
           if (e.scope === 'gesture' && stateWins) continue;

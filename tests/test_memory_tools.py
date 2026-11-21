@@ -60,5 +60,5 @@ def test_stira_memory_tools_follow_breaker_write_policy(tmp_path):
     )
 
     assert {"memory_read", "memory_write", "memory_search", "memory_list"} <= normal_names
-    assert {"memory_read", "memory_search", "memory_list"} <= warning_names
-    assert "memory_write" not in warning_names
+    # #259: same list at WARNING; IdentityGuard refuses the memory_write call instead.
+    assert warning_names == normal_names

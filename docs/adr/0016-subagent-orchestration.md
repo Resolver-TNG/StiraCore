@@ -66,7 +66,7 @@ or the named test; R = read in code, not measured):
 | 4 | Execution-boundary wrappers: `file_write` / `editor` gate mark, exec entry guard | **hold**: refused without a gate mark; a grandchild exec tool or a nested child-agent tool is refused | M `test_exec_tool_consent.py::test_inner_agent_without_stira_hooks_is_refused`, `::test_child_that_loads_upstream_tools_itself_runs_nothing` |
 | 5 | Read floor / write roots inside file tools (`WritePathPolicy.check_read`, #312, #243) | **hold** (enforced in the tool, not in a hook) | R `tools/file_tools.py` |
 | 6 | Other tools with side effects (network, memory stores, journal, MCP …) | **run unchecked** — only their own code limits them | M (spike, same as row 1) |
-| 7 | Breaker | child sees the parent turn's already-filtered tool list (a WARNING-hidden tool is absent) but **no re-check while the child runs**, no child breaker | R `nxp_agent.py` turn build, upstream modules |
+| 7 | Breaker | child sees the parent turn's already-filtered tool list (a WARNING-hidden tool is absent; since #259 the parent's list is the same at every level and the child gets only read tools while the breaker withholds writes, ADR 0010 addendum) but **no re-check while the child runs**, no child breaker | R `nxp_agent.py` turn build, upstream modules |
 | 8 | Parent's extra hooks: dashboard UI events, `WriteFailureHook`, YOLO `TRACKER` | **not attached**: the child's calls are invisible on the turn UI and to the running-tool tracker | M (spike: extra hook saw only the parent's call) |
 | 9 | YOLO window: approver, origin mark, cap / sub-caps, audit rows | **nothing counted, nothing asked**: the child never reaches the rule layer, so it needs no approval and leaves no row | R `checkpoint_hooks._auto_decision`; follows from row 1 |
 | 10 | Token / usage accounting | child's model calls **not in the parent turn's usage** | M (spike) |
@@ -150,8 +150,17 @@ each row of the table above:
 ### 2. Permission inheritance — **recommended: "never more than the parent, now"; phase 1 counts nothing because a child asks for nothing**
 
 * **Tools.** `child tools = requested names ∩ parent turn's current tools ∩ {rule = Always}`,
-  minus the exec class, minus `delegate` itself. An unknown or not-allowed name is dropped and
+  minus the exec class, minus `delegate` itself, minus `run_checks` (#768, note below). An
+  unknown or not-allowed name is dropped and
   named in the result ("not given: …"), not an error — the parent can retry differently.
+  *Note (#768; [ADR 0015](0015-verification-browser-tool.md) rev 6, C13 / O4):* `run_checks`
+  is a conditional-Always tool ([ADR 0019](0019-verification-runner.md) Q3): on a verified
+  `os_sandbox` host a saved Always is effective, so the rule alone would have given it to a
+  child (measured: `test_children_never_get_run_checks` failed before the change). It is
+  now in `NOT_FOR_CHILDREN` by name. The parent runs the checks itself. A tool that joins
+  `CONDITIONAL_ALWAYS_TOOLS` is added to the same list and to the enumeration test
+  (`test_not_for_children_enumerates_the_conditional_always_tools`). Children built for a
+  grant (`create_grant_child`, ADR 0011) do not go through `delegate` and are unchanged.
 * **Paths.** The parent's write policy, never wider (`write_policy.narrow`). Phase 1 takes no
   `write_roots` argument at all (nothing for the model to tune).
 * **Rules are live.** A rule saved while the child runs applies to its next call (the child
@@ -288,6 +297,7 @@ keep `exec_child_ungated` permanently unless option (A) of §1 is ever built.
 |---|---|
 | ask for a tool the parent may not use without asking | not given (§2), named in "not given" |
 | ask for an exec tool / `delegate` / `subagent` / `handoff_to_agent` | not given; also in the child's `blocked_tool_names` |
+| ask for `run_checks` (its Always is conditional; #768) | not given, by name (`NOT_FOR_CHILDREN`), also while the Always is effective |
 | choose a model or provider | no argument (§1 row 11) |
 | widen write roots | no argument; `narrow` refuses widening anyway (`ValueError`) |
 | override the child's system prompt or the return rules | no argument; the task text is user content |
@@ -399,7 +409,9 @@ Phase 1 as built (differences from the text above, all on the safe side or small
   child is registered before it is built (PR #493 review M3): a server stop between the
   start of the call and the child's first step builds nothing.
 * **Breaker.** `delegate` is write class (`blocked_tool_names`): hidden at WARNING and not
-  offered at CRITICAL (offered while `writes_allowed` holds: NORMAL, COHERENCE).
+  offered at CRITICAL (offered while `writes_allowed` holds: NORMAL, COHERENCE). Since #259
+  it stays in the list at every level and its call is refused at WARNING / CRITICAL
+  (`breaker_write_refused`); see the ADR 0010 addendum.
 * **Only in a person's turn (PR #493 review M4).** `delegate` is offered only in a chat /
   Stage turn — the turns the chat route marks (`yolo.origin.human_turn`, the mark YOLO
   uses), and of those only one a person's message started (`started_by_person`; PR #493

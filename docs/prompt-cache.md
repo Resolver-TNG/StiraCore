@@ -51,9 +51,16 @@ current strands-agents 1.57.x; `strands-harness` itself is not a dependency
 - The cache settings go on a per-turn copy of the model; the configured model
   object is never modified, so switching models, turning the option off, or
   sharing one model between agents cannot leave a `cache_config` behind.
-- Tools are sorted by name, so their order is deterministic. The tool prefix
-  changes only when the breaker removes write tools (or the settings hub turns
-  a tool off).
+- Tools are sorted by name, so their order is deterministic. The breaker does
+  not change the tool prefix (#259, ADR 0010 addendum): write tools stay listed
+  at every level and their calls are refused (`breaker_write_refused`); only the
+  settings hub turning a tool off changes it (on the chat server also `delegate`
+  entering / leaving CRITICAL, see ADR 0010 addendum #259). MCP tools discovered with `tool_registry.register_mcp_tools` are
+  named tools like any other, so the order in which the MCP server lists them
+  does not reach the request (`tests/test_prompt_cache_mcp_order.py`). Known
+  limit: a `ToolProvider` (e.g. an `MCPClient`) handed to the agent as a tool
+  has no name until the SDK expands it; it follows the named tools, and its own
+  tools keep the server's listing order. With the option off nothing is sorted.
 - The static part has its own budget (`max_tokens`), so trimming never makes it
   depend on the per-turn parts; control state and recalled memory share one
   budget, recalled memory getting what the control state leaves.
@@ -68,16 +75,61 @@ current strands-agents 1.57.x; `strands-harness` itself is not a dependency
   be cached without a split.
 - With the option off, the model input is exactly what it was before #254.
 
-Known prefix breakers (by design): a breaker transition (tools and identity
-notice change); while the breaker is WARNING/CRITICAL the identity notice keeps
+Known prefix breakers (by design): a breaker transition changes the system part
+(the identity notice), not the tools (#259); while the breaker is WARNING/CRITICAL the identity notice keeps
 its live `stability=0.xx` line, so the system part can change between turns.
 This is an accepted trade-off: WARNING and above are rare, and identity
-protection is not weakened for caching.
+protection is not weakened for caching. While the breaker refuses writes
+(WARNING; CRITICAL without `halt`) the runtime block — never the cached prefix —
+carries one fixed line: `Circuit breaker WARNING|CRITICAL: write and exec tool
+calls are refused (breaker_write_refused) until stability recovers; read tools
+keep working.` It is absent at NORMAL / COHERENCE and under `halt`. The line exists
+only in the split mode (the runtime block); with a fixed cached system prompt
+(`static`) or with the option off (`off`) only the identity notice is added, and
+the reason code in the refused tool result is the model's signal.
+On the chat server the list is fixed too (`_stira_tools`), except `delegate`, which
+stays out at CRITICAL (ADR 0010 addendum #259).
 Context management (#258, opt-in) keeps the prefix across offload turns; a
 history summary rewrites it once, and afterwards `SoulCompactionGuard`'s runtime
 block in the system prompt changes every turn (open point, see
 [context-management.md](context-management.md)).
 Identity protection is not weakened for caching.
+
+## By provider
+
+What Stira does with `prompt_cache` on is decided by two checks
+(`prompt_cache.split_eligible`): the model object is a Strands `BedrockModel`,
+and its capability row has `prompt_cache`. Everything else is recorded as
+`mode: "unsupported"` and gets the request it gets with the option off: no
+split, no cache points, no tool sorting, and no setting is added to the model.
+
+| Provider (`ModelSpec`) / model | Capability row `prompt_cache` | What Stira does with the option on | Cache tokens in the usage |
+|---|---|---|---|
+| `bedrock`, Anthropic Claude | yes | split + 3 cache points (this page) | reported separately from the input |
+| `bedrock`, Amazon Nova, Meta Llama, gpt-oss | no | nothing (`unsupported`) | as reported; none requested |
+| `anthropic` (direct API), Claude | yes | nothing (`unsupported`): not a `BedrockModel` | reported separately from the input |
+| `openai` / `openai_responses`, GPT-5, o3 / o4-mini, GPT-4.1, GPT-4o | yes | nothing (`unsupported`) | inside the prompt total; `normalize_strands_usage` subtracts them |
+| `gemini`, Gemini 2.5 / 3 | yes (2.0: no) | nothing (`unsupported`) | inside the prompt total; subtracted |
+| `litellm` | by the model behind it | nothing (`unsupported`) | inside the prompt total; subtracted |
+| `mistral`, `writer`, `llamaapi`, `sagemaker` | no | nothing (`unsupported`) | as reported |
+| `ollama`, `llamacpp` | always no (forced, also for a matching row) | nothing (`unsupported`) | llama.cpp: inside the prompt total; subtracted |
+| an injected Strands `Model` | unknown: no | nothing (`unsupported`) | as reported |
+
+The capability column is `providers/capabilities.py` (what the model family
+documents); it does not switch anything on by itself. A row that says "yes"
+outside Bedrock is not used yet (`tests/test_prompt_cache.py`,
+`test_only_a_bedrock_model_is_split`).
+
+What a provider caches on its own is outside Stira's control and has not been
+measured here. From the #254 reading of the strands-agents 1.57.1 source and the
+Bedrock documentation (not repeated for this page): Bedrock Claude uses explicit
+cache points; Nova caches implicitly; for OpenAI, LiteLLM and Mistral the SDK can
+send a cache routing key derived from the session id; Ollama and llama.cpp
+adapters ignore cache settings; Gemini was not checked. Two consequences for an
+operator: such a provider keeps the prompt prefix for its own TTL, and with the
+legacy prompt (Neural State and Episodic Memory inside the system prompt) the
+part of a request that repeats from turn to turn ends at the first per-turn
+section, so an implicit cache has little to match (expected, not measured).
 
 ## Visibility
 

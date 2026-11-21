@@ -72,12 +72,15 @@ from typing import Any, ClassVar
 from stiracore.authority import AuthorityError, ClockPair, Receipt, TtlPair
 
 from . import progress as outcome
-from . import state
-from .schema import TOOLS, BoardBusy, GrantRefused
+from . import round_ledger, state
+from .schema import PAGE_TOOLS, TOOLS, TTL_CAP_SEC, BoardBusy, GrantRefused
 
 __all__ = [
+    "AXIS_NONSTICKY",
     "BLOCK_FOR_END",
     "END_CODES",
+    "PAGE_LOOK_CALLS_PER_ROUND",
+    "PAGE_LOOK_FAILURES_PER_ROUND",
     "PLAYBOOK_FILE",
     "REPORT_TOOL",
     "ClaimFence",
@@ -128,8 +131,35 @@ END_CODES = frozenset(
         "workspace_changed",
         # W6a: the model ended without a tool call and without a report (ADR 0011 §11).
         "no_action",
+        # ADR 0015 rev 6 (S5): a page tool's checks (the user setting, the light axis
+        # check) failed inside the round; the detail is the failing code.
+        "page_tools_unavailable",
     }
 )
+# ADR 0015 rev 6 (S5): the page tools of a grant scope.
+PAGE_LOOK = "page_look"
+VIEW_IMAGE = "view_image"
+# The bound of ``page_look`` in one round (memory only, on the iteration): at most this
+# many calls take a slot, and none once this many calls ended in a failure (a failure is
+# any status but ``ok`` / ``truncated``; a success takes nothing back). A running call
+# holds one of the places a failure would take until it ends: a call over that is refused
+# ``page_look_busy`` (not a failure) and takes no slot. The
+# numbers are ``page_look.CALLS_PER_TURN`` / ``REPEATED_FAILURE_RUNS`` — a round is one
+# turn of the grant — but counted here, because a round has no chat turn mark. Over a
+# whole grant that is at most ``MAX_ITERATIONS_CAP`` × 12 = 240 calls.
+PAGE_LOOK_CALLS_PER_ROUND = 12
+PAGE_LOOK_FAILURES_PER_ROUND = 3
+# The axis codes that refuse a press (or skip a heartbeat start) without blocking the
+# goal: the next round boundary measures again. Every other failing code — also one this
+# list does not know — blocks the goal ``axis_failed`` (fail closed).
+AXIS_NONSTICKY = frozenset({"guard_pending", "breaker_not_normal", "rules_changed", "axis_stale"})
+
+
+def axis_reason(code: str) -> str:
+    """The refusal reason of a press for a failing axis code: ``axis_<code>``."""
+    return code if code.startswith("axis_") else f"axis_{code}"
+
+
 # W6a: per iteration, at most this many written files / distinct check rows enter the
 # outcome; more → the outcome is unknown (no progress; fail closed, bounded memory).
 WRITTEN_KEPT = 256
@@ -141,6 +171,8 @@ OUTCOMES_KEPT = 5
 # of heartbeat-started iterations (memory only, codes and numbers).
 ENDS_KEPT = 8
 TICK_COSTS_KEPT = 5
+# ADR 0028 §5: how many of the ledger's last rounds the Stage board's read carries.
+ROUNDS_SHOWN = 5
 # W6d: the usage counters a model call reports (the stream's ``metadata.usage``).
 _USAGE_KEYS = (
     ("inputTokens", "tokens_in"),
@@ -186,6 +218,8 @@ _DETAIL = frozenset(
         "not_in_scope",
         "outside_subtree",
         "path_invalid",
+        # #791: a grant's editor write to a run-later file or the never-editable list
+        "protected_path",
         "setting_off",
         "not_contained",
         "disabled",
@@ -198,6 +232,8 @@ _DETAIL = frozenset(
         # W6d fix round 1: a heartbeat-started iteration's wake stamp failed before its
         # first effect
         "tick_stale",
+        # ADR 0015 rev 6 (S5): the failing axis code of ``page_tools_unavailable``.
+        *(round_ledger.AXIS_CODES - {"pass", "not_run"}),
     }
 )
 
@@ -504,6 +540,14 @@ class _Iteration:
         self.grant_id = grant.grant_id
         self.session_ref = grant.session_ref
         self.subtree = grant.workspace_subtree
+        # ADR 0028 §4 (memory only): the grant's report files as absolute paths — the
+        # outcome leaves them out (``_observe``). Fixed at issue; never the model's choice.
+        self.report_files = frozenset(
+            os.path.join(grant.workspace_subtree, *rel.split("/"))
+            for rel in getattr(grant, "report_files", ())
+        )
+        # #683: the grant's done_when kinds (fixed at issue; never the model's choice).
+        self.done_when_kinds: tuple[str, ...] = tuple(getattr(grant, "done_when", ()))
         self.number = number
         self.deadline = deadline
         self.seq0 = seq0
@@ -553,6 +597,13 @@ class _Iteration:
         self.writing = 0
         self.wrote_any = False
         self.claimed_at: float | None = None
+        # #683 (memory only): the last done_when gate of this iteration (result, unmet
+        # kinds), or None when no gate ran — the round ledger's ``done_when``.
+        self.done_when: tuple[str, tuple[str, ...]] | None = None
+        # #683: the write sequence a quiet gate run started at (None: the last gate's run
+        # overlapped a write, or none ran) — a repeated claim with no write since reuses
+        # its refusal, and a met verdict holds only while no write moved it.
+        self.done_when_seq: int | None = None
         self.tools: tuple[str, ...] = ()
         self.called: list[str] = []  # W5b: the scope tools that ran, in call order
         self.child: Any = None
@@ -567,6 +618,36 @@ class _Iteration:
         self.stamp: Any = None  # W6d fix round 1: the wake's stamp (tick only)
         self.stamp_gates: set[str] = set()  # W6d fix round 2: the gates passed once
         self.usage: dict[str, int] = {}
+        # ADR 0028 §5 (the round ledger; numbers only, any origin): the wall time at the
+        # start, the grant's iteration maximum, calls per scope tool, the reported usage
+        # counters and the largest reported input of one call.
+        self.started_wall: int | None = None
+        self.of_max = getattr(grant, "max_iterations", 0)
+        self.tool_counts: dict[str, int] = {}
+        self.round_usage: dict[str, int] = {}
+        self.largest_input: int | None = None
+        # ADR 0015 rev 6 (S5; memory only): does the scope name a page tool; the axis
+        # codes of the round (``start``: the boundary's full check, ``end``: the code that
+        # stopped the round or the light check at its end); ``page_look``'s slots.
+        self.page = bool(PAGE_TOOLS & set(grant.tools))
+        self.axis_start = "not_run"
+        self.axis_end: str | None = None
+        self.page_calls = 0
+        self.page_running = 0
+        self.page_failures = 0
+
+    def note_round_usage(self, usage: Any) -> None:
+        """The round ledger's counters of one model call (reported values only: built-in
+        non-negative ints; a counter the provider did not report stays absent)."""
+        if not isinstance(usage, Mapping):
+            return
+        with self.lock:
+            for source, key in _USAGE_KEYS:
+                value = usage.get(source)
+                if type(value) is int and 0 <= value < (1 << 53):
+                    self.round_usage[key] = self.round_usage.get(key, 0) + value
+                    if key == "tokens_in":
+                        self.largest_input = max(self.largest_input or 0, value)
 
     def add_usage(self, usage: Any) -> None:
         """W6d: add one model call's reported counters (built-in non-negative ints only;
@@ -639,6 +720,8 @@ class _Iteration:
         the board's outcome row lists these, never the admitted scope. Bounded by
         :data:`TOOLS` (a scope name only, each once)."""
         with self.lock:
+            if name in TOOLS:
+                self.tool_counts[name] = self.tool_counts.get(name, 0) + 1
             if name in TOOLS and name not in self.called:
                 self.called.append(name)
 
@@ -688,6 +771,14 @@ def _refused(tool_use: Mapping, code: str) -> ToolResultEvent:
             "content": [{"text": f"Not run: the grant iteration refused this call ({code})."}],
         }
     )
+
+
+def _readable_fail(result: Any) -> bool:
+    """#683: a ``run_checks`` result positively read as a failure (not unknown)."""
+    try:
+        return outcome.claim_checks(result)[0] == "fail"
+    except Exception:  # noqa: BLE001 - unreadable: not a decided failure
+        return False
 
 
 @dataclass(frozen=True)
@@ -784,6 +875,8 @@ class GrantModel(Model):
             it.note("model_calls")
             if it.origin == "tick" and not failed and settled:
                 it.add_usage(usage)
+            if not failed and settled:
+                it.note_round_usage(usage)  # ADR 0028 §5: the round ledger (any origin)
         # Review round 1 (Astra B1): a stop or a person's turn that arrived while the call ran
         # discards the completed response (charged above) — the child never sees it, so a
         # text-only answer cannot enter its history or its turn processing either.
@@ -793,9 +886,11 @@ class GrantModel(Model):
 
 
 class GrantTool(AgentTool):
-    """One scope tool of the child: the allow-list, the subtree (``editor``) and the
-    containment (``run_checks``) are checked, a permit is taken and consumed, and the same
-    checks run again **after** the consume, right before the call."""
+    """One scope tool of the child: the allow-list, the subtree (``editor``), the
+    containment (``run_checks``) and the page tools' checks (``page_look`` /
+    ``view_image``: the user setting, the light axis check, the target inside the
+    subtree) are checked, a permit is taken and consumed, and the same checks run again
+    **after** the consume, right before the call."""
 
     def __init__(self, inner: Any, executor: GoalIterationExecutor, it: _Iteration) -> None:
         super().__init__()
@@ -822,6 +917,15 @@ class GrantTool(AgentTool):
         arguments = tool_use.get("input")
         arguments = arguments if isinstance(arguments, Mapping) else {}
         entry = None
+        slot = False
+        if name == PAGE_LOOK:
+            # The round's bound first: a call over it is refused, takes no permit and
+            # starts no browser (the round goes on without it).
+            limit = ex._page_slot(it)
+            if limit is not None:
+                yield _refused(tool_use, limit)
+                return
+            slot = True
         try:
             ex._precheck(it)
             ex._check_tool(it, name, arguments)
@@ -831,13 +935,26 @@ class GrantTool(AgentTool):
         except IterationStop as stop:
             if entry is not None:
                 entry.done("cancelled")
+            if slot:
+                ex._page_done(it, False)  # it never ran: its slot stays counted
             yield _refused(tool_use, stop.code)
             return
         it.note("tool_calls")
         it.called_tool(name)
         # Counted when the result is seen (the consumer may stop at the result event).
         try:
-            if name == "run_checks":
+            if name == PAGE_LOOK:
+                failed = True
+                try:
+                    result = await asyncio.to_thread(ex._page_look, it, self.inner, arguments, host)
+                    failed = result.get("status") not in ("ok", "truncated")
+                finally:
+                    ex._page_done(it, failed)
+                yield ToolResultEvent(ex._page_result(tool_use, result))
+            elif name == VIEW_IMAGE:
+                shown = await asyncio.to_thread(ex._view_image, it, self.inner, tool_use, arguments)
+                yield ToolResultEvent(shown)
+            elif name == "run_checks":
                 token = ex._checks_started(it)
                 try:
                     result = await asyncio.to_thread(ex._run_checks, self.inner, arguments, host)
@@ -949,6 +1066,8 @@ class GoalReportTool(AgentTool):
         return "python"
 
     async def stream(self, tool_use: dict, invocation_state: dict, **kwargs: Any):
+        import asyncio
+
         ex, it = self._ex, self._it
         arguments = tool_use.get("input")
         kind = arguments.get("kind") if isinstance(arguments, Mapping) else None
@@ -968,15 +1087,52 @@ class GoalReportTool(AgentTool):
         except IterationStop as stop:
             yield _refused(tool_use, stop.code)
             return
+        gate = None
+        ran = stopped_meanwhile = False
         try:
-            ex._apply_report(it, kind, code)
+            if kind == "claim_complete" and it.done_when_kinds:
+                # #683: the grant's done_when checks, run by the harness itself (a grant
+                # that declares none goes on exactly as before).
+                gate, ran = await asyncio.to_thread(ex._done_when_gate, it)
+                # Read before this claim's own stop (``claimed``) could be set below.
+                stopped_meanwhile = ran and ex._stopped_since(it)
+                # The run may take minutes: a stop meanwhile (a person's turn, the wall
+                # time, an in-flight cancel; an abandoned call has set the stop) records
+                # nothing.
+                ex._precheck(it)
+                if gate[0] == outcome.DONE_WHEN_MET and not ex._done_when_holds(it):
+                    gate = (outcome.DONE_WHEN_NOT_PROVEN, it.done_when_kinds)
+                    with it.lock:
+                        it.done_when, it.done_when_seq = gate, None
+            if gate is None or gate[0] == outcome.DONE_WHEN_MET:
+                ex._apply_report(it, kind, code)
+        except IterationStop as stop:
+            yield _refused(tool_use, stop.code)
+            return
         except GrantRefused:
             it.stop("tool_refused", "report_refused")
             yield _refused(tool_use, "report_refused")
             return
         finally:
-            entry.done()
+            # Like a model's own run_checks: the gate's run finished after a narrowing
+            # (in-flight cancel) or a stop nothing narrows. A reused verdict ran nothing.
+            after_stop = entry.done() == "completed_after_stop"
+            if ran and (after_stop or stopped_meanwhile):
+                with it.lock:
+                    it.residual.append("run_checks_completed_after_stop")
         it.note("reports")
+        if gate is not None and gate[0] != outcome.DONE_WHEN_MET:
+            # Refused, the iteration goes on: the fixed code and the unmet kinds only.
+            text = f"{gate[0]}: the declared checks did not all pass (unmet: "
+            text += (",".join(gate[1]) or "none") + "). The claim was not recorded."
+            yield ToolResultEvent(
+                {
+                    "toolUseId": tool_use.get("toolUseId"),
+                    "status": "error",
+                    "content": [{"text": text}],
+                }
+            )
+            return
         yield ToolResultEvent(
             {
                 "toolUseId": tool_use.get("toolUseId"),
@@ -1013,6 +1169,16 @@ class IterationGuard:
             self._it.stop("tool_refused", "not_in_scope")
             event.cancel_tool = "Not available in this grant iteration."
             return
+        arguments = event.tool_use.get("input")
+        if name == "editor" and isinstance(arguments, Mapping):
+            # #791: a write to a protected path is refused here, before the child's gate
+            # could show a card for it (the same check runs again in ``_check_tool``).
+            try:
+                if not self._ex._read_only(arguments):
+                    self._ex._writable(self._it, arguments.get("path"))
+            except IterationStop:
+                event.cancel_tool = "Not writable in a grant iteration (protected path)."
+                return
         try:
             self._ex._precheck(self._it)
         except IterationStop as stop:
@@ -1094,8 +1260,25 @@ class GoalIterationExecutor:
         probe: Callable[[str, Any], Any] | None = None,
         build_child: Callable[..., Any] | None = None,
         stop_drain_sec: float | None = None,
+        ledger: Any = "default",
+        wall: Callable[[], float] = time.time,
+        page_axis: Callable[..., str] | None = None,
+        page_look_runner: Callable[..., dict] | None = None,
     ) -> None:
         self._grants = grants
+        # ADR 0015 rev 6 (S5): ``page_axis(tools, ledger, full=...)`` → an axis code
+        # (default: ``page_look.grant_axis``, the server's own readers) and the runner of
+        # a grant's ``page_look`` call (default: ``page_look.run_page_look``).
+        self._page_axis = page_axis
+        self._page_look_runner = page_look_runner
+        # ADR 0028 §5: the round ledger (observation only). Default: the grant service's
+        # data directory; ``None``: no ledger (nothing is written, nothing is skipped).
+        self.ledger = (
+            round_ledger.RoundLedger.open(getattr(grants, "data_dir", None))
+            if isinstance(ledger, str)
+            else ledger
+        )
+        self._wall = wall
         self._authority = authority
         self._parent = parent
         self._tool_provider = tool_provider
@@ -1216,6 +1399,15 @@ class GoalIterationExecutor:
             raise self._refuse("budget_exhausted")
         if self._estimator is None:
             raise self._refuse("token_count_unavailable")
+        if PAGE_TOOLS & set(grant.tools):
+            # ADR 0015 rev 6 (S5), the round boundary: the user setting and the full axis
+            # check (A1–A10; A9 over the tools the live rules leave), before the provider
+            # is read. A sticky failure also blocks the goal; a non-sticky one does not.
+            code = self._page_axis_code(self._tool_names(grant), full=True)
+            if code != "pass":
+                if code not in AXIS_NONSTICKY:
+                    self._grants.block_goal(grant.grant_id, "axis_failed")
+                raise self._refuse(axis_reason(code))
         try:
             supported = self._provider_supported(self._inner_model(self._parent()))
         except Exception:  # noqa: BLE001 - unreadable: unsupported
@@ -1286,8 +1478,14 @@ class GoalIterationExecutor:
                 epoch0,
             )
             it.tools = tools
+            if it.page:
+                it.axis_start = "pass"  # the admission's full check (it refuses otherwise)
             it.broker = self._broker
             it.started = self._mono()
+            try:
+                it.started_wall = int(self._wall())
+            except Exception:  # noqa: BLE001 - unreadable: the round's start is its end
+                it.started_wall = None
             it.origin = "press" if tick is None else "tick"
             it.stamp = tick
             thread = threading.Thread(
@@ -1664,6 +1862,26 @@ class GoalIterationExecutor:
             it.stop("tool_refused", "outside_subtree")
             raise IterationStop("tool_refused")
 
+    def _writable(self, it: _Iteration, raw: Any) -> None:
+        """#791 (ADR 0029 B6b): a grant's editor never writes a run-later file (``.git``,
+        ``.github/``, ``.vscode/``, … — ``self_protect.GRANT_RUN_LATER_PATTERNS``) nor —
+        inside a Stira checkout — anything outside the allow-list or on the never-editable
+        list (``stiracore.self_protect``), whatever the rules and the grant say; a grant
+        whose subtree lies in a checkout's data place writes its own project there. A path
+        that cannot be judged is refused. The detail is ``protected_path``."""
+        from stiracore import self_protect
+
+        absolute = self._absolute(raw)
+        if absolute is None:
+            return  # ``_inside`` refuses it (``path_invalid``)
+        try:
+            refused = self_protect.grant_write_refused(absolute, it.subtree) is not False
+        except Exception:  # noqa: BLE001 - unreadable: refused
+            refused = True
+        if refused:
+            it.stop("tool_refused", "protected_path")
+            raise IterationStop("tool_refused")
+
     def _host(self) -> Any:
         if self._containment is not None:
             return self._containment()
@@ -1673,14 +1891,19 @@ class GoalIterationExecutor:
 
     def _check_tool(self, it: _Iteration, name: str, arguments: Mapping) -> Any:
         """The per-tool scope checks (run before the permit and again after the consume).
-        Returns the verified containment for ``run_checks``."""
+        Returns the verified containment for ``run_checks`` and the resolved target for
+        ``page_look``."""
         if name not in it.tools:
             it.stop("tool_refused", "not_in_scope")
             raise IterationStop("tool_refused")
-        if name in ("editor", "run_checks"):
+        if name in ("editor", "run_checks", *PAGE_TOOLS):
             self._require_root(it)
+        if name in PAGE_TOOLS:
+            return self._check_page_tool(it, name, arguments)
         if name == "editor":
             self._inside(it, arguments.get("path"))
+            if not self._read_only(arguments):
+                self._writable(it, arguments.get("path"))
             return None
         if name != "run_checks":
             return None
@@ -1713,6 +1936,244 @@ class GoalIterationExecutor:
             path = str(Path(workspace) / path)
         self._inside(it, path)
         return host
+
+    # -- ADR 0015 rev 6 (S5): the page tools of a grant ------------------------------------
+
+    def _live_rule(self, name: str) -> str:
+        """The person's rule for ``name`` as the gate reads it now (no reader, an error or
+        an unknown value: ``never``)."""
+        from stiracore.agent.checkpoint_hooks import read_policy
+
+        policy_check = getattr(
+            getattr(self._parent(), "checkpoint_hooks", None), "policy_check", None
+        )
+        read = read_policy(policy_check, name)
+        return read[0] if read is not None else "never"
+
+    def _live_tools(self, it: _Iteration) -> tuple[str, ...]:
+        """The round's tools the live rules still leave (a rule that reads Never now, or
+        cannot be read, takes its tool out): read at every page tool call."""
+        return tuple(name for name in it.tools if self._live_rule(name) in ("always", "ask"))
+
+    def _page_axis_code(self, tools: Iterable[str], *, full: bool) -> str:
+        """``pass``, or why a page tool may not run now: ``setting_off`` (the user setting
+        ``autonomy.page_look_unattended``), ``file_read_not_always`` (A9: ``file_read`` is
+        among ``tools`` but its live rule is not Always — a page reads workspace files, so
+        the grant answers no call that ``file_read`` itself would need a card for) or the
+        failing axis code. Anything unreadable or unknown is ``axis_unreadable`` (never
+        ``pass``)."""
+        if self.settings.page_look_unattended is not True:
+            return "setting_off"
+        try:
+            tools = frozenset(tools)
+            if "file_read" in tools and self._live_rule("file_read") != "always":
+                return "file_read_not_always"
+            check = self._page_axis
+            if check is None:
+                from stiracore.tools import page_look
+
+                check = page_look.grant_axis
+            code = check(tools, self.ledger, full=full)
+        except Exception:  # noqa: BLE001 - fail closed
+            return "axis_unreadable"
+        known = type(code) is str and code in round_ledger.AXIS_CODES
+        return code if known else "axis_unreadable"
+
+    def _check_page_tool(self, it: _Iteration, name: str, arguments: Mapping) -> Any:
+        """Before the permit and again after the consume: the user setting and the light
+        axis check (A9 over the round's tools as the live rules leave them now:
+        ``file_read`` must be one, and its rule Always) — a failure
+        stops the iteration ``page_tools_unavailable`` with the code as detail; then, for
+        ``page_look``, the target as the tool itself resolves it must lie inside the
+        grant's subtree (else ``tool_refused``). Returns that resolved path: it is what
+        the browser is given, never the call's own text."""
+        code = self._page_axis_code(self._live_tools(it), full=False)
+        if code != "pass":
+            with it.lock:
+                if it.axis_end is None:
+                    it.axis_end = code
+            it.stop("page_tools_unavailable", code if code in _DETAIL else "other")
+            raise IterationStop("page_tools_unavailable")
+        if name != PAGE_LOOK:
+            return None
+        from stiracore.tools import page_check
+
+        try:
+            resolved = str(page_check.check_target(arguments.get("target"), self._policy())[0])
+        except Exception:  # noqa: BLE001 - not a workspace page file (a URL, a missing file)
+            it.stop("tool_refused", "path_invalid")
+            raise IterationStop("tool_refused") from None
+        root = it.subtree  # the issue-time resolved root (never a fresh realpath)
+        if not (resolved == root or resolved.startswith(root + os.sep)):
+            it.stop("tool_refused", "outside_subtree")
+            raise IterationStop("tool_refused")
+        return resolved
+
+    @staticmethod
+    def _page_slot(it: _Iteration) -> str | None:
+        """Take one of the round's ``page_look`` slots, or the code that refuses the call:
+        ``page_look_repeated_failure`` (that many calls **ended** in a failure),
+        ``page_look_busy`` (nothing more may run until a running call ends: a running
+        call holds one of the places a failure would take, so the calls of one batch are
+        bounded and no more calls can fail in a round than before) or
+        ``page_look_call_limit``. A refused call takes no slot."""
+        with it.lock:
+            if it.page_failures >= PAGE_LOOK_FAILURES_PER_ROUND:
+                return "page_look_repeated_failure"
+            if it.page_failures + it.page_running >= PAGE_LOOK_FAILURES_PER_ROUND:
+                return "page_look_busy"
+            if it.page_calls >= PAGE_LOOK_CALLS_PER_ROUND:
+                return "page_look_call_limit"
+            it.page_calls += 1
+            it.page_running += 1
+        return None
+
+    @staticmethod
+    def _page_done(it: _Iteration, failed: bool) -> None:
+        with it.lock:
+            it.page_running = max(0, it.page_running - 1)
+            if failed:
+                it.page_failures += 1
+
+    def _page_look(self, it: _Iteration, inner: Any, arguments: Mapping, target: str) -> dict:
+        """One ``page_look`` call of a grant (past its consume and the checks after it):
+        the tool's own run with the resolved target, R1's grant tag for its screenshots,
+        and the audit row ``answered_by: grant``."""
+        from stiracore.tools import page_check, page_look
+
+        run_look = self._page_look_runner or page_look.run_page_look
+        policy = getattr(inner, "policy", None) or self._policy()
+        browser = getattr(inner, "browser", None)
+        kept = {"target": target}
+        kept.update({key: arguments[key] for key in ("actions", "wait_ms") if key in arguments})
+        try:
+            if browser is not None:
+                page_check.note_browser(browser)  # A2: a stat and a memory comparison
+            result = run_look(
+                target,
+                policy,
+                browser=browser,
+                wait_ms=kept.get("wait_ms", 1000),
+                actions=kept.get("actions"),
+            )
+        except Exception as error:  # noqa: BLE001 - codes only, never the message
+            logger.warning("grants: a page_look call failed (%s)", type(error).__name__)
+            result = None
+        if not isinstance(result, dict):
+            result = {"status": "error", "reason": "page_look_failed"}
+        page_look.tag_shots(result, it.grant_id)
+        page_look.record_call(kept, result, "grant", grant=it.grant_id, round_number=it.number)
+        return result
+
+    @staticmethod
+    def _page_result(tool_use: Mapping, result: Mapping) -> dict:
+        try:
+            from stiracore.tools.page_check import _tool_result
+
+            return _tool_result(tool_use.get("toolUseId"), result)
+        except Exception:  # noqa: BLE001
+            status = "success" if result.get("status") in ("ok", "truncated") else "error"
+            return {
+                "toolUseId": tool_use.get("toolUseId"),
+                "status": status,
+                "content": [{"text": str(result.get("status"))}],
+            }
+
+    def _view_image(self, it: _Iteration, inner: Any, tool_use: Mapping, arguments: Mapping):
+        """The narrowed ``view_image`` of a grant: only a screenshot R1 holds for a run of
+        **this** grant, whose size and SHA-256 still match (``page_look.grant_shot``). The
+        bytes shown are the bytes that were compared; the wrapped tool is never called."""
+        from stiracore.tools import page_look
+
+        policy = getattr(inner, "policy", None) or self._policy()
+        try:
+            code, shot = page_look.grant_shot(arguments.get("path"), policy, it.grant_id)
+        except Exception:  # noqa: BLE001 - unreadable: nothing is shown
+            code, shot = "shot_changed", None
+        if code is not None or shot is None:
+            code = code or "shot_changed"
+            page_look.record_grant_view("refused", code, None, it.grant_id, it.number)
+            text = (
+                "Not shown: in a grant view_image reads only the screenshots of this "
+                f"grant's own page_look calls ({code})."
+            )
+            return {
+                "toolUseId": tool_use.get("toolUseId"),
+                "status": "error",
+                "content": [{"text": text}],
+            }
+        data, digest = shot
+        page_look.record_grant_view("ok", None, digest, it.grant_id, it.number)
+        return {
+            "toolUseId": tool_use.get("toolUseId"),
+            "status": "success",
+            "content": [{"image": {"format": "png", "source": {"bytes": data}}}],
+        }
+
+    def _done_when_gate(self, it: _Iteration) -> tuple[tuple[str, tuple[str, ...]], bool]:
+        """#683, on the report tool's thread: the grant's ``done_when`` kinds, run by the
+        harness itself on the grant's subtree before a claim is recorded — through the
+        scope checks of a ``run_checks`` call (:meth:`_check_tool`: the setting, the
+        verified containment, the subtree; a failure stops the iteration as it would stop
+        that call) and the same runner (container, no network, masked, allow-listed
+        output) — read from the grant record when the iteration started, never from the
+        model. ``(result, unmet kinds)`` (:func:`~.progress.done_when_verdict`); a
+        ``run_checks``
+        the scope no longer allows, or whose live rule is not Always (an Ask would need a
+        person's card the harness cannot show here; Never), runs nothing and proves nothing.
+        The verdict joins the claim's evidence like a model's call; the model's own report
+        is never read. ``(verdict, ran)``: ``ran`` — the runner was actually called. Codes
+        only."""
+        declared = it.done_when_kinds
+        verdict: tuple[str, tuple[str, ...]] = (outcome.DONE_WHEN_NOT_PROVEN, declared)
+        with it.lock:
+            last, last_seq = it.done_when, it.done_when_seq
+            if last is not None and last_seq == it.write_seq and it.writing == 0:
+                return last, False  # no write since the last readable failure: the same
+        seq: int | None = None
+        ran = False
+        if "run_checks" in it.tools and self._live_rule("run_checks") == "always":
+            arguments: dict[str, Any] = {"kinds": list(declared), "path": it.subtree}
+            host = self._check_tool(it, "run_checks", arguments)
+            policy = self._policy()
+            from stiracore.tools import run_checks
+
+            arguments = run_checks.prepare_input(arguments, policy)
+            # (not named ``runner``: the turn-lock audit reads that name as a turn start; this is
+            # the checks runner, not an agent turn)
+            check_run = self._run_checks_runner or run_checks.run
+            token = self._checks_started(it)
+            result: Any = None
+            ran = True
+            try:
+                result = check_run(arguments, policy, host=host)
+            except Exception:  # noqa: BLE001 - an unknown outcome proves nothing
+                logger.warning("grants: a done_when check run failed")
+            self._claim_call(it, result, token)
+            verdict = outcome.done_when_verdict(declared, result)
+            with it.lock:
+                quiet = token[1] and it.write_seq == token[0] and it.writing == 0
+            if not quiet:
+                # An editor write of the same turn overlapped the run: it proves nothing.
+                verdict = (outcome.DONE_WHEN_NOT_PROVEN, declared)
+            elif verdict[0] == outcome.DONE_WHEN_MET or _readable_fail(result):
+                # Only a decided run is reused; a runner error or an unreadable result
+                # (a transient container failure) runs again at the next claim.
+                seq = token[0]
+        with it.lock:
+            it.done_when, it.done_when_seq = verdict, seq
+        return verdict, ran
+
+    @staticmethod
+    def _done_when_holds(it: _Iteration) -> bool:
+        """#683: right before a met claim is recorded — no editor write started or ended
+        since the gate's quiet run began."""
+        with it.lock:
+            return (
+                it.done_when_seq is not None
+                and it.done_when_seq == it.write_seq
+                and it.writing == 0
+            )
 
     def _run_checks(self, inner: Any, arguments: Mapping, host: Any) -> dict:
         runner = self._run_checks_runner
@@ -1879,7 +2340,9 @@ class GoalIterationExecutor:
         interrupted = self._interrupted(it)
         with it.lock:
             unreadable = it.unreadable
-            pre, wrote = dict(it.pre), list(it.wrote)
+            # ADR 0028 §4: a report file is neither tracked nor read at the end (its write
+            # is activity, not an outcome); ``unreadable`` above is untouched (fail closed).
+            pre, wrote = dict(it.pre), [p for p in it.wrote if p not in it.report_files]
             rows = list(it.check_outcomes)
             it.pre, it.wrote, it.check_outcomes = {}, [], set()
         tracker = self._tracker(it.grant_id)
@@ -2004,6 +2467,14 @@ class GoalIterationExecutor:
                 return "always"
             if name not in it.tools or parent_check is None:
                 return "never"
+            if name == PAGE_LOOK:
+                # ADR 0015 rev 6 (S5): in a grant the grant answers ``page_look`` — its
+                # checks in ``GrantTool`` stand before every call — unless the person's
+                # rule reads Never now. No card is shown and no chat turn's slot is used.
+                from stiracore.agent.checkpoint_hooks import read_policy
+
+                read = read_policy(parent_check, name)
+                return "always" if read is not None and read[0] in ("always", "ask") else "never"
             return parent_check(name)
 
         return rule_of
@@ -2040,6 +2511,8 @@ class GoalIterationExecutor:
                 getattr(getattr(parent, "checkpoint_hooks", None), "input_preparers", {}) or {}
             ),
         }
+        if PAGE_LOOK in it.tools:
+            kwargs["grant_answered"] = (PAGE_LOOK,)  # see ``_rule_reader``
         if self._build is not None:
             return self._build(parent, **kwargs)
         from stiracore.agent.grant_child import create_grant_child
@@ -2134,6 +2607,16 @@ class GoalIterationExecutor:
         with it.lock:
             if it.stop_code is None and it.counts["tool_calls"] == 0 and not it.counts["reports"]:
                 it.stop_code = "no_action"  # W6a: no tool call, no report (ADR 0011 §11)
+            page, axis_end = it.page, it.axis_end
+        if page and axis_end is None:
+            # ADR 0015 rev 6 (S5): the round's ``axis.end`` — the light check now (the
+            # code that stopped the round, if one did, was kept above).
+            try:
+                axis_end = self._page_axis_code(self._live_tools(it), full=False)
+            except Exception:  # noqa: BLE001 - the round must always end (review F7); fail closed
+                axis_end = "axis_unreadable"
+            with it.lock:
+                it.axis_end = axis_end
         try:
             observed = self._observe(it)
         except Exception:  # noqa: BLE001 - fail closed: no progress
@@ -2290,6 +2773,7 @@ class GoalIterationExecutor:
         return None
 
     def _finish_writes(self, it: _Iteration, observed: _Outcome) -> None:
+        progress = "unknown"  # the round ledger's value when the count below never ran
         try:
             # A call still open (abandoned, or an exit before its settle): its whole
             # reservation stays charged (unknown outcome); a late settle is a no-op.
@@ -2327,6 +2811,7 @@ class GoalIterationExecutor:
                 logger.warning("grants: an iteration's board row could not be built")
                 outcome = None
             ended, cost = self._end_row(it, outcome)
+            self._ledger_round(it, progress, observed, outcome)
             with self._cond:
                 self._last[it.grant_id] = it.summary()
                 if outcome is not None:
@@ -2360,6 +2845,172 @@ class GoalIterationExecutor:
             cost["wall_ms"] = outcome["duration_ms"]
         return ended, cost
 
+    # -- the round ledger (ADR 0028 §5: observation only) ----------------------------------
+
+    _ROUND_ERRORS = frozenset(
+        {
+            "model_error",
+            "tool_refused",
+            "token_count_unavailable",
+            "budget_refused",
+            "timeout",
+            "failed",
+        }
+    )
+
+    @staticmethod
+    def _round_stop(grant: Any) -> str | None:
+        """The rule that ended or paused the grant, read from its record after the round
+        (a fixed code of ``round_ledger.STOP_CODES``; ``None``: still running on)."""
+        if grant is None:
+            return "unknown"
+        status, goal = grant.status, grant.goal_status
+        if status == "expired":
+            code = "ttl"
+        elif status == "revoked":
+            code = "kill" if grant.reason == "kill_switch" else grant.reason
+        elif status == "halted":
+            code = "breaker"
+        elif goal == "blocked":
+            code = grant.goal_reason
+        elif goal == "budget_limited":
+            code = "budget"
+        elif goal == "paused" or status == "paused":
+            code = "user"
+        else:
+            return None
+        return code if code in round_ledger.STOP_CODES else "other"
+
+    def _round_grant(self, grant_id: str) -> Any:
+        """This grant's record as it is after the round — memory only, no look, no event
+        (the service's read by id, ``round_record``: it waits a bounded time for the
+        service's memory lock, so a board read or a newer grant does not hide it, #761).
+        ``None``: not readable (the limits are then zero, the stop ``unknown``)."""
+        try:
+            record = self._grants.round_record(grant_id)
+        except Exception:  # noqa: BLE001 - unreadable
+            return None
+        return record if getattr(record, "grant_id", None) == grant_id else None
+
+    def _round_record(self, it: _Iteration, progress: str, observed: _Outcome, outcome) -> dict:
+        """One ``round`` record from the harness's own counters and codes (never a text of
+        the model, a path or the goal). A code outside its list is ``other``."""
+        top = 1_000_000
+        with it.lock:
+            end, detail, origin = it.stop_code or "done", it.detail or "none", it.origin
+            counts, tools = dict(it.counts), dict(it.tool_counts)
+            usage, largest, start = dict(it.round_usage), it.largest_input, it.started_wall
+            # ADR 0015 rev 6 (S5): measured only for a grant that names a page tool.
+            axis_start = it.axis_start if it.page else "not_run"
+            axis_end = (it.axis_end or "axis_unreadable") if it.page else "not_run"
+            if axis_end == "setting_off":
+                # Not a result of the axis check (the user setting stopped the round; the
+                # row's ``detail`` names it): ``other``, never "unreadable".
+                axis_end = "other"
+        grant = self._round_grant(it.grant_id)
+        with it.lock:
+            gate = it.done_when
+        now = None if grant is None else self._grants.clock_reading()
+        ended = int(self._wall())
+        took = outcome.get("duration_ms") if isinstance(outcome, dict) else None
+        changed = len(observed.added) if observed.kind in ("known", "none") else 0
+        left = 0 if now is None else state.ttl_left(grant, now)
+        runs = 0 if grant is None else grant.max_iterations - grant.iterations
+        tokens = 0 if grant is None else grant.total_tokens - grant.used_tokens
+        limits = {
+            "iteration_wall_sec": max(0, int(self.settings.iteration_wall_sec)),
+            "ttl_left_s": max(0, int(left)) if math.isfinite(left) else 0,
+            "iterations_left": max(0, runs),
+            "tokens_left": max(0, tokens),
+            "ceiling_min": TTL_CAP_SEC // 60,
+            "out_cap": None,
+            "out_cap_source": "unknown",
+            "ctx_mode": "unknown",
+        }
+        record = {
+            "k": "round",
+            "grant": it.grant_id,
+            "round": it.number,
+            "of_max": it.of_max,
+            "origin": origin,
+            "start": ended if start is None else min(start, ended),
+            "end": ended,
+            "wall_ms": took if type(took) is int else 0,
+            "end_code": end if end in round_ledger.END_CODES else "other",
+            "detail": detail if detail in round_ledger.DETAIL_CODES else "other",
+            "progress": progress if progress in round_ledger.PROGRESS else "unknown",
+            "model_calls": min(counts["model_calls"], top),
+            "writes": min(counts["writes"], top),
+            "approval_waits": min(counts["waits"], top),
+            "reports": min(counts["reports"], top),
+            "tools": {
+                name: min(counts["reports"] if name == REPORT_TOOL else tools.get(name, 0), top)
+                for name in round_ledger.TOOL_KEYS
+            },
+            "files_changed": min(changed, WRITTEN_KEPT),
+            "tokens_in": usage.get("tokens_in"),
+            "tokens_out": usage.get("tokens_out"),
+            "cache_read": usage.get("cache_read"),
+            "cache_write": usage.get("cache_write"),
+            "largest_input": largest,
+            "summaries": None,  # no counter exists yet: not measured, never estimated
+            "errors": [end] if end in self._ROUND_ERRORS else [],
+            "limits": limits,
+            "stop": self._round_stop(grant),
+            # ADR 0015 rev 6: the axis check's codes of this round (``not_run`` for a grant
+            # that names no page tool). Observation: nothing reads this value.
+            "axis": {
+                "start": round_ledger.axis_code(axis_start),
+                "end": round_ledger.axis_code(axis_end),
+            },
+        }
+        if gate is not None:
+            # #683: only a round that ran a done_when gate carries the key (codes only).
+            record["done_when"] = {"result": gate[0], "unmet": list(gate[1])}
+        return record
+
+    def _ledger_round(self, it: _Iteration, progress: str, observed: _Outcome, outcome) -> None:
+        """Append the ended iteration's record. A refused record or a failed write is
+        never swallowed silently: it is logged (the code only) and stays visible as the
+        ledger's ``unhealthy_reason`` (``GET /api/grants/<id>/rounds``; the heartbeat start
+        is then skipped ``ledger_unhealthy``). It never raises and never touches the
+        authority service: the ledger is observation."""
+        ledger = self.ledger
+        if ledger is None:
+            return
+        try:
+            record = self._round_record(it, progress, observed, outcome)
+        except Exception as error:  # noqa: BLE001 - codes only, never the message
+            ledger.mark_refused()  # the round was not recorded: visible, like a refusal
+            logger.warning("grants: a round record could not be built (%s)", type(error).__name__)
+            return
+        try:
+            ledger.append(record)
+        except round_ledger.LedgerSchemaError as error:
+            logger.warning("grants: the round ledger refused a record (field=%s)", error)
+        except Exception as error:  # noqa: BLE001 - codes only, never the message
+            if ledger.unhealthy_reason is None:
+                # Not a failure the ledger recorded itself (a write error is sticky there):
+                # the round is missing, so it is counted like a refused record (#761).
+                ledger.mark_refused()
+            logger.warning(
+                "grants: the round ledger could not be written (%s, %s)",
+                type(error).__name__,
+                ledger.unhealthy_reason,
+            )
+
+    def ledger_view(self, grant_id: Any, *, last: int | None = None) -> dict:
+        """The round ledger's records of one grant (codes and counts only), oldest first
+        (``last``: only the newest N), and the ledger's state: ``ok``, a fixed
+        ``round_ledger_*`` code, or ``off``."""
+        ledger = self.ledger
+        if ledger is None:
+            return {"ledger": "off", "rounds": []}
+        rounds = ledger.records(grant_id)
+        if last is not None:
+            rounds = rounds[-last:] if last > 0 else []
+        return {"ledger": ledger.unhealthy_reason or "ok", "rounds": rounds}
+
     def tick_facts(self, grant_id: Any) -> dict:
         """W6d: what the scheduler's ``grant_tick`` reads of the executor (memory only, no
         callback under ``_lock``): an iteration running or starting, live abandoned
@@ -2382,6 +3033,8 @@ class GoalIterationExecutor:
             "stopping": stopping,
             "ends": ends,
             "now": now,
+            # ADR 0028 §5 (Q12): why the round ledger cannot record (a fixed code), or None
+            "ledger": None if self.ledger is None else self.ledger.unhealthy_reason,
         }
 
     def tick_costs(self, grant_id: Any) -> list[dict]:
@@ -2496,12 +3149,23 @@ class GoalIterationExecutor:
                 iteration["tick_used"] = outcomes[-1]["tick_used"]
         else:
             iteration = {"state": "idle", "number": 0, "end": "", "detail": "", "card": "none"}
+        # ADR 0028 §5: the last rounds of the ledger (memory, never a wait) — an end's
+        # append runs inside its board write, so the check below covers it too.
+        ledger = self.ledger
+        rounds = [] if ledger is None else ledger.try_last(grant_id, ROUNDS_SHOWN)
+        if rounds is None:
+            raise BoardBusy()
         if self._board_seq != seq:
             # a write began (and maybe ended) while the pieces were read: never a mix
             raise BoardBusy()
         out = {"iteration": iteration, "outcomes": outcomes}
         if costs:
             out["tick_costs"] = costs  # W6d: only after a heartbeat-started iteration
+        reason = None if ledger is None else ledger.unhealthy_reason
+        if rounds or reason is not None:
+            # only once a round was recorded (or could not be): codes and counts
+            out["rounds"] = rounds
+            out["ledger"] = reason or "ok"
         return out
 
     def status(self) -> dict:

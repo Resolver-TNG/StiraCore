@@ -179,6 +179,23 @@ def test_job_schema_is_strict_and_tools_are_read_only_regardless_of_env(monkeypa
     assert error.value.code == "scope"
 
 
+def test_job_tools_exclude_page_tools():
+    """ADR 0015 rev 6 (Contexts): an agent-layer job is never offered a page tool."""
+    kwargs = {"now": T0, "gateway_actions": {"probe"}, "agent_jobs": True}
+    agent = {
+        "name": "a",
+        "layer": "agent",
+        "prompt": "summarize",
+        "schedule": {"type": "interval", "every_sec": 3600},
+        "budget": {"max_tokens_per_run": 100, "max_tokens_per_day": 1000},
+    }
+    for tool in ("page_check", "page_look", "page_review"):
+        assert tool not in JOB_READ_ONLY_TOOLS
+        with pytest.raises(JobError) as error:
+            parse_job({**agent, "tools": [tool]}, **kwargs)
+        assert error.value.code == "scope"
+
+
 # --- AC1: cron firing, pause, resume --------------------------------------------------
 
 

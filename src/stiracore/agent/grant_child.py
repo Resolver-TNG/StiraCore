@@ -81,9 +81,12 @@ def create_grant_child(
     hitl_timeout_sec: float,
     pre_hooks: Iterable[Any] = (),
     input_preparers: dict[str, Callable[[Any], Any]] | None = None,
+    grant_answered: Iterable[str] = (),
 ) -> Any:
     """Construct (not run) the child of one iteration. ``model`` is the executor's
-    permit-taking wrapper; ``tools`` the executor's wrapped tools (only those)."""
+    permit-taking wrapper; ``tools`` the executor's wrapped tools (only those).
+    ``grant_answered``: the conditional-Always tools the executor answers itself
+    (``page_look`` in the grant's scope, ADR 0015 rev 6 S5)."""
     from stiracore.agent.stimulus_classifier import RuleBasedClassifier
     from stiracore.agent.subagent import NXPSubagent
 
@@ -116,4 +119,5 @@ def create_grant_child(
     child.agent_id = child.engine.agent_id = session_ref
     for name, prepare in (input_preparers or {}).items():
         child.checkpoint_hooks.input_preparers[name] = prepare
+    child.checkpoint_hooks.grant_answered = frozenset(grant_answered)
     return child

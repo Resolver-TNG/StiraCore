@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Stage — Re:Solver</title>
   <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../static/ui/tokens.css">
   <link rel="stylesheet" href="stage.css">
   <script type="module" src="js/main.js"></script>
 </head>
@@ -12,6 +13,22 @@
   <main id="app" class="app">
     <div id="stage" class="stage">
       <canvas id="view" class="view" role="img" aria-label="Re:Solver in the lab (pixel-art scene)"></canvas>
+      <section id="board" class="board" hidden aria-labelledby="board-title" data-state="closed">
+        <div class="board-housing" aria-hidden="true"></div>
+        <div class="board-roll">
+          <div id="board-head" class="board-head">
+            <h2 id="board-title" class="board-title"><span class="board-tag" data-i18n="stage.board_tag">ボード</span> <span id="board-title-text"></span></h2>
+            <span class="board-buttons">
+              <button id="board-pin" class="mini" type="button" aria-pressed="false">📌 固定</button>
+              <button id="board-copy" class="mini" type="button" data-i18n="stage.board_copy">コピー</button>
+              <button id="board-close" class="mini" type="button" data-i18n="stage.board_close">× 閉じる</button>
+            </span>
+          </div>
+          <div id="board-body" class="board-body md" tabindex="0" role="region" aria-labelledby="board-title"></div>
+          <div class="board-foot"><span id="board-stats"></span><span id="board-note" class="board-note" role="status"></span></div>
+        </div>
+        <div class="board-weight" aria-hidden="true"></div>
+      </section>
       <div id="choices" class="choices" role="group" aria-label="choices" hidden></div>
       <section id="approval-detail" class="approval-detail" hidden aria-labelledby="approval-detail-title">
         <h2 id="approval-detail-title" class="approval-detail-title"></h2>

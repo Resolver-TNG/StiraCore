@@ -13,11 +13,14 @@ model with ``ModelSpec.options["capabilities"]`` (e.g. a local vision model).
 
 from __future__ import annotations
 
+import ipaddress
 from collections.abc import Mapping
 from dataclasses import dataclass, fields, replace
 from fnmatch import fnmatchcase
 from typing import Any
+from urllib.parse import urlsplit
 
+from .credentials import is_loopback_url
 from .spec import ModelSpec, normalize_provider
 
 
@@ -207,11 +210,16 @@ def capabilities_for(
 # A cap is a ceiling, not a purchase: output is billed for the tokens actually produced.
 LEGACY_MAX_OUTPUT_TOKENS = 8192
 AUTO_MAX_OUTPUT_TOKENS = 32_000
+# The automatic cap of a hosted model whose limit is not recorded (#745, owner decision
+# 2026-11-13: 8192 cut a single ``file_write`` of a few hundred lines off). 16384 is accepted by
+# the current hosted families; a model that refuses it says so, and ``max_output_tokens``
+# or a capability row overrides it.
+HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT = 16_384
 
 # The automatic cap when the model's limit is not recorded (unknown models, rows without
 # ``max_output``), per provider (#416). Hosted APIs (Bedrock, Anthropic, OpenAI and OpenAI-
 # compatible servers, Gemini, ...) reject a request whose cap is above the model's own limit,
-# so the safe value is a floor the models they serve accept: 8192 stays. A local server
+# so the safe value is a floor the models they serve accept: 16384 (was 8192, #745). A local server
 # (llama.cpp ``n_predict``, Ollama ``num_predict``) does not reject a large cap; generation
 # ends at its context window, and there is no bill.
 _UNKNOWN_LIMIT_MAX_OUTPUT = {"llamacpp": AUTO_MAX_OUTPUT_TOKENS, "ollama": AUTO_MAX_OUTPUT_TOKENS}
@@ -222,8 +230,8 @@ def unknown_limit_max_output(provider: str) -> int:
     try:
         name = normalize_provider(provider)
     except (TypeError, ValueError):
-        return LEGACY_MAX_OUTPUT_TOKENS
-    return _UNKNOWN_LIMIT_MAX_OUTPUT.get(name, LEGACY_MAX_OUTPUT_TOKENS)
+        return HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT
+    return _UNKNOWN_LIMIT_MAX_OUTPUT.get(name, HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT)
 
 
 def automatic_cap_source(spec_or_provider: ModelSpec | str, model_id: str | None = None) -> str:
@@ -235,40 +243,134 @@ def automatic_cap_source(spec_or_provider: ModelSpec | str, model_id: str | None
     return "provider_default" if limit is None else "model"
 
 
-def resolve_max_output_tokens(
+# #745: an OpenAI-compatible provider whose ``base_url`` is a local server (llama.cpp-class
+# behind ``/v1``) is the same case as ``llamacpp`` / ``ollama``: a large cap is accepted and
+# nothing is billed. Only these providers, and only when the model's limit is not recorded.
+_LOCAL_ENDPOINT_PROVIDERS = frozenset({"openai", "openai_responses"})
+_RFC1918 = tuple(
+    ipaddress.ip_network(net) for net in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+)
+
+# Where the effective cap comes from (``/api/gateway/status``): codes only.
+CAP_SOURCE_SETTING = "setting"
+CAP_SOURCE_MODEL_TABLE = "model_table"
+CAP_SOURCE_UNKNOWN_LIMIT = "unknown_limit_default"
+CAP_SOURCE_LOCAL = "local_default"
+CAP_SOURCES = frozenset(
+    {CAP_SOURCE_SETTING, CAP_SOURCE_MODEL_TABLE, CAP_SOURCE_UNKNOWN_LIMIT, CAP_SOURCE_LOCAL}
+)
+
+
+def is_local_endpoint(base_url: Any) -> bool:
+    """Is ``base_url`` a loopback (``127.0.0.0/8``, ``::1``, ``localhost``) or RFC 1918 host?
+
+    Decided from the URL text alone: no DNS lookup, so a public name that resolves to a
+    private address is *not* local here (it keeps the hosted default).
+    """
+    if not isinstance(base_url, str) or not base_url.strip():
+        return False
+    try:
+        if is_loopback_url(base_url.strip()):
+            return True
+        host = (urlsplit(base_url.strip()).hostname or "").strip("[]")
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return address.version == 4 and any(address in net for net in _RFC1918)
+
+
+def resolve_max_output_cap(
     configured: int | None,
     spec_or_provider: ModelSpec | str,
     model_id: str | None = None,
-) -> int:
-    """The per-call output cap: an explicit value wins, else the capability-bound default."""
+    *,
+    base_url: str | None = None,
+) -> tuple[int, str]:
+    """``(cap, source)``: the per-call output cap and where it comes from (``CAP_SOURCES``).
+
+    ``base_url`` is the endpoint when a provider name is given; a ``ModelSpec`` carries its
+    own (``options["base_url"]``).
+    """
     if configured is not None:
-        return configured
+        return configured, CAP_SOURCE_SETTING
     try:
         capabilities = capabilities_for(spec_or_provider, model_id)
     except (TypeError, ValueError):
         capabilities = None
     if capabilities is None or capabilities.max_output is None:
-        provider = (
-            spec_or_provider.provider
-            if isinstance(spec_or_provider, ModelSpec)
-            else spec_or_provider
-        )
-        return unknown_limit_max_output(provider)
+        if isinstance(spec_or_provider, ModelSpec):
+            provider = spec_or_provider.provider
+            base_url = spec_or_provider.options.get("base_url")
+        else:
+            provider = spec_or_provider
+        try:
+            name = normalize_provider(provider)
+        except (TypeError, ValueError):
+            return HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT, CAP_SOURCE_UNKNOWN_LIMIT
+        if name in _UNKNOWN_LIMIT_MAX_OUTPUT:
+            return _UNKNOWN_LIMIT_MAX_OUTPUT[name], CAP_SOURCE_LOCAL
+        if name in _LOCAL_ENDPOINT_PROVIDERS and is_local_endpoint(base_url):
+            return AUTO_MAX_OUTPUT_TOKENS, CAP_SOURCE_LOCAL
+        return HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT, CAP_SOURCE_UNKNOWN_LIMIT
     wanted = AUTO_MAX_OUTPUT_TOKENS
     if capabilities.thinking_uses_output_budget and capabilities.thinking_reserve:
         wanted += capabilities.thinking_reserve
-    return min(wanted, capabilities.max_output)
+    return min(wanted, capabilities.max_output), CAP_SOURCE_MODEL_TABLE
+
+
+def resolve_max_output_tokens(
+    configured: int | None,
+    spec_or_provider: ModelSpec | str,
+    model_id: str | None = None,
+    *,
+    base_url: str | None = None,
+) -> int:
+    """The per-call output cap: an explicit value wins, else the capability-bound default."""
+    return resolve_max_output_cap(configured, spec_or_provider, model_id, base_url=base_url)[0]
+
+
+def describe_output_cap(
+    value: Any,
+    spec_or_provider: ModelSpec | str | None,
+    model_id: str | None = None,
+    *,
+    base_url: str | None = None,
+) -> dict[str, Any] | None:
+    """``{value, source}`` of a cap in use (#745): a number and a ``CAP_SOURCES`` code only.
+
+    The source is read back from the value: the automatic cap of this model and endpoint
+    keeps the automatic source, any other value is ``"setting"``. (A setting equal to the
+    automatic value is therefore reported as automatic: the two behave the same.)
+    None when ``value`` is not a positive integer.
+    """
+    if type(value) is not int or value < 1:
+        return None
+    try:
+        automatic, source = resolve_max_output_cap(
+            None,
+            spec_or_provider,  # type: ignore[arg-type]
+            model_id,
+            base_url=base_url,
+        )
+    except Exception:  # noqa: BLE001 - a status field must not fail on an odd agent
+        automatic, source = HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT, CAP_SOURCE_UNKNOWN_LIMIT
+    return {"value": value, "source": source if value == automatic else CAP_SOURCE_SETTING}
 
 
 __all__ = [
     "AUTO_MAX_OUTPUT_TOKENS",
     "CAPABILITY_TABLE",
+    "CAP_SOURCES",
+    "HOSTED_UNKNOWN_LIMIT_MAX_OUTPUT",
     "LEGACY_MAX_OUTPUT_TOKENS",
     "UNKNOWN",
     "ModelCapabilities",
     "automatic_cap_source",
     "capabilities_for",
+    "describe_output_cap",
+    "is_local_endpoint",
     "lookup_capabilities",
+    "resolve_max_output_cap",
     "resolve_max_output_tokens",
     "unknown_limit_max_output",
 ]

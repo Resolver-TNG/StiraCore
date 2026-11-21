@@ -200,6 +200,7 @@ def make_env(
     wall=600,
     max_iterations=10,
     stop_drain_sec=2.0,
+    issue_extra=None,
     **service_kw,
 ):
     from stiracore.grants.executor import GoalIterationExecutor
@@ -258,6 +259,7 @@ def make_env(
         scope={"tools": list(tools), "workspace_subtree": str(sub)},
         budget={"total_tokens": total, "per_tick_tokens": per_tick},
         max_iterations=max_iterations,
+        **(issue_extra or {}),
     )
     env.grant_id = confirm_and_issue(service, body)["grant"]["grant_id"]
     return env

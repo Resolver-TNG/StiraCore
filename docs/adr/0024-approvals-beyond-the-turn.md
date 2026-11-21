@@ -377,7 +377,8 @@ What shipped, and where it reads the decision text more strictly than written:
   stored (and listed in the dashboard) while the first segment is still ending; an approval
   in that window is kept for the run and its continuation is scheduled when the run parks,
   with the same checks (§6.2; before #296's A8 fix it was revoked and the run ended
-  `cancelled(approval_cancelled)`). A run that ends instead of parking drops it.
+  `cancelled(approval_cancelled)`). A run that ends instead of parking drops it. A pause in
+  that same window ends the run when it parks (`cancelled(paused)`, #636), as for a parked run.
 * The chat server: a dashboard approval of a `kind: "job"` request is routed to
   `scheduler.resume_waiting_run`, never to the turn resume. Only with gateway `agent_jobs` on.
 * Deviations: the run's token reservation is kept while it waits (not settled and

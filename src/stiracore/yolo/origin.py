@@ -27,9 +27,27 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any
 
-__all__ = ["HUMAN_TURN", "covered", "current", "human_turn", "started_by_person"]
+__all__ = [
+    "COVERED_CLASSES",
+    "HUMAN_TURN",
+    "ORIGIN_CLASSES",
+    "covered",
+    "current",
+    "human_turn",
+    "origin_class",
+    "started_by_person",
+    "turn_key",
+]
 
 HUMAN_TURN = "turn"
+# ADR 0015 rev 6 (O1): the class of the turn a tool call belongs to. Only the two covered
+# classes carry a live mark; every other origin sets none and reads ``unknown`` here (the
+# routes of a bot, a webhook and a job cannot be told apart from a missing mark — all of
+# them are "not covered"). ``child``: a live mark of another agent's turn.
+CHAT_PERSON, YOLO_WINDOW, CHILD, UNKNOWN = "chat_person", "yolo_window", "child", "unknown"
+ORIGIN_CLASSES = (CHAT_PERSON, YOLO_WINDOW, "bot", "webhook", "job", CHILD, UNKNOWN)
+COVERED_CLASSES = frozenset({CHAT_PERSON, YOLO_WINDOW})
+_ANY_AGENT = object()
 
 
 @dataclass(frozen=True, eq=False)
@@ -62,6 +80,28 @@ def started_by_person() -> bool:
     #493 review round 2: ``delegate`` is offered only here)."""
     mark = _live_mark()
     return mark is not None and not mark.automatic
+
+
+def origin_class(agent_id: Any = _ANY_AGENT) -> str:
+    """One of :data:`ORIGIN_CLASSES` for the running turn (ADR 0015 rev 6, O1).
+
+    ``chat_person``: a turn a message on the chat route started — a person's, or an
+    external driver's (the route cannot tell them apart). ``yolo_window``: a window's
+    automatic continue (ADR 0014). No live mark (a bot, a webhook, a job, a resume, a
+    context that outlived its turn): ``unknown``. With ``agent_id``: a live mark of
+    another agent is ``child``. Only :data:`COVERED_CLASSES` are ever "covered"."""
+    mark = _live_mark()
+    if mark is None:
+        return UNKNOWN
+    if agent_id is not _ANY_AGENT and mark.agent_id != agent_id:
+        return CHILD
+    return YOLO_WINDOW if mark.automatic else CHAT_PERSON
+
+
+def turn_key() -> object | None:
+    """The identity of the running covered turn (its live mark), else ``None``. Compared
+    with ``is`` only: per-turn counters reset when it changes."""
+    return _live_mark()
 
 
 def covered(agent_id: Any = None) -> bool:

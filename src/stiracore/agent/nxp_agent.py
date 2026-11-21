@@ -3,7 +3,8 @@
 Tool restrictions are name-based. Applications must configure every
 write-capable tool name, including aliases, in ``blocked_tool_names``.
 This wrapper does not sandbox tools or implement per-tool confirmation.
-Until a confirmation gateway exists, WARNING also disables write tools.
+Until a confirmation gateway exists, WARNING also refuses write tools at the call
+(#259: they stay in the tool list so the cached prefix does not change).
 """
 
 import copy
@@ -26,6 +27,7 @@ from stiracore.agent import prompt_cache as _cache
 from stiracore.agent.checkpoint_hooks import CheckpointHooks, read_policy
 from stiracore.agent.context_management import ContextManagementSettings, StashStorage
 from stiracore.agent.prompt_cache import PromptCacheSettings, PromptParts
+from stiracore.agent.repeated_failure import RepeatedFailureHook
 from stiracore.agent.soul_compaction import SoulAgentState, SoulCompactionGuard
 from stiracore.agent.stimulus_classifier import NO_UPDATE_REASONS
 from stiracore.core import (
@@ -39,8 +41,13 @@ from stiracore.core import (
 )
 from stiracore.core.approval import OperationLedger
 from stiracore.core.checkpoint import Checkpoint, CheckpointStore
+from stiracore.core.repeated_failure import RepeatedFailureCounter, RepeatedFailureSettings
 from stiracore.identity_paths import WritePathPolicy
-from stiracore.middleware.identity_guard import IdentityGuard
+from stiracore.middleware.identity_guard import (
+    IdentityGuard,
+    breaker_withholds_writes,
+    breaker_write_names,
+)
 from stiracore.providers import ModelSpec, create_model, provider_of
 
 # The stash directory is context_stash_dir/<agent_id>; nothing else is accepted.
@@ -60,6 +67,18 @@ def prompt_text(prompt: Any) -> str:
             if isinstance(block, Mapping) and isinstance(block.get("text"), str)
         )
     return ""
+
+
+def _breaker_tool_notice(breaker: Any) -> str:
+    """#259: one fixed line for the runtime (volatile) block while the breaker refuses
+    write tools; "" otherwise (NORMAL, COHERENCE, CRITICAL with ``halt``)."""
+    if not breaker_withholds_writes(breaker.actions):
+        return ""
+    level = "WARNING" if breaker.actions & BreakAction.REQUIRE_CONFIRMATION else "CRITICAL"
+    return (
+        f"Circuit breaker {level}: write and exec tool calls are refused "
+        "(breaker_write_refused) until stability recovers; read tools keep working."
+    )
 
 
 def _tool_name(tool: Any) -> str | None:
@@ -88,6 +107,44 @@ def _tool_name(tool: Any) -> str | None:
             return name
 
     return None
+
+
+# #745: after a call cut off by ``max_tokens`` the SDK replaces each half-written tool use
+# with one sentence ("... tool use was incomplete due to maximum token limits ..."). That
+# does not tell the model that the call was not run, nor what to do, so the same oversized
+# call came again. This fixed text (and the cap, a number) is appended to those blocks;
+# nothing of the cut arguments is copied.
+_SDK_CUT_TOOL_USE = "incomplete due to maximum token limits"
+CUT_OFF_NOTE_MARKER = "[stira:cut_off]"
+
+
+def cut_off_note(limit: Any = None) -> str:
+    cap = f" ({limit} tokens)" if type(limit) is int and limit > 0 else ""
+    return (
+        f"{CUT_OFF_NOTE_MARKER} This tool call was cut off by the output limit{cap} before"
+        " its arguments were complete, so it was not run and nothing was written. Sending"
+        " the same call again will be cut off again. Redo it in smaller pieces: for a long"
+        " file, write a first part and add the rest in further, shorter calls."
+    )
+
+
+def annotate_cut_off_note(message: Any, limit: Any = None) -> bool:
+    """Append :func:`cut_off_note` to the SDK's cut-tool-use blocks of an assistant message.
+
+    In place; True when a block was changed. Any other message, and a block that already
+    carries the note, is left as it is.
+    """
+    if not isinstance(message, Mapping) or message.get("role") != "assistant":
+        return False
+    changed = False
+    for block in message.get("content") or []:
+        if not isinstance(block, dict) or not isinstance(block.get("text"), str):
+            continue
+        text = block["text"]
+        if _SDK_CUT_TOOL_USE in text and CUT_OFF_NOTE_MARKER not in text:
+            block["text"] = f"{text}\n{cut_off_note(limit)}"
+            changed = True
+    return changed
 
 
 class NXPAgent:
@@ -134,6 +191,7 @@ class NXPAgent:
         tool_policy: Callable[[str], str] | None = None,
         callback_handler: Any = _SDK_DEFAULT_CALLBACK,
         send_allowed_tools_only: bool = False,
+        repeated_failure: RepeatedFailureSettings | None = None,
     ) -> None:
         if type(max_output_tokens) is not int or max_output_tokens < 1:
             raise ValueError("max_output_tokens must be a positive integer")
@@ -252,6 +310,18 @@ class NXPAgent:
         self._turn_agent: Agent | None = None
         # Optional additional Strands HookProviders (e.g. dashboard/UI event hooks).
         self._extra_hooks = list(extra_hooks or ())
+        # Repeated-failure indicator (#151): off unless settings with enabled=True are
+        # given. On, a hook counts consecutive tool errors and a fixed notice is prepended
+        # with the identity notice at the next turn's start while the count is at the
+        # threshold. Observe + prompt only: no gate, approval or breaker input changes.
+        if repeated_failure is not None and not isinstance(
+            repeated_failure, RepeatedFailureSettings
+        ):
+            raise TypeError("repeated_failure must be RepeatedFailureSettings")
+        self._repeated_failure: RepeatedFailureCounter | None = None
+        if repeated_failure is not None and repeated_failure.enabled:
+            self._repeated_failure = RepeatedFailureCounter(repeated_failure.threshold)
+            self._extra_hooks.append(RepeatedFailureHook(self._repeated_failure))
         # Prompt caching (#254): opt-in. prompt_parts_provider (normally
         # ContextAssembler.build_prompt_parts) supplies the static/volatile split;
         # it is called after pre_turn, like system_prompt_provider.
@@ -273,6 +343,7 @@ class NXPAgent:
         self._stash: StashStorage | None = None
         self._stash_purged_at = 0.0
         self._context_warned: set[str] = set()
+        self._context_refusal: str | None = None
         self._last_context_management: dict[str, Any] | None = None
         # Passed to every SDK Agent when given. The SDK default prints the model's
         # streamed text and tool names to stdout (unmasked, e.g. into a server log);
@@ -376,6 +447,8 @@ class NXPAgent:
                 for b in blocks
             )
             reasoning = any("reasoningContent" in b for b in blocks)
+            # #745: tell the model why its call did not run and what to do instead.
+            annotate_cut_off_note(last, self.max_output_tokens)
         except Exception:  # noqa: BLE001 - telemetry must never mask the turn's own error
             return
         self._last_cut_off = {"before_reply": not started, "reasoning": reasoning}
@@ -418,42 +491,71 @@ class NXPAgent:
         """This agent's offload stash (``context_stash_dir/<agent_id>``), once opened."""
         return self._stash
 
+    @property
+    def context_refusal_reason(self) -> str | None:
+        """Why context management was last refused: a ``REFUSAL_REASONS`` code, or ``None``."""
+        return self._context_refusal
+
+    def server_context_window(self, *, cached_only: bool = False) -> int | None:
+        """The window a local OpenAI-compatible server reports for this model (#746).
+
+        ``None`` for every other provider or address and when nothing is reported.
+        ``cached_only`` never sends a request (status views).
+        """
+        from stiracore.providers.server_window import reported_context_window
+
+        return reported_context_window(self.model_spec, cached_only=cached_only)
+
     def _context_refused(self, reason: str) -> str:
+        """Refuse with a fixed code (#746): the log names the fix, never a path."""
+        self._context_refusal = reason
         if reason not in self._context_warned:
             self._context_warned.add(reason)
             logging.getLogger(__name__).warning(
-                "context_management is enabled but refused (%s); history is managed as before",
+                "context_management is enabled but refused (%s); history is managed as before: "
+                "nothing is offloaded or summarized. To fix: %s",
                 reason,
+                _context.REFUSAL_REASONS[reason],
             )
         return "refused"
 
     def _context_mode(self) -> str:
         """``off`` | ``unsupported`` | ``refused`` | ``on``.
 
-        ``refused`` (fail-closed, warned once): no stash directory, or one
-        outside the write roots (#243) or on the identity floor. Offloading
+        ``refused`` (fail-closed, warned once, ``context_refusal_reason``): no stash
+        directory, or one on the identity floor, or one that is neither inside the write
+        roots (#243) nor the server's ``<data dir>/context-stash/`` (#746). Offloading
         without a durable stash would drop content the model cannot read back.
         ``unsupported``: a stateful model keeps its history server-side.
         """
         settings = self.context_management
+        self._context_refusal = None
         if not settings.enabled:
             return "off"
         if getattr(self.model, "stateful", False):
             return "unsupported"
         if self.context_stash_dir is None:
-            return self._context_refused("no context_stash_dir")
+            return self._context_refused("no_stash_dir")
         if not _SAFE_DIR_NAME.fullmatch(self.agent_id) or self.agent_id in (".", ".."):
-            return self._context_refused("agent_id is not a plain directory name")
+            return self._context_refused("agent_id_not_plain")
         directory = self.context_stash_dir / self.agent_id
         policy = self.write_policy
         within = getattr(policy, "within_roots", None)
         try:
-            if within is None or not within(directory) or policy.is_read_only(directory):
-                return self._context_refused("stash directory outside the write roots")
+            # Never on the floor. Inside the write roots (#243), or the server's own
+            # <data dir>/context-stash/ (#746): the offloader writes there itself, so a
+            # workspace_dir outside the data directory does not switch the feature off,
+            # and the agent's file tools gain no write root.
+            if (
+                within is None
+                or policy.is_read_only(directory)
+                or not (within(directory) or _context.internal_stash(policy, directory))
+            ):
+                return self._context_refused("stash_outside_write_roots")
             if self._stash is None or self._stash.directory != directory:
                 self._stash = StashStorage(directory)
-        except (OSError, ValueError) as error:
-            return self._context_refused(f"stash directory unusable: {type(error).__name__}")
+        except (OSError, RuntimeError, ValueError):
+            return self._context_refused("stash_unusable")
         now = time.time()
         if now - self._stash_purged_at >= 60:
             self._stash_purged_at = now
@@ -629,7 +731,11 @@ class NXPAgent:
         turn_tools = _cache.sort_tools(self._turn_tools(breaker), _tool_name)
         system_prompt = self._with_identity(breaker, _cache.static_system_prompt(parts.static))
         now = datetime.now().astimezone().isoformat(timespec="seconds")
-        volatile = "\n\n".join(part for part in (parts.volatile.strip(), f"## Time\n{now}") if part)
+        volatile = "\n\n".join(
+            part
+            for part in (parts.volatile.strip(), _breaker_tool_notice(breaker), f"## Time\n{now}")
+            if part
+        )
         return turn_tools, system_prompt, volatile, parts.recalled.strip()
 
     def _prepare_turn(self, breaker: Any) -> tuple[list[Any], str]:
@@ -642,28 +748,19 @@ class NXPAgent:
         return self._turn_tools(breaker), self._with_identity(breaker, base_prompt)
 
     def _turn_tools(self, breaker: Any) -> list[Any]:
-        """This turn's tools after the breaker's write filter."""
+        """This turn's tools. #259: the breaker no longer removes write tools here (the
+        list, and so the cached prefix, is the same at every level); ``IdentityGuard``
+        refuses their calls with ``breaker_write_refused``. While the breaker withholds
+        writes, a tool whose name cannot be resolved is still left out (fail closed: the
+        call-time check decides by name)."""
         turn_tools = list(self.tools)
-        filters_writes = bool(breaker.actions & BreakAction.REQUIRE_CONFIRMATION) or bool(
-            breaker.actions & BreakAction.BLOCK_WRITES and not breaker.actions & BreakAction.HALT
-        )
-        if filters_writes:
-            blocked = self.engine.blocked_tools()
-            # Dynamic MCP names do not exist in static StiraConfig defaults.
-            # Apply the host registry's conservative WRITE classification too.
-            from stiracore.tools.tool_registry import WRITE_TOOLS
-
-            blocked.update(WRITE_TOOLS)
-            if breaker.actions & BreakAction.REQUIRE_CONFIRMATION:
-                # No confirmation gateway exists yet. Conservatively disable
-                # all configured write tools rather than silently allowing them.
-                blocked.update(self.config.blocked_tool_names)
-            # Fail closed for tools whose registered name cannot be resolved.
-            turn_tools = [
-                tool
-                for tool in turn_tools
-                if (name := _tool_name(tool)) is not None and name not in blocked
-            ]
+        # The names refused by the breaker as of this turn's start (IdentityGuard and the
+        # gate's breaker refusal both read it, so a tool closed mid-turn stays refused).
+        names = frozenset(breaker_write_names(self.engine))
+        self.identity_guard.turn_write_names = names
+        self.checkpoint_hooks.turn_write_names = names
+        if breaker_withholds_writes(breaker.actions):
+            turn_tools = [tool for tool in turn_tools if _tool_name(tool) is not None]
         if getattr(self, "send_allowed_tools_only", False):
             turn_tools = self._allowed_tools(turn_tools)
         return turn_tools
@@ -692,11 +789,22 @@ class NXPAgent:
             return self.engine.identity_injection() or ""
         return ""
 
+    def _calm_notice(self) -> str:
+        """The repeated-failure notice (#151) this turn prepends; "" when off or below."""
+        counter = getattr(self, "_repeated_failure", None)
+        return counter.calm_notice() if counter is not None else ""
+
+    def _turn_notice(self, breaker: Any) -> str:
+        """Everything this turn prepends to the base prompt: identity, then calm."""
+        return "\n\n".join(
+            part for part in (self._identity_notice(breaker), self._calm_notice()) if part
+        )
+
     def _with_identity(self, breaker: Any, base_prompt: str) -> str:
         """Prepend the live identity notice while the breaker injects identity."""
-        identity = self._identity_notice(breaker)
-        if identity:
-            return f"{identity}\n\n{base_prompt}" if base_prompt else identity
+        notice = self._turn_notice(breaker)
+        if notice:
+            return f"{notice}\n\n{base_prompt}" if base_prompt else notice
         return base_prompt
 
     def _snapshot_context(self, agent: Agent, system_prompt: str) -> None:
@@ -764,6 +872,9 @@ class NXPAgent:
             )
             self._last_turn_summary["no_update_reason"] = reason
             self._record_emotion_update(reason)
+            counter = getattr(self, "_repeated_failure", None)
+            if counter is not None:
+                self._last_turn_summary["repeated_failure"] = counter.snapshot()
         else:
             self._last_turn_summary = None
         if self._compaction_state is not None:
@@ -852,6 +963,9 @@ class NXPAgent:
         # A fresh process has a fresh guard (it tracks this conversation's history size).
         self.compaction_guard = SoulCompactionGuard()
         self._compaction_state = None
+        counter = getattr(self, "_repeated_failure", None)
+        if counter is not None:
+            counter.reset()  # another task (#151)
         self._last_prompt_cache = None
         self._cached_prefix_tokens = 0
         self._last_context_management = None
@@ -939,13 +1053,16 @@ class NXPAgent:
                 if mode == "static":
                     turn_tools = _cache.sort_tools(turn_tools, _tool_name)
             if self.send_boundary_check is not None:
-                self.send_boundary_check(turn_tools, self._identity_notice(breaker))
+                self.send_boundary_check(turn_tools, self._turn_notice(breaker))
             cache_active = mode in ("split", "static")
             context_mode = self._context_mode()
             turn_model = self._turn_model(
                 cache_active,
                 _context.resolve_context_window(
-                    self.context_management, self.model, self.capabilities
+                    self.context_management,
+                    self.model,
+                    self.capabilities,
+                    server_window=self.server_context_window,
                 )
                 if context_mode == "on"
                 else None,

@@ -112,7 +112,10 @@ def test_delegate_is_offered_only_in_a_persons_turn():
     with origin.human_turn("stira"):
         assert "delegate" in names()
         assert "delegate" in names("coherence")  # writes_allowed: COHERENCE writes
-        assert "delegate" not in names("warning")
+        # #259: listed at WARNING (its call is refused, breaker_write_refused); still out at
+        # CRITICAL, where under halt its call would reach a card instead (fail closed).
+        assert "delegate" in names("warning")
+        assert "delegate" not in names("critical")
     with origin.human_turn("stira", automatic=True):  # a window's automatic continue
         assert origin.covered("stira")  # YOLO still covers it (ADR 0014)
         assert "delegate" not in names()  # round 2 minor 3: nobody may be watching

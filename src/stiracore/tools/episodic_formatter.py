@@ -52,6 +52,17 @@ ELLIPSIS = "…"
 # ``episode_labels`` in agent-config.json (#653): see ``clean_episode_labels``.
 EPISODE_LABEL_KEYS = ("user", "agent")
 EPISODE_LABEL_MAX_CHARS = 24
+# ``episode_labels.placeholders``: the language of the fixed words in a line (empty text,
+# omitted tool output, omitted code). ``ja`` is the long-standing default.
+PLACEHOLDER_LANGS = {
+    "ja": ("(空)", "[ツール出力 省略]", "[コード: {lang}{lines}行 省略]", "[コード 省略]"),
+    "en": (
+        "(empty)",
+        "[tool output omitted]",
+        "[code: {lang}{lines} lines omitted]",
+        "[code omitted]",
+    ),
+}
 _EPISODE_LABEL_JOINERS = frozenset(" _-.・")
 
 # --------------------------------------------------------------------------
@@ -272,8 +283,11 @@ class _Protector:
         return _TOKEN_RE.sub("", text)
 
 
-def _prepare(text: str, stats: _Stats, url_chars: int, inline_code_chars: int) -> list[str]:
+def _prepare(
+    text: str, stats: _Stats, url_chars: int, inline_code_chars: int, placeholders: str = "ja"
+) -> list[str]:
     """Sanitize ``text`` and split it into restored meaning units."""
+    _empty, tool_word, code_template, _code_short = PLACEHOLDER_LANGS[placeholders]
     # NUL is the token delimiter: an input NUL could forge or break a token.
     text = text.replace("\x00", "")
     text = _ANSI.sub("", text.replace("\r\n", "\n").replace("\r", "\n"))
@@ -284,7 +298,7 @@ def _prepare(text: str, stats: _Stats, url_chars: int, inline_code_chars: int) -
 
     def _tool(_: re.Match[str]) -> str:
         stats.tool_outputs += 1
-        return "\n\n" + protector.protect("[ツール出力 省略]") + "\n\n"
+        return "\n\n" + protector.protect(tool_word) + "\n\n"
 
     text = _TOOL_ENVELOPE.sub(_tool, text)
 
@@ -294,7 +308,8 @@ def _prepare(text: str, stats: _Stats, url_chars: int, inline_code_chars: int) -
         lines = body.count("\n") + 1 if body else 0
         stats.code_blocks += 1
         label = f"{language} " if language else ""
-        return "\n\n" + protector.protect(f"[コード: {label}{lines}行 省略]") + "\n\n"
+        placeholder = code_template.format(lang=label, lines=lines)
+        return "\n\n" + protector.protect(placeholder) + "\n\n"
 
     text = _FENCE.sub(_code, text)
     text = _URL.sub(lambda match: protector.protect(shorten_url(match.group(0), url_chars)), text)
@@ -319,7 +334,7 @@ def _prepare(text: str, stats: _Stats, url_chars: int, inline_code_chars: int) -
             if _JSON_LINE.match(raw_line) and len(raw_line.strip()) > 80:
                 _flush(prose, units)
                 stats.tool_outputs += 1
-                units.append(protector.protect("[ツール出力 省略]"))
+                units.append(protector.protect(tool_word))
                 continue
             if _BULLET.match(raw_line):
                 _flush(prose, units)
@@ -481,7 +496,11 @@ class EpisodicFormatter:
         max_chars: int = 600,
         url_chars: int = 60,
         inline_code_chars: int = 60,
+        placeholders: str = "ja",
     ) -> None:
+        if placeholders not in PLACEHOLDER_LANGS:
+            raise ValueError("placeholders must be one of: " + ", ".join(PLACEHOLDER_LANGS))
+        self.placeholders = placeholders
         for name, value in (
             ("user_budget", user_budget),
             ("agent_budget", agent_budget),
@@ -502,7 +521,7 @@ class EpisodicFormatter:
     def _summarize(
         self, text: str, budget: int, stats: _Stats, priority: Callable[[list[str]], list[int]]
     ) -> SpeakerSummary:
-        units = _prepare(text, stats, self.url_chars, self.inline_code_chars)
+        units = _prepare(text, stats, self.url_chars, self.inline_code_chars, self.placeholders)
         selected, truncated = _select(units, budget, priority(units)) if units else ("", False)
         return SpeakerSummary(selected, len(text), truncated)
 
@@ -510,7 +529,9 @@ class EpisodicFormatter:
         stats = _Stats()
         user = self._summarize(str(user_message), self.user_budget, stats, _user_priority)
         agent = self._summarize(str(agent_response), self.agent_budget, stats, _agent_priority)
-        content = _compose(self.user_label, user.text, self.agent_label, agent.text)
+        content = _compose(
+            self.user_label, user.text, self.agent_label, agent.text, self.placeholders
+        )
         if len(content) > self.max_chars:
             # Final defense only; budgets normally keep content under the cap.
             content = shorten_unit(content, self.max_chars)
@@ -562,16 +583,29 @@ def clean_episode_labels(options: Any) -> dict[str, str]:
             cleaned[key] = options[key]
         else:
             logger.warning("episode_labels.%s ignored: not allowed (E_EPISODE_LABEL_IGNORED)", key)
-    if any(key not in EPISODE_LABEL_KEYS for key in options):
+    if any(key not in (*EPISODE_LABEL_KEYS, "placeholders") for key in options):
         logger.warning("episode_labels: unknown key ignored (E_EPISODE_LABEL_IGNORED)")
     if len(cleaned) == 2 and cleaned["user"].casefold() == cleaned["agent"].casefold():
         logger.warning("episode_labels ignored: both labels are equal (E_EPISODE_LABEL_IGNORED)")
         return {}
+    if "placeholders" in options:
+        if (
+            isinstance(options["placeholders"], str)
+            and options["placeholders"] in PLACEHOLDER_LANGS
+        ):
+            cleaned["placeholders"] = options["placeholders"]
+        else:
+            logger.warning(
+                "episode_labels.placeholders ignored: not allowed (E_EPISODE_LABEL_IGNORED)"
+            )
     return cleaned
 
 
-def _compose(user_label: str, user_text: str, agent_label: str, agent_text: str) -> str:
-    return f"{user_label}: {user_text or '(空)'} → {agent_label}: {agent_text or '(空)'}"
+def _compose(
+    user_label: str, user_text: str, agent_label: str, agent_text: str, placeholders: str = "ja"
+) -> str:
+    empty = PLACEHOLDER_LANGS[placeholders][0]
+    return f"{user_label}: {user_text or empty} → {agent_label}: {agent_text or empty}"
 
 
 def fallback_format(
@@ -582,12 +616,17 @@ def fallback_format(
     agent_label: str = "Agent",
     user_budget: int = 160,
     agent_budget: int = 320,
+    placeholders: str = "ja",
 ) -> EpisodeSummary:
     """Minimal-dependency deterministic fallback used when a formatter fails.
 
     Deliberately simple: redact, drop fenced code / tool envelopes, collapse
     whitespace, cut at a sentence or clause boundary.
     """
+
+    if placeholders not in PLACEHOLDER_LANGS:
+        placeholders = "ja"
+    words = PLACEHOLDER_LANGS[placeholders]
 
     def _one(value: Any, budget: int) -> SpeakerSummary:
         try:
@@ -598,8 +637,8 @@ def fallback_format(
         # ANSI first, as in ``_prepare``: an escape inside a key (``pass\x1b[31mword=``)
         # would hide it from the mask and come back as ``password=`` once removed.
         text = _ANSI.sub("", text)
-        text = _TOOL_ENVELOPE.sub(" [ツール出力 省略] ", text)
-        text = _FENCE.sub(" [コード 省略] ", text)
+        text = _TOOL_ENVELOPE.sub(f" {words[1]} ", text)
+        text = _FENCE.sub(f" {words[3]} ", text)
         text, _ = redact_secrets(text)
         text = re.sub(r"\s+", " ", text).strip()
         short = shorten_unit(text, budget)
@@ -608,7 +647,10 @@ def fallback_format(
     user = _one(user_message, user_budget)
     agent = _one(agent_response, agent_budget)
     return EpisodeSummary(
-        _compose(user_label, user.text, agent_label, agent.text), user, agent, "fallback"
+        _compose(user_label, user.text, agent_label, agent.text, placeholders),
+        user,
+        agent,
+        "fallback",
     )
 
 
@@ -691,6 +733,7 @@ def record_episode(
     labels = {
         "user_label": getattr(formatter, "user_label", "User"),
         "agent_label": getattr(formatter, "agent_label", "Agent"),
+        "placeholders": getattr(formatter, "placeholders", "ja"),
     }
     try:
         summary = formatter.format(str(user_message), str(agent_response))

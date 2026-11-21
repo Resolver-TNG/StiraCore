@@ -204,6 +204,8 @@ def test_hub_state_shape_without_runtime(client):
         "heartbeat",
         "delegation",
         "agent_jobs",
+        "screens",
+        "memory_retention",  # #474
     }
     # ADR 0021 S2: scheduled agent jobs are off by default, with the 50,000-token pool
     assert state["values"]["agent_jobs"] == {"enabled": False, "agent_daily_token_budget": 50000}

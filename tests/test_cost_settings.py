@@ -128,7 +128,7 @@ def test_model_info_gives_the_automatic_cap_and_caching_support():
     assert (claude["auto_max_output_source"], claude["thinking_reserve"]) == ("model", 32_000)
     assert claude["prompt_cache_supported"] is True
     unknown = hub.cost_model_info("openai", "some-local-model")
-    assert unknown["auto_max_output_tokens"] == 8192
+    assert unknown["auto_max_output_tokens"] == 16384
     assert unknown["model_max_output"] is None
     assert unknown["auto_max_output_source"] == "provider_default"
     assert unknown["thinking_reserve"] is None

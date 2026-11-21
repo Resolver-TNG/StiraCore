@@ -24,6 +24,6 @@
    `.venv/bin/python -m pytest -q tests/attack tests/test_server_startup_smoke.py`
 5. チャットサーバーを起動(ポートは人間に聞く。ここでは 5600):
    `STIRA_PORT=5600 .venv/bin/python dashboard/stira_server.py`
-6. 人間に `http://127.0.0.1:5600/chat` を開いてもらう。Stage は `STIRA_STAGE=1` を付けて再起動し `/stage/`。
+6. 人間に `http://127.0.0.1:5600/chat` を開いてもらう。Stage は `/stage/`（既定で有効。設定 → 画面、または `STIRA_STAGE=0` で無効にできる）。
 7. モデルの選択は人間が決める。Bedrock は本人の AWS 資格情報が必要、llama.cpp などは [providers_ja.md](providers_ja.md)。案内するだけで、キーは設定しない。
 8. 終わったら、起動したサーバーを止める(そのターミナルで Ctrl+C)。

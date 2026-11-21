@@ -40,15 +40,16 @@ Page audit (`tests/test_ui_observer_pages.py` requests every sidebar link of bot
 | `/observability` | sidebar | sidebar | `observability.html` |
 | `/settings` | sidebar | sidebar | `settings.html` (settings hub, #227: model, classifier, breaker, tool permissions in one draft with a save/discard/defaults footer; `/api/config/hub`) |
 | `/tools` | redirect → `/settings#sec-tools` | redirect → `/settings#sec-tools` | — (one tool list only) |
-| `/memory` | — (no memory store) | sidebar (read-only tree, `/api/memory/tree`) | `forest.html` |
-| — | not routed | not routed | `memory.html`, `artifacts.html` (on the shell; their APIs `memory_api` / `artifact_api` are not registered by either server) |
+| `/memory` | — (no memory store) | sidebar (read-only tree, `/api/memory/tree`; under it the key / importance / retention table, `/api/memory/entries`, no entry text, #652; the procedural review panel, #463) | `forest.html` |
+| — | not routed | not routed | `memory.html` (on the shell; its API `/api/memory/browser` returns entry bodies and is not registered by either server) |
 
 Language: Japanese by default; the selector (or `?lang=en|ja`) is stored in
 `localStorage` and sets `<html lang>`. UI text lives in `static/i18n/catalog.{ja,en}.json`
 (`data-i18n` / `t("key", {vars})`); missing keys fall back to Japanese with a console
 warning. `python scripts/i18n_extract.py --apply|--check` converts/validates bilingual
-literals. **Neural State dimension names are translated** in the UI (信頼 / 好奇心 / 警戒 /
-愛着 / 安定 / 満足, keys `dim.*`; stimuli `stimulus.*`); the API/JSON identifiers
+literals. **Neural State dimension names are translated** in the UI (信頼 / 好奇心 /
+愛着 / 安定 / 満足, keys `dim.*`; stimuli `stimulus.*`; `vigilance` stays in the state and
+the API but is not displayed, #137); the API/JSON identifiers
 (`trust`, `stability`, …) stay English and are never translated. Breaker levels shown as
 signals (`WARNING` / `CRITICAL` lines in charts) keep their English names as fixed labels.
 

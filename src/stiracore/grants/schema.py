@@ -13,13 +13,20 @@ Rules (each pinned by ``tests/test_grants_schema.py``):
   not an ``int``, no subclass is evaluated);
 * ``kind`` is ``"goal"``: the discriminator against YOLO windows (``kind="yolo"``), checked
   by :func:`stiracore.authority.require_kind` wherever a record is used;
-* ``scope.tools`` is a non-empty subset of :data:`TOOLS`; ``scope.workspace_subtree`` is
+* ``scope.tools`` is a non-empty subset of :data:`TOOLS` (``view_image`` only together
+  with ``page_look``); ``scope.workspace_subtree`` is
   an existing directory inside the agent's write roots, resolved (no symlink escape:
   :func:`check_subtree`);
 * ``budget`` ``{total_tokens, per_tick_tokens}``, ``ttl_sec`` (default
   :data:`TTL_DEFAULT_SEC`, cap :data:`TTL_CAP_SEC`), ``max_iterations`` (default
   :data:`MAX_ITERATIONS_DEFAULT`, cap :data:`MAX_ITERATIONS_CAP`), ``no_progress_ticks``
-  (default :data:`NO_PROGRESS_DEFAULT`), ``verifier`` exactly ``"user"`` (v1: nothing else);
+  (default :data:`NO_PROGRESS_DEFAULT`), ``verifier`` ``"user"`` — or ``"checks"`` exactly
+  together with ``done_when`` (#683, :func:`check_done_when`: a non-empty set of
+  ``run_checks`` kinds, run by the harness at a claim on the subtree; needs ``run_checks``
+  in ``scope.tools``);
+* ``report_files`` (ADR 0028 §4, default none): at most :data:`REPORT_FILES_MAX` relative
+  file paths inside the subtree that the progress fingerprint ignores
+  (:func:`check_report_files`: no glob, no directory, no ``..``, no symlink);
 * the **goal** is free text, but only for the grant store: it is refused when
   :func:`stiracore.observability.masking.mask_secrets` would change it, and no function
   here puts it into an error, a code or a log.
@@ -33,6 +40,7 @@ import math
 import os
 import re
 import stat
+import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass, fields
 from pathlib import Path
@@ -54,6 +62,8 @@ __all__ = [
     "MAX_ITERATIONS_DEFAULT",
     "NO_PROGRESS_CAP",
     "NO_PROGRESS_DEFAULT",
+    "PAGE_TOOLS",
+    "REPORT_FILES_MAX",
     "RESUME_WORD",
     "SHOW_WORD",
     "TOOLS",
@@ -67,7 +77,9 @@ __all__ = [
     "Grant",
     "GrantRefused",
     "IssueRequest",
+    "check_done_when",
     "check_goal",
+    "check_report_files",
     "check_subtree",
     "evidence_from_dict",
     "evidence_to_dict",
@@ -77,7 +89,10 @@ __all__ = [
 ]
 
 KIND = "goal"
-# The v1 scope allow-list (ADR 0011 §8, W5 brief): read tools, the editor and run_checks.
+# The scope allow-list (ADR 0011 §8, W5 brief): read tools, the editor and run_checks —
+# and (ADR 0015 rev 6, S5) the page tools of :data:`PAGE_TOOLS`. ``page_check`` and
+# ``page_review`` are not nameable.
+PAGE_TOOLS = frozenset({"page_look", "view_image"})
 TOOLS = frozenset(
     {
         "file_read",
@@ -87,9 +102,12 @@ TOOLS = frozenset(
         "memory_search",
         "memory_list",
         "current_time",
+        *PAGE_TOOLS,
     }
 )
-VERIFIERS = frozenset({"user"})
+# ``user``: a person verifies a claim (v1). ``checks`` (#683): the harness first runs the
+# grant's ``done_when`` checks itself, then a person verifies — exactly with ``done_when``.
+VERIFIERS = frozenset({"user", "checks"})
 TTL_DEFAULT_SEC = 7200
 TTL_CAP_SEC = 21600
 TTL_MIN_SEC = 60
@@ -100,6 +118,9 @@ NO_PROGRESS_CAP = 20
 TOTAL_TOKENS_CAP = 5_000_000
 GOAL_MAX_CHARS = 2000
 SUBTREE_MAX_CHARS = 1024
+# ADR 0028 §4: the files the progress fingerprint ignores (the person's list, at issue).
+REPORT_FILES_MAX = 8
+REPORT_FILE_MAX_CHARS = 255
 # W6c: the evidence a completion claim carries (codes only, harness-measured).
 CLAIM_CHECKS = ("pass", "fail", "not_run", "unknown")
 CLAIM_WORKSPACE = ("changed", "unchanged", "unknown")
@@ -118,6 +139,11 @@ SHOW_WORD = "SHOW"
 _HEX32 = re.compile(r"[0-9a-f]{32}")
 # Control characters other than tab / newline are refused in a goal.
 _CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+# Never in a report file path: control characters, glob characters, a backslash.
+_REPORT_REFUSED = re.compile(r"[\x00-\x1f\x7f*?\[\]{}\\]")
+# ... and at issue (#761): these Unicode categories and the slash / backslash lookalikes.
+_REPORT_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Zl", "Zp"})
+_REPORT_LOOKALIKES = frozenset("\u2044\u2215\u2216\u29f5\u29f8\ufe68\uff0f\uff3c")
 
 # Refusal code -> HTTP status. The page maps each code to its wording (grants.code_<code>).
 CODES = {
@@ -130,11 +156,25 @@ CODES = {
     "grant_tool_invalid": 400,
     "grant_subtree_invalid": 400,
     "grant_subtree_outside": 400,
+    # #791 (ADR 0029 Q3 / B6): the subtree overlaps the protected part of a Stira checkout,
+    # holds a checkout or lies inside a run-later directory (or could not be judged); it is
+    # the running server's own checkout or package (refused also with the option); the
+    # confirmation ``self_development`` was sent while the user setting
+    # ``autonomy.grant_self_development`` is off.
+    "grant_subtree_protected": 400,
+    "grant_subtree_running_checkout": 400,
+    "grant_self_development_off": 409,
     "grant_verifier_invalid": 400,
     "grant_cap_exceeded": 400,
     "grant_confirm_mismatch": 400,
     "grant_run_checks_setting_off": 409,
     "grant_run_checks_not_contained": 409,
+    # ADR 0015 rev 6 (S5): a scope that names ``page_look`` — the user setting
+    # ``autonomy.page_look_unattended`` is off; ``page_look`` is not registered on this
+    # server (no browser); the axis check is not ``pass`` (``reason``: its fixed code).
+    "grant_page_look_setting_off": 409,
+    "grant_page_look_unavailable": 409,
+    "grant_page_look_axis": 409,
     "grant_already_active": 409,
     "grant_unknown": 404,
     "grant_terminal": 409,
@@ -229,15 +269,25 @@ def check_goal(goal: Any) -> str:
     return goal
 
 
-def check_subtree(raw: Any, roots: Iterable[str | Path], policy: Any = None) -> str:
-    """``raw`` resolved, if it is an existing directory inside one of ``roots``.
+def _subtree_verdict(resolved: str) -> str:
+    """#791: how ``resolved`` relates to Stira's own code — a ``self_protect`` verdict. A
+    check that cannot judge (an error, an answer outside the closed set) answers ``""``:
+    the caller refuses, with or without the option (fail closed)."""
+    from stiracore import self_protect
 
-    The path must be absolute and its **resolved** form (every symlink followed) must lie
-    inside a resolved root; the final component must not be a symlink. The resolved path
-    is what the grant keeps, so a symlink in the given path can never be re-pointed later.
-    ``policy`` (the server's ``WritePathPolicy``) additionally applies the write floor
-    (identity / data directory / secret paths): a subtree the agent could not write to is
-    refused. Codes: ``grant_subtree_invalid`` / ``grant_subtree_outside``."""
+    try:
+        verdict = self_protect.subtree_verdict(resolved)
+    except Exception:  # noqa: BLE001 - unreadable, too large: refused
+        return ""
+    return verdict if type(verdict) is str and verdict in self_protect.VERDICTS else ""
+
+
+def _checked_subtree(
+    raw: Any, roots: Iterable[str | Path], policy: Any, self_development: bool
+) -> tuple[str, bool]:
+    """:func:`check_subtree`'s resolved path, and whether the option was what let it
+    pass (the subtree overlaps the protected part of a checkout that is not the running
+    server's)."""
     if type(raw) is not str or not raw or len(raw) > SUBTREE_MAX_CHARS or "\0" in raw:
         raise GrantRefused("grant_subtree_invalid")
     if not os.path.isabs(raw):
@@ -272,7 +322,126 @@ def check_subtree(raw: Any, roots: Iterable[str | Path], policy: Any = None) -> 
             raise GrantRefused("grant_subtree_outside") from error
         if not getattr(decision, "allowed", False):
             raise GrantRefused("grant_subtree_outside")
-    return resolved
+    from stiracore import self_protect
+
+    verdict = _subtree_verdict(resolved)
+    if verdict == self_protect.FREE:
+        return resolved, False
+    if self_development is not True or verdict not in (
+        self_protect.CHECKOUT,
+        self_protect.RUNNING,
+    ):
+        raise GrantRefused("grant_subtree_protected")
+    if verdict == self_protect.RUNNING:
+        raise GrantRefused("grant_subtree_running_checkout")
+    return resolved, True
+
+
+def check_subtree(
+    raw: Any, roots: Iterable[str | Path], policy: Any = None, *, self_development: bool = False
+) -> str:
+    """``raw`` resolved, if it is an existing directory inside one of ``roots``.
+
+    #791 (ADR 0029 Q3 / B6): a subtree that overlaps the protected part of a Stira
+    checkout (``stiracore.self_protect``: outside the checkout's data places and its
+    allow-list, or inside or around a never-editable entry) or holds a checkout is
+    refused (``grant_subtree_protected``; also when that cannot be judged, and — with or
+    without the option — inside a run-later directory) unless ``self_development`` is
+    exactly ``True`` — only :func:`parse_issue` passes it, for a person's issue with the
+    user setting on and the separate confirmation ticked. The running server's own
+    checkout or package is refused also then (``grant_subtree_running_checkout``).
+
+    The path must be absolute and its **resolved** form (every symlink followed) must lie
+    inside a resolved root; the final component must not be a symlink. The resolved path
+    is what the grant keeps, so a symlink in the given path can never be re-pointed later.
+    ``policy`` (the server's ``WritePathPolicy``) additionally applies the write floor
+    (identity / data directory / secret paths): a subtree the agent could not write to is
+    refused. Codes: ``grant_subtree_invalid`` / ``grant_subtree_outside``."""
+    return _checked_subtree(raw, roots, policy, self_development)[0]
+
+
+def _report_path(value: Any) -> bool:
+    """The shape of one report file path (no file system read): a ``/``-separated
+    relative path of plain names — not empty, at most :data:`REPORT_FILE_MAX_CHARS`, no
+    control or glob character, no backslash, not absolute, no ``~``, and no empty, ``.``
+    or ``..`` component (so no trailing ``/``: a file, never a directory)."""
+    if type(value) is not str or not value or len(value) > REPORT_FILE_MAX_CHARS:
+        return False
+    if _REPORT_REFUSED.search(value) or value.startswith("~") or os.path.isabs(value):
+        return False
+    return all(part not in ("", ".", "..") for part in value.split("/"))
+
+
+def _report_name_plain(value: str) -> bool:
+    """The stricter shape of a report file path **at issue** (#761; no file system read):
+    NFC, no character of the categories ``Cc`` / ``Cf`` / ``Cs`` / ``Zl`` / ``Zp`` (C1
+    controls, bidi and other format characters, lone surrogates, line / paragraph
+    separators), no character that looks like a slash or backslash, and no component that
+    ends with a space or a dot. The store's reader keeps :func:`_report_path` only, so a
+    record issued before this check still loads."""
+    if unicodedata.normalize("NFC", value) != value:
+        return False
+    for char in value:
+        if char in _REPORT_LOOKALIKES or unicodedata.category(char) in _REPORT_CATEGORIES:
+            return False
+    return all(part[-1] != "." and not part[-1].isspace() for part in value.split("/"))
+
+
+def check_report_files(raw: Any, subtree: str) -> tuple[str, ...]:
+    """The report files as given (ADR 0028 §4), if every one names a file inside
+    ``subtree`` (the resolved subtree of :func:`check_subtree`).
+
+    At most :data:`REPORT_FILES_MAX` (``grant_cap_exceeded``); anything else is
+    ``grant_field_invalid``: not a list of :func:`_report_path` shapes (and, at issue,
+    :func:`_report_name_plain`), a duplicate (compared without case, #761), a name
+    ``mask_secrets`` would change, a path with a symlink anywhere in it (its resolved form
+    must be the path itself, so it cannot leave the subtree), or an existing path that is
+    not a regular file (a directory, a FIFO). A file that does not exist yet is accepted.
+    No path is put into an error."""
+    from stiracore.observability.masking import mask_secrets
+
+    if type(raw) is not list:
+        raise GrantRefused("grant_field_invalid")
+    if len(raw) > REPORT_FILES_MAX:
+        raise GrantRefused("grant_cap_exceeded")
+    for value in raw:
+        if not _report_path(value) or not _report_name_plain(value):
+            raise GrantRefused("grant_field_invalid")
+        if mask_secrets(value) != value:
+            raise GrantRefused("grant_field_invalid")
+        target = os.path.join(subtree, *value.split("/"))
+        try:
+            if os.path.realpath(target) != target:
+                raise GrantRefused("grant_field_invalid")
+            info = os.lstat(target)
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError) as error:
+            raise GrantRefused("grant_field_invalid") from error
+        if not stat.S_ISREG(info.st_mode):
+            raise GrantRefused("grant_field_invalid")
+    if len({value.casefold() for value in raw}) != len(raw):
+        raise GrantRefused("grant_field_invalid")
+    return tuple(raw)
+
+
+#: #683: at most as many kinds as one ``run_checks`` call runs (``run_checks.MAX_CHECKS``;
+#: a test pins the two equal) — more could never be met.
+DONE_WHEN_MAX = 4
+
+
+def check_done_when(raw: Any) -> tuple[str, ...]:
+    """#683: the grant's completion checks as given — a non-empty list of distinct
+    ``run_checks`` kinds (:data:`CHECK_KINDS`, at most :data:`DONE_WHEN_MAX`), returned
+    sorted. A closed list: no path, no threshold, no free text (``grant_field_invalid`` for
+    anything else)."""
+    if type(raw) is not list or not raw or len(raw) > DONE_WHEN_MAX:
+        raise GrantRefused("grant_field_invalid")
+    if not all(type(kind) is str and kind in CHECK_KINDS for kind in raw):
+        raise GrantRefused("grant_field_invalid")
+    if len(set(raw)) != len(raw):
+        raise GrantRefused("grant_field_invalid")
+    return tuple(sorted(raw))
 
 
 @dataclass(frozen=True)
@@ -290,19 +459,45 @@ class IssueRequest:
     verifier: str
     # W6d: the scheduler's grant_tick may start this grant's iterations (default off).
     heartbeat_start: bool = False
+    # ADR 0028 §4: relative paths the progress fingerprint ignores (default none).
+    report_files: tuple[str, ...] = ()
+    # #791: the subtree is a Stira checkout, issued with the setting on and the person's
+    # separate confirmation (the host summary names it: ``loosen:self_development``).
+    self_development: bool = False
+    # #683: the run_checks kinds the harness runs at a claim (``verifier`` ``checks``).
+    done_when: tuple[str, ...] = ()
 
     def __repr__(self) -> str:  # never the goal
         return f"IssueRequest(tools={self.tools!r}, ttl_sec={self.ttl_sec})"
 
 
 _ISSUE_REQUIRED = ("goal", "scope", "budget", "verifier", "confirm")
-_ISSUE_OPTIONAL = ("ttl_sec", "max_iterations", "no_progress_ticks", "heartbeat_start")
+_ISSUE_OPTIONAL = (
+    "ttl_sec",
+    "max_iterations",
+    "no_progress_ticks",
+    "heartbeat_start",
+    "report_files",
+    "self_development",
+    "done_when",
+)
 
 
-def parse_issue(body: Any, *, roots: Iterable[str | Path], policy: Any = None) -> IssueRequest:
+def parse_issue(
+    body: Any,
+    *,
+    roots: Iterable[str | Path],
+    policy: Any = None,
+    self_development: bool = False,
+) -> IssueRequest:
     """Validate the issue body. Typed confirmation: ``confirm`` must be exactly
     :data:`ISSUE_WORD`. The containment floor for ``run_checks`` is checked by the
-    service (it needs the live settings), not here."""
+    service (it needs the live settings), not here.
+
+    #791: ``self_development`` is the user setting ``autonomy.grant_self_development``
+    (default off). The body's own ``self_development`` (the person's separate
+    confirmation, exactly ``true``) is refused while the setting is off
+    (``grant_self_development_off``); a Stira checkout subtree is accepted only with both."""
     data = _keys(body, _ISSUE_REQUIRED, _ISSUE_OPTIONAL)
     if type(data["confirm"]) is not str or data["confirm"] != ISSUE_WORD:
         raise GrantRefused("grant_confirm_mismatch")
@@ -317,6 +512,15 @@ def parse_issue(body: Any, *, roots: Iterable[str | Path], policy: Any = None) -
             raise GrantRefused("grant_tool_invalid")
     if len(set(tools)) != len(tools):
         raise GrantRefused("grant_tool_invalid")
+    if "view_image" in tools and "page_look" not in tools:
+        # The narrowed view_image reads only what this grant's page_look calls wrote.
+        raise GrantRefused("grant_tool_invalid")
+    done_when = check_done_when(data["done_when"]) if "done_when" in data else ()
+    if done_when and "run_checks" not in tools:
+        # #683: the harness runs them under the grant's own run_checks scope only.
+        raise GrantRefused("grant_field_invalid")
+    if (data["verifier"] == "checks") != bool(done_when):
+        raise GrantRefused("grant_verifier_invalid")
     budget = _keys(data["budget"], ("total_tokens", "per_tick_tokens"))
     total = _int(budget["total_tokens"], 1, TOTAL_TOKENS_CAP)
     per_tick = _int(budget["per_tick_tokens"], 1, total)
@@ -326,8 +530,14 @@ def parse_issue(body: Any, *, roots: Iterable[str | Path], policy: Any = None) -
     heartbeat = data.get("heartbeat_start", False)
     if type(heartbeat) is not bool:
         raise GrantRefused("grant_field_invalid")
+    ticked = data.get("self_development", False)
+    if type(ticked) is not bool:
+        raise GrantRefused("grant_field_invalid")
+    if ticked and self_development is not True:
+        raise GrantRefused("grant_self_development_off")
     goal = check_goal(data["goal"])
-    subtree = check_subtree(scope["workspace_subtree"], roots, policy)
+    subtree, loosened = _checked_subtree(scope["workspace_subtree"], roots, policy, ticked)
+    report_files = check_report_files(data.get("report_files", []), subtree)
     return IssueRequest(
         goal=goal,
         tools=tuple(sorted(tools)),
@@ -339,6 +549,9 @@ def parse_issue(body: Any, *, roots: Iterable[str | Path], policy: Any = None) -
         no_progress_ticks=no_progress,
         verifier=data["verifier"],
         heartbeat_start=heartbeat,
+        report_files=report_files,
+        self_development=loosened,
+        done_when=done_when,
     )
 
 
@@ -532,6 +745,18 @@ class Grant:
     # W6d: issued with the heartbeat start (set at issue only, never changed afterwards;
     # stored only when true, so a record without it — every older one — reads as false).
     heartbeat_start: bool = False
+    # ADR 0028 §4: the report files (set at issue only, never changed afterwards; stored
+    # only when not empty, so a record without it — every older one — reads as none).
+    report_files: tuple[str, ...] = ()
+    # #791: issued as a self-development grant (the option and the person's separate
+    # confirmation; set at issue only, never changed afterwards; stored only when true, so
+    # a record without it — every older one — reads as false). For the audit: the write
+    # rules do not read it.
+    self_development: bool = False
+    # #683: the completion checks (set at issue only, never changed afterwards; stored only
+    # when not empty, so a record without it — every older one — has none; exactly with
+    # ``verifier`` ``checks``).
+    done_when: tuple[str, ...] = ()
 
 
 _FIELD_TYPES = {f.name: f.type for f in fields(Grant)}
@@ -582,6 +807,14 @@ def grant_to_dict(grant: Grant, goal: str) -> dict:
     out["claim_evidence"] = evidence_to_dict(grant.claim_evidence)
     if not grant.heartbeat_start:
         del out["heartbeat_start"]  # W6d: only a flagged grant carries the key
+    out["report_files"] = list(grant.report_files)
+    if not grant.report_files:
+        del out["report_files"]  # only a grant issued with a list carries the key
+    if not grant.self_development:
+        del out["self_development"]  # #791: only a self-development grant carries the key
+    out["done_when"] = list(grant.done_when)
+    if not grant.done_when:
+        del out["done_when"]  # #683: only a grant issued with done_when carries the key
     out["goal"] = goal
     return out
 
@@ -595,12 +828,19 @@ def grant_from_dict(data: Any) -> tuple[Grant, str]:
     from . import state
 
     expected = set(_FIELD_TYPES) | {"goal"}
-    optional = {"claim_evidence", "heartbeat_start"}
+    optional = {
+        "claim_evidence",
+        "heartbeat_start",
+        "report_files",
+        "self_development",
+        "done_when",
+    }
     if type(data) is not dict or not expected - optional <= set(data) <= expected:
         raise GrantRefused("grant_body_invalid")
-    # W6d: present only as exactly ``true`` (it is written only then).
-    if "heartbeat_start" in data and data["heartbeat_start"] is not True:
-        raise GrantRefused("grant_body_invalid")
+    # W6d / #791: present only as exactly ``true`` (it is written only then).
+    for flag in ("heartbeat_start", "self_development"):
+        if flag in data and data[flag] is not True:
+            raise GrantRefused("grant_body_invalid")
     values: dict[str, Any] = {}
     for name in _STR:
         value = data[name]
@@ -660,4 +900,30 @@ def grant_from_dict(data: Any) -> tuple[Grant, str]:
         raise GrantRefused("grant_body_invalid")
     values["claim_evidence"] = evidence_from_dict(data.get("claim_evidence"))
     values["heartbeat_start"] = data.get("heartbeat_start", False) is True
+    values["self_development"] = data.get("self_development", False) is True
+    # ADR 0028 §4: present only as a non-empty list of valid, distinct paths (the shape
+    # only: the file system was checked at issue).
+    report_files = data.get("report_files", [])
+    if type(report_files) is not list or len(report_files) > REPORT_FILES_MAX:
+        raise GrantRefused("grant_body_invalid")
+    if ("report_files" in data and not report_files) or not all(
+        _report_path(path) for path in report_files
+    ):
+        raise GrantRefused("grant_body_invalid")
+    if len(set(report_files)) != len(report_files):
+        raise GrantRefused("grant_body_invalid")
+    values["report_files"] = tuple(report_files)
+    # #683: present only as a valid, non-empty list, and exactly with verifier ``checks``.
+    done_when: tuple[str, ...] = ()
+    if "done_when" in data:
+        raw = data["done_when"]
+        try:
+            done_when = check_done_when(raw)
+        except GrantRefused as error:
+            raise GrantRefused("grant_body_invalid") from error
+        if list(done_when) != raw or "run_checks" not in values["tools"]:
+            raise GrantRefused("grant_body_invalid")
+    if (values["verifier"] == "checks") != bool(done_when):
+        raise GrantRefused("grant_body_invalid")
+    values["done_when"] = done_when
     return Grant(**values), goal

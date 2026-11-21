@@ -36,6 +36,7 @@ from flask import (
 from strands.types.exceptions import MaxTokensReachedException
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
+from stiracore.agent.context_management import turn_record as context_turn_record
 from stiracore.core import (
     HITLAction,
     HITLDecision,
@@ -58,11 +59,13 @@ from stiracore.core.approval_store import (
     stricter_than_requested,
 )
 from stiracore.core.hitl_reasons import reason_code, reason_params, resolution_code
+from stiracore.core.repeated_failure import clean_summary as clean_repeated_failure
 from stiracore.core.turn_lock import TurnLock
 from stiracore.observability import activity
 from stiracore.observability.chat_images import MAX_CHAT_BYTES, decode_images
 from stiracore.observability.masking import mask_secrets
 from stiracore.observability.security import DUPLICATE_ERROR, idempotency_release
+from stiracore.observability.turn_autostop import TurnAutoStop
 from stiracore.observability.turn_events import (
     USAGE_CANCELLED,
     USAGE_INTERRUPTED,
@@ -1404,8 +1407,34 @@ MAX_TOKENS_BEFORE_REPLY_MESSAGE = (
 )
 
 
+def _output_cap_status(agent) -> dict | None:
+    """#745: ``{value, source}`` of the running agent's output cap, or None when unknown.
+
+    A number and one of four source codes (``capabilities.CAP_SOURCES``): the endpoint is
+    read to decide "local", never returned.
+    """
+    from stiracore.providers.capabilities import describe_output_cap
+
+    try:
+        spec = field(agent, "model_spec")
+        if spec is not None:
+            return describe_output_cap(field(agent, "max_output_tokens"), spec)
+        return describe_output_cap(
+            field(agent, "max_output_tokens"), field(agent, "provider"), field(agent, "model_id")
+        )
+    except Exception:  # noqa: BLE001 - a status field must never break the status
+        return None
+
+
+# The limit that cut the turn was not set by anyone: say so, and name the setting (#745).
+MAX_TOKENS_AUTOMATIC_NOTE = (
+    "（自動の既定 {limit}。設定の `max_output_tokens` で変更できます）"
+    " / (automatic default {limit}; set `max_output_tokens`)"
+)
+
+
 def _cut_off_details(agent) -> dict:
-    """``cut`` / ``limit`` of a ``max_tokens`` turn for the page (#416); {} when unknown."""
+    """``cut`` / ``limit`` / ``limit_source`` of a ``max_tokens`` turn (#416, #745)."""
     details: dict = {}
     cut = field(agent, "last_cut_off")
     if isinstance(cut, Mapping) and cut.get("before_reply") is True:
@@ -1413,7 +1442,21 @@ def _cut_off_details(agent) -> dict:
     limit = field(agent, "max_output_tokens")
     if type(limit) is int and limit > 0:
         details["limit"] = limit
+        shown = _output_cap_status(agent)
+        if shown is not None:
+            details["limit_source"] = shown["source"]
     return details
+
+
+def _cut_off_message(details: Mapping) -> str:
+    message = (
+        MAX_TOKENS_BEFORE_REPLY_MESSAGE
+        if details.get("cut") == CUT_BEFORE_REPLY
+        else MAX_TOKENS_MESSAGE
+    )
+    if details.get("limit_source") in ("unknown_limit_default", "local_default"):
+        message += " " + MAX_TOKENS_AUTOMATIC_NOTE.format(limit=details["limit"])
+    return message
 
 
 def _merge_reported_usage(usage: dict, reported: object) -> None:
@@ -1593,6 +1636,27 @@ def _last_call_prompt_tokens(metrics, provider: object) -> int | None:
     return normalized.prompt_tokens
 
 
+def _max_call_prompt_tokens(metrics, provider: object) -> int | None:
+    """The largest prompt of one model call in the turn (#746), counted like
+    ``_last_call_prompt_tokens``. None when no call reported its input."""
+    try:
+        invocations = field(metrics, "agent_invocations") or []
+        cycles = (field(invocations[-1], "cycles") or []) if invocations else []
+        usages = [field(cycle, "usage") for cycle in cycles]
+    except Exception:  # noqa: BLE001 - telemetry must never break chat
+        return None
+    name = provider if isinstance(provider, str) else "custom"
+    largest = None
+    for usage in usages:
+        raw = usage.get("inputTokens") if isinstance(usage, Mapping) else None
+        if not isinstance(raw, int) or isinstance(raw, bool) or raw < 0:
+            continue
+        prompt = normalize_strands_usage(usage, name).prompt_tokens
+        if isinstance(prompt, int) and (largest is None or prompt > largest):
+            largest = prompt
+    return largest
+
+
 # POST /api/chat/session/new (#350): refusal reason codes (409 unless noted).
 NEW_SESSION_REFUSALS = {
     "turn_running": "ターンの実行中です / A turn is running",
@@ -1662,8 +1726,15 @@ def create_chat_blueprint(
     token_prices=None,
     artifact_counts=None,
     session_reset=None,
+    yolo_window_id=None,
+    turn_clock=None,
 ):
-    """``turn_lock`` (ADR 0011 W6b): the server's :class:`~stiracore.core.turn_lock.TurnLock`
+    """``yolo_window_id() -> str | None`` / ``turn_clock() -> float`` (#680, ADR 0034): the
+    open YOLO window's id (default ``yolo.runtime.current_window_id``) and a monotonic
+    clock (default ``time.monotonic``) for the automatic stop rules of a chat turn
+    (``turn_autostop``). Tests pass fakes.
+
+    ``turn_lock`` (ADR 0011 W6b): the server's :class:`~stiracore.core.turn_lock.TurnLock`
     (a plain lock or None: one without a pre-emption signal). Every acquirer here — the
     chat route, the automatic continue, ``/new`` — takes it only through it, so a goal
     iteration is pre-empted before the lock is tried (it yields at its next effect
@@ -1808,6 +1879,10 @@ def create_chat_blueprint(
         taint = clean_taint(field(candidate, "taint"))
         if taint is not None:
             data["taint"] = taint
+        # #151: the repeated-failure indicator (two integers and a flag; absent when off).
+        repeated = clean_repeated_failure(field(candidate, "repeated_failure"))
+        if repeated is not None:
+            data["repeated_failure"] = repeated
         for key in ("before", "after"):
             value = field(candidate, key)
             data[key] = (
@@ -1885,6 +1960,8 @@ def create_chat_blueprint(
                 "path": (str(field(soul, "path")) if field(soul, "path") is not None else None),
             },
             "bc_score": field(agent, "bc_score"),
+            # #745: the output cap in use and where it comes from (a number and a code).
+            "max_output_tokens": _output_cap_status(agent),
             "session": session,
             "uptime_seconds": int(time.monotonic() - started),
         }
@@ -2629,6 +2706,11 @@ def create_chat_blueprint(
         prefix = field(agent, "last_prompt_cache")
         if isinstance(prefix, Mapping):
             completed["prompt_cache"] = dict(prefix)
+        # #746: what context management did this turn (a mode, a reason code, counts)
+        # and the largest input of one model call. Absent while the feature is off.
+        context = context_turn_record(agent, ui.get("max_input"))
+        if context is not None:
+            completed["context"] = context
         turn_recorder.emit("turn.completed", completed)
         return True
 
@@ -2652,6 +2734,51 @@ def create_chat_blueprint(
         ui = {"turn_id": run["turn_id"], "done": False, "lock": threading.Lock()}
         run["ui"], run["usage"] = ui, usage
         unsubscribe = None
+        # #680 (ADR 0034): the rules that stop this turn without a press (fixed codes).
+        autostop = TurnAutoStop(
+            window_id=yolo_window_id or (lambda: yolo_runtime.current_window_id()),
+            now=turn_clock,
+        )
+
+        def auto_stop(reason):
+            """Stop this turn like the explicit stop, recorded with ``reason``. Only once,
+            never after a person's stop or the turn's end."""
+            with ui["lock"]:
+                if run["done"].is_set() or run["cancel"].is_set() or ui["done"]:
+                    return
+                run["auto_stop"] = reason
+                run["cancel"].set()
+            logger.info("chat turn stopped automatically (turn %s, %s)", run["turn_id"], reason)
+            threading.Thread(
+                target=_keep_cancelling,
+                args=(run, "system"),
+                name="chat-turn-autostop",
+                daemon=True,
+            ).start()
+
+        def check_autostop(event=None):
+            if run["cancel"].is_set() or run["done"].is_set():
+                return
+            reason = None
+            if event is not None and event.get("turn_id") == ui["turn_id"]:
+                kind = event.get("type")
+                data = event.get("data") or {}
+                request_id = data.get("request_id")
+                if kind == "approval.requested" and _live_card_of(request_id, ui["turn_id"]):
+                    reason = autostop.card_raised(request_id)
+                elif kind == "approval.resolved":
+                    reason = autostop.card_resolved(
+                        request_id, data.get("status"), data.get("resolver")
+                    )
+                else:
+                    if kind == "model.completed":
+                        autostop.note_model_completed(data)
+                    autostop.note_window()
+            if reason is None:
+                reason = autostop.limits(attended=run["stream"].attached, usage=usage)
+            if reason is not None:
+                auto_stop(reason)
+
         try:
             with app.app_context():
                 try:
@@ -2661,6 +2788,10 @@ def create_chat_blueprint(
                         # #445: model.progress is written by a ticker while the model call
                         # runs and no chunk wakes this loop: it goes to the page at once.
                         def on_event(event):
+                            try:
+                                check_autostop(event)
+                            except Exception:  # noqa: BLE001 - never break the event path
+                                logger.warning("chat turn automatic stop check failed")
                             if event.get("type") == "model.progress":
                                 out(_sse("ui_event", event))
                                 return
@@ -2701,6 +2832,9 @@ def create_chat_blueprint(
                         last_call = _last_call_prompt_tokens(metrics, field(agent, "provider"))
                         if last_call is not None:
                             usage["context_tokens"] = last_call
+                        largest = _max_call_prompt_tokens(metrics, field(agent, "provider"))
+                        if largest is not None:
+                            ui["max_input"] = max(ui.get("max_input") or 0, largest)
 
                         delta = field(
                             chunk,
@@ -2731,8 +2865,15 @@ def create_chat_blueprint(
                             # An explicit stop: what came so far is kept (and its usage);
                             # a runner without agent.cancel() is closed here.
                             break
+                        try:
+                            check_autostop()
+                        except Exception:  # noqa: BLE001 - a rule's failure must not end the turn
+                            current_app.logger.warning("chat turn auto-stop check failed")
+                        if run["cancel"].is_set():
+                            break
 
                     stop = "cancelled" if run["cancel"].is_set() else "completed"
+                    stop_reason = run.get("auto_stop") if stop == "cancelled" else None
                     checkpoint = (
                         progress.turn_finished(ui["turn_id"]) if progress is not None else None
                     )
@@ -2760,6 +2901,8 @@ def create_chat_blueprint(
                     }
                     if stop != "completed":
                         turn["stop"] = stop
+                    if stop_reason is not None:
+                        turn["stop_reason"] = stop_reason
                     if auto is not None:
                         turn["auto_continue"] = True
                     if summary is not None:
@@ -2780,6 +2923,8 @@ def create_chat_blueprint(
                     turn_event = {**usage, "status": status()}
                     if stop != "completed":
                         turn_event["stop"] = stop
+                    if stop_reason is not None:
+                        turn_event["stop_reason"] = stop_reason
                     if summary is not None:
                         turn_event["turn_summary"] = summary
                     if stop == "checkpoint":
@@ -2792,7 +2937,11 @@ def create_chat_blueprint(
                             app.logger.warning("progress: the report could not be made")
                     if ui["turn_id"] is not None:
                         finish_ui(
-                            ui, usage, error=stop not in ("completed", "checkpoint"), stop=stop
+                            ui,
+                            usage,
+                            error=stop not in ("completed", "checkpoint"),
+                            stop=stop,
+                            reason=stop_reason,
                         )
                         drain_ui(ui_queue, out)
                         turn_event["turn_id"] = ui["turn_id"]
@@ -2813,12 +2962,16 @@ def create_chat_blueprint(
                     # SDK raises before any tool runs, and the partial message stays in
                     # history with its tool uses replaced by text, so nothing truncated can
                     # execute.
-                    message = (
-                        MAX_TOKENS_BEFORE_REPLY_MESSAGE
-                        if cut_off.get("cut") == CUT_BEFORE_REPLY
-                        else MAX_TOKENS_MESSAGE
+                    out(
+                        _sse(
+                            "error",
+                            {
+                                "error": _cut_off_message(cut_off),
+                                "code": MAX_TOKENS_CODE,
+                                **cut_off,
+                            },
+                        )
                     )
-                    out(_sse("error", {"error": message, "code": MAX_TOKENS_CODE, **cut_off}))
                 except Exception as exc:  # noqa: BLE001 - logged by type only, a failed turn
                     app.logger.error(
                         "NXPAgent chat failed: %s code=%s", type(exc).__name__, "E_CHAT_FAILED"
@@ -2833,6 +2986,7 @@ def create_chat_blueprint(
                         error=True,
                         stop=stop,
                         failure=failure,
+                        reason=run.get("auto_stop") if stop == "cancelled" else None,
                     )
                     drain_ui(ui_queue, out)
                     out(
@@ -2910,9 +3064,15 @@ def create_chat_blueprint(
             return jsonify(error=CANCEL_REFUSALS["no_turn"], code="no_turn"), 409
         if wanted is not None and wanted != run["turn_id"]:
             return jsonify(error=CANCEL_REFUSALS["turn_mismatch"], code="turn_mismatch"), 409
-        first = not run["cancel"].is_set()
         publish_allow_end("stop")  # ADR 0025 §5 (Q5 A): a person's stop ends allowances
-        run["cancel"].set()
+        ui = run.get("ui")
+        # #680: under the lock the automatic stop sets its reason with, so a person's
+        # stop at the same moment is recorded as the person's (no automatic reason).
+        with ui["lock"] if ui is not None else contextlib.nullcontext():
+            first = not run["cancel"].is_set()
+            if first:  # already stopped (by the automatic rule): its reason stays
+                run.pop("auto_stop", None)
+            run["cancel"].set()
         rejected = _reject_cards_of(run["turn_id"]) if first else 0
         if first:
             current_app.logger.info("chat turn stop requested (turn %s)", run["turn_id"])
@@ -2921,12 +3081,14 @@ def create_chat_blueprint(
             ).start()
         return jsonify(status="cancelling", turn_id=run["turn_id"], rejected=rejected), 202
 
-    def _keep_cancelling(run):
+    def _keep_cancelling(run, resolver="operator"):
         """Until the stopped turn has ended: repeat agent.cancel() and reject the turn's cards.
 
         A card raised after the stop (its tool was already asking) is rejected too, so the
         stop never waits for hitl_timeout_sec. Each cancel() runs under the lock the worker
-        sets "done" with: it never lands after the turn ended, on the next turn's agent."""
+        sets "done" with: it never lands after the turn ended, on the next turn's agent.
+        ``resolver``: ``"operator"`` for a person's stop, ``"system"`` for an automatic one
+        (#680)."""
         cancel = getattr(agent, "cancel", None)
         cancel = cancel if callable(cancel) else None
         while True:
@@ -2939,13 +3101,29 @@ def create_chat_blueprint(
                     except Exception:  # noqa: BLE001 - best effort; still ends as cancelled
                         logger.info("chat turn stop: agent.cancel failed")
                         cancel = None
-            _reject_cards_of(run["turn_id"])
+            _reject_cards_of(run["turn_id"], resolver)
             run["done"].wait(CANCEL_REPEAT_SEC)
 
-    def _reject_cards_of(turn_id):
-        """Reject the live approval cards of the stopped turn (a rejection is never refused)."""
+    def _live_card_of(request_id, turn_id):
+        """#680: ``request_id`` is a live card (its worker waits) raised by ``turn_id``."""
+        if hitl_broker is None or turn_id is None or not isinstance(request_id, str):
+            return False
+        try:
+            entry = hitl_broker.pending_entry(request_id)
+        except Exception:  # noqa: BLE001 - unreadable: not counted as this turn's wait
+            return False
+        return isinstance(entry, dict) and entry.get("turn_id") == turn_id
+
+    def _reject_cards_of(turn_id, resolver="operator"):
+        """Reject the live approval cards of the stopped turn (a rejection is never refused).
+
+        An automatic stop (#680, ``resolver="system"``) rejects with the server's fixed
+        sentence (``hitl_reasons.TURN_AUTO_STOPPED``): never recorded as a person's."""
         if hitl_broker is None or turn_id is None:
             return 0
+        automatic = resolver == hitl_reasons.SYSTEM_RESOLVER
+        reason = hitl_reasons.TURN_AUTO_STOPPED if automatic else "the turn was stopped"
+        resolver = hitl_reasons.SYSTEM_RESOLVER if automatic else "operator"
         count = 0
         try:
             pending = hitl_broker.pending()
@@ -2956,8 +3134,8 @@ def create_chat_blueprint(
                 continue
             outcome = hitl_broker.decide(
                 item["id"],
-                HITLDecision(HITLAction.REJECT, reason="the turn was stopped"),
-                resolver="operator",
+                HITLDecision(HITLAction.REJECT, reason=reason),
+                resolver=resolver,
             )
             count += bool(outcome)
         return count
@@ -3027,11 +3205,13 @@ def create_chat_blueprint(
 
     def _append_report_event(entry, event_type, data):
         try:
-            turn_recorder.store.append(entry["turn_id"], event_type, data)
-            return True
+            # None: not written, and counted by the recorder (#705)
+            recorded = turn_recorder.append_to(entry["turn_id"], event_type, data) is not None
         except Exception:  # noqa: BLE001 - the answer itself still holds
+            recorded = False
+        if not recorded:
             logger.warning("progress: %s not recorded", event_type)
-            return False
+        return recorded
 
     def _take_reply(reply, next_turn_id):
         """In chat(), with the turn lock held: the person's message answers the pending

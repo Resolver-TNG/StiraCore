@@ -34,6 +34,9 @@
 
 /* Chat: the queue sits above the conversation. */
 .hitl-panel.approval-queue { background: var(--warn-bg); border-color: var(--warn-border); }
+/* #655: while the queue scrolls inside the chat panel, "Approve once" / "Reject" of the card
+   being read stay at its bottom edge (the card's text scrolls under the row). */
+.chat-panel > .approval-queue .approval-actions:not(.approval-allow-actions) { position: sticky; bottom: 0; z-index: 1; padding: 8px 0; background: var(--surface); }
 
 /* /approvals page */
 /* minmax(0, 1fr): a wide table scrolls inside its wrapper instead of widening the page. */

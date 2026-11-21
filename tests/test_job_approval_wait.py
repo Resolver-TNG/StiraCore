@@ -439,6 +439,44 @@ def test_an_early_approval_of_a_run_that_ends_instead_runs_nothing(world, monkey
     assert scheduler._resume_on_park == {} and scheduler.waiting_runs() == []
 
 
+@pytest.mark.parametrize("seam", ["stored", "parking"])
+def test_a_pause_before_the_run_parks_ends_it(world, monkeypatch, seam):
+    """#636: the job is paused in the window where the request is stored but the run is
+    not parked yet (no approval was given). The run does not stay waiting: it ends at the
+    park with the pause reason, its request is revoked, nothing runs."""
+    from stiracore.scheduler.scheduler import RunContext
+
+    scheduler, store, clock, _ = world
+    seen = []
+    if seam == "stored":
+        original = RunContext.wait_for_approval
+
+        def wait_for_approval(self, request_id, tool_name, digest):
+            original(self, request_id, tool_name, digest)
+            seen.append(request_id)
+            scheduler.pause_job("digest", by=HUMAN)
+
+        monkeypatch.setattr(RunContext, "wait_for_approval", wait_for_approval)
+    else:
+        park = Scheduler._park
+
+        def parking(self, ctx, outcome):
+            seen.append(ctx.waiting_request)
+            scheduler.pause_job("digest", by=HUMAN)
+            park(self, ctx, outcome)
+
+        monkeypatch.setattr(Scheduler, "_park", parking)
+    scheduler.create_job(_wait_job(), by=HUMAN, confirm=True)
+    _tick_at(scheduler, clock, T0 + 3600)
+    (request_id,) = seen
+    run = _ended(scheduler)
+    assert run["status"] == "cancelled" and run["reason"] == "paused", run
+    assert SENT == []
+    record = store.get(request_id)
+    assert record.status == "cancelled" and not record.consumed
+    assert scheduler.waiting_runs() == [] and scheduler._resume_on_park == {}
+
+
 def test_an_early_continuation_without_an_approval_ends_the_run(world, monkeypatch):
     """As for a parked run: continuing a request that is not approved (still pending)
     refuses and ends the run, even before it parked; nothing runs."""

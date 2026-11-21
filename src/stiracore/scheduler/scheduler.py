@@ -1705,6 +1705,8 @@ class Scheduler:
                 ctx.segment_usage_unknown = True
             self._parked.add(ctx.run_id)
             early = self._resume_on_park.pop(ctx.run_id, None)
+            job = self._jobs.get(ctx.job.job_id)
+            paused = job is None or job.state == "paused"
 
         def ended() -> None:
             with self._lock:
@@ -1714,6 +1716,12 @@ class Scheduler:
             self._finish(ctx, RunOutcome("cancelled", ctx.cancel_reason))
 
         ctx.on_cancel(ended)
+        if paused:
+            # #636: the job was paused after the request was stored but before this park
+            # (``pause_job`` only sees parked runs). As for a parked run (ADR 0024 §6.5) the
+            # pause ends it; an approval given meanwhile is revoked, nothing continues.
+            ctx.cancel("paused")
+            return
         if early is not None:
             # The person approved before the run was parked: continue it now, with every
             # check of a resume (a refusal cancels the run; a run ended meanwhile is gone).

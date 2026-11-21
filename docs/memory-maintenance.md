@@ -331,7 +331,16 @@ history table would defeat it (the failure mode the research in #294 / #342 poin
 Limits live in `agent-config.json` under `memory_retention`
 ([configuration §4](configuration.md#4-agent-configjson-agentconfig--checked)); without it, every limit is unset
 and the report lists no candidates — except plan files of memory jobs, which have a default
-limit of 90 days (still applied only by `--apply`). Example:
+limit of 90 days (still applied only by `--apply`).
+
+The limits can also be edited under **Settings → Memory retention limits** (#474): integers
+from 1 to 1,000,000 (`*_bytes`: up to 10^15), empty = no limit, saved through the settings
+hub (validation, change history, undo). Saving removes nothing. The section's **dry run**
+button shows what `--apply` would archive and remove under the *saved* limits as **counts
+only** (episodes, turn events, tool payloads, checkpoints, emotion records, plan files, and
+how many stores could not be inspected) — never a key, a path or memory text
+(`GET /api/config/memory-retention/dry-run`). **Applying stays on the command line**: the
+page has no way to run `--apply`. Example:
 
 ```json
 {"memory_retention": {
@@ -531,6 +540,12 @@ staging; a delete request for the Procedural layer.
 **Default: unchanged.** An entry without a tag is `derived` with the reference half-life
 of 30 days, which selects exactly what was selected before (30/90/180 days, stale at
 365). Nothing sets a tag by itself; no new automatic deletion exists.
+
+**Where to see them (#652).** The chat server's Memory page (`/memory`) lists, under the
+forest, each entry's key, importance and retention (the newest 50 per layer; read-only,
+`GET /api/memory/entries`). Entry text is not shown. An Episodic front-matter value that
+nobody verified (an importance the server's writer did not record, a `retention` no human
+bound) is shown as "Unverified" without the value.
 
 Two front-matter fields:
 

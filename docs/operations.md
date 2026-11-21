@@ -76,7 +76,8 @@ credentials are configured (names only), `heartbeat`, `prompt_cache`,
 
 ## 2. Opt-in features
 
-All are off by default and read at start-up (restart after changing them).
+All are off by default except the Stage page (last row: on by default, can be turned off),
+and all are read at start-up (restart after changing them).
 
 | Feature | Turn on | Check | Doc |
 |---|---|---|---|
@@ -85,12 +86,15 @@ All are off by default and read at start-up (restart after changing them).
 | Prompt cache (Bedrock Claude) | `"prompt_cache": true` or `STIRA_PROMPT_CACHE=1` | `/api/gateway/status` → `prompt_cache.active` | [prompt-cache.md](prompt-cache.md) |
 | Context management | `"context_management": true` or `STIRA_CONTEXT_MANAGEMENT=1` | `/api/gateway/status` → `context_management.mode` | [context-management.md](context-management.md) |
 | Exec-class tools | `STIRA_ENABLE_EXEC_TOOLS=1` (every call still asks) | `/settings#sec-tools` | [ADR 0010](adr/0010-tool-policy-gate-stack.md) |
-| Stage page (read-only view; approvals via the existing API) | `STIRA_STAGE=1` | `/stage/` (a "Stage" nav item) | [stage.md](stage.md) |
+| Stage page (read-only view; approvals via the existing API) | on by default; off with `"stage_enabled": false` (Settings → Screens) or `STIRA_STAGE=0` | `/stage/` (a "Stage" nav item) | [stage.md](stage.md) |
 
 `0` (or any other non-empty value) in `STIRA_HEARTBEAT`, `STIRA_PROMPT_CACHE` or
 `STIRA_CONTEXT_MANAGEMENT` turns a configured `true` off.
 
-None of these distills, reviews or forgets memory. Memory maintenance is a manual command
+None of these distills, reviews or forgets memory, with one exception: with the scheduler on,
+a person-created `memory_harvest` job distills (rule distiller, staging only; see
+[guide-scheduler-heartbeat.md](guide-scheduler-heartbeat.md)). Creating or resuming a job needs
+a confirmed `scheduler_loosen` operation. Memory maintenance is a manual command
 that you may run from an OS timer: [memory-maintenance.md](memory-maintenance.md).
 
 ## 3. `stira doctor`
@@ -216,6 +220,21 @@ the tokens of each turn and the model they belong to; model rates are not config
 cost reads as unpriced (marked `*`), never as free. The observer dashboard
 (`dashboard/app.py`) serves no event stream; its `/observability` says so and does not
 connect (#278).
+
+**What the chat page shows after a restart or a language switch (#655).** The conversation on
+`/chat` is the one the server process holds (`GET /api/chat/history`), not the page's: a
+reload or a language switch (`?lang=en|ja`) shows the same conversation again, in the other
+language's labels. A restart starts a new conversation, as `/new` does: the earlier one is
+not continued (a message sent after it reaches the model without the earlier turns; only a
+turn resumed from a restored approval card replays its own checkpoint), so the page does not
+list its turns as if it were. When `turns.db` holds
+an earlier turn, the empty page says so ("The server was restarted, so this is a new
+conversation…") instead of only "Send a message to begin"; the turns' record stays under
+`/observability`, and memory, Neural State and the approval store are kept. The Neural State
+trajectory on the chat server's `/observability` (`GET /api/state/history`) is a 500-sample
+buffer of the process and starts again with it (the six values themselves are restored from
+`neural-state.json`). On `/chat`, a tall approval queue scrolls inside the chat panel and
+"Approve once" / "Reject" stay at the bottom edge of the card being read.
 
 ## 8. Backup and restore
 

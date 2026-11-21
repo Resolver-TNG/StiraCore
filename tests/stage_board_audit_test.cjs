@@ -289,7 +289,17 @@ test('the controller: rapid open/close, Esc, pinned activity holds a reply, lang
   assert.equal(board.show({ key: 'r1', text, c: classify(text) }), 'held');
   assert.equal(board.showingActivity, true);
   assert.equal(board.show({ key: 'r1', text, c: classify(text) }, { explicit: true }), 'replace');
-  // a pinned reply holds the activity unless asked
+  // #623: the pin belongs to the content: the explicit switch cleared it, so the next reply is not held
+  assert.equal(board.show({ key: 'r2', text, c: classify(text) }), 'replace');
+  // the Issue's repro: pin a reply, press Activity (explicit): the pin goes with the reply
+  document.getElementById('board-pin').click();
+  board.showActivity(nodes(), { explicit: true });
+  assert.equal(document.getElementById('board-pin').getAttribute('aria-pressed'), 'false');
+  assert.equal(board.show({ key: 'r3', text, c: classify(text) }), 'replace');
+  // pin the reply again: a pinned reply holds the activity unless asked
+  document.getElementById('board-pin').click();
+  assert.equal(board.show({ key: 'r1', text, c: classify(text) }, { explicit: true }), 'replace');
+  document.getElementById('board-pin').click();
   assert.equal(board.showActivity(nodes()), 'held');
   assert.equal(board.mode, 'reply');
   // language switch: the pin label and the title follow

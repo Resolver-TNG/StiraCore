@@ -478,24 +478,49 @@ def _classifier_check(choice: str) -> dict[str, Any]:
     )
 
 
-def _page_check_note(status: Any) -> dict[str, Any]:
+def _page_check_guard_fields(guard: Any) -> dict[str, str]:
+    """The start-time guard state and the axis code (ADR 0015 Addendum rev 6, S1) for the
+    ``page_check`` note: three fixed codes read from memory. Display only — nothing reads
+    them to decide anything, and no browser is started here. Unreadable = fail closed."""
+    from stiracore.tools import page_check_guard as pg
+
+    try:
+        report = pg.guard_report() if guard is None else dict(guard)
+    except Exception:  # noqa: BLE001 - the doctor never fails on a note; fail closed below
+        report = None
+    if report is not None:
+        state, code, axis = report.get("guard"), report.get("guard_code"), report.get("axis")
+        if state in pg.GUARD_STATES and code in pg.GUARD_CODES and axis in pg.AXIS_CODES:
+            return {"guard": state, "guard_code": code, "axis": axis}
+    return {"guard": "unverified", "guard_code": "guard_unreadable", "axis": "axis_unreadable"}
+
+
+def _page_check_note(status: Any, guard: Any = None) -> dict[str, Any]:
     """Whether the verification browser tool ``page_check`` is offered (ADR 0015 §7).
 
     Informational: the tool is optional, so a missing browser is not a problem of the
     setup. Display only: nothing is changed and no browser is started.
     """
+    fields = _page_check_guard_fields(guard)
+    measured = (
+        f" Network guard measured at start: {fields['guard']} ({fields['guard_code']}); "
+        f"axis check: {fields['axis']}. Shown only: no rule depends on it yet."
+    )
     if status.code == "page_check_ready":
         return _finding(
             "page_check_ready",
             "info",
             "page_check (verification browser: opens a workspace page with no network, runs "
-            f"a few input actions and checks, takes screenshots) is available: {status.path}.",
+            f"a few input actions and checks, takes screenshots) is available: {status.path}."
+            + measured,
+            **fields,
         )
     if status.code == "page_check_platform":
         return _finding(
             "page_check_platform",
             "info",
             "page_check (verification browser) is hidden: Windows is not supported yet.",
+            **fields,
         )
     if status.code == "page_check_root":
         return _finding(
@@ -503,12 +528,14 @@ def _page_check_note(status: Any) -> dict[str, Any]:
             "info",
             "page_check (verification browser) is hidden: Stira runs as root and the browser "
             "would need its sandbox switched off.",
+            **fields,
         )
     return _finding(
         "page_check_no_browser",
         "info",
         "page_check (verification browser) is hidden: no Chrome, Chromium or Edge was found. "
         "Install one or set STIRA_BROWSER_PATH.",
+        **fields,
     )
 
 
@@ -581,6 +608,7 @@ def run_doctor(
     browser: Any = None,
     run_checks_code: str | None = None,
     run_checks_host: Any = None,
+    page_check_guard: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Check every write root; never changes a setting (only a temp file per root).
 
@@ -628,7 +656,7 @@ def run_doctor(
         from stiracore.tools.page_check import browser_status
 
         browser = browser_status(platform=platform)
-    notes.append(_page_check_note(browser))
+    notes.append(_page_check_note(browser, page_check_guard))
     notes.append(_run_checks_note(run_checks_code, run_checks_host))
     counts = {"ok": 0, "warning": 0, "error": 0}
     for entry in roots:

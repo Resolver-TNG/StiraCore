@@ -24,6 +24,10 @@ logger = logging.getLogger(__name__)
 
 MAX_TRANSCRIPTION_LEN = 200
 HITL_APPROVED_TOOL_IDS_KEY = "stira.hitl.approved_tool_use_ids"
+# toolUseIds of calls the gate let through because a conditional Always rule read
+# ``always`` (ADR 0015 rev 6, S4). Only ``CheckpointHooks`` adds an id. The tool reads it to
+# check its conditions once more before it runs and to say who answered in its record.
+RULE_ALWAYS_TOOL_IDS_KEY = "stira.rule.always_tool_use_ids"
 # #165: while a non-NORMAL level persists, the breaker log is not repeated every turn.
 # It is written on a transition and then once per this many consecutive turns at the
 # same level (a numbers-only summary). The on_breaker callback is not throttled.
@@ -192,6 +196,8 @@ class StiraConfig:
                 "rss",
                 "diagram",
                 "page_check",
+                "page_look",
+                "page_review",
                 "run_checks",
                 "propose_procedure",
                 "speak",

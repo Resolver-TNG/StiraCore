@@ -6,7 +6,7 @@
 import { Animator } from './anim.js';
 import { boardGeometry, createBoard } from './board.js';
 import { svgImage } from './svg_safe.js';
-import { IDLE_KEY, startActivityController } from './activity.js';
+import { IDLE_KEY, activityModel, renderActivity, startActivityController } from './activity.js';
 import { buildCatalog, CATALOG } from './catalog.js';
 import { CharLayer, loadCharRig } from './char_bridge.js';
 import { partIds } from './char_rig.js';
@@ -15,7 +15,7 @@ import { MotionPlayer } from './motion.js';
 import { buildMotions, MOTIONS } from './motion_catalog.js';
 import { FaceHolder } from './motion_model.js';
 import { GADGET_STEPS } from './demo_gadgets.js';
-import { AUTOPLAY_SECONDS, STEPS as BASE_STEPS } from './director.js';
+import { AUTOPLAY_SECONDS, GRANT_STEPS, STEPS as BASE_STEPS } from './director.js';
 import { GADGET_ANIMS } from './gadget_catalog.js';
 import { DeskSeat, deskLiftFor } from './desk_seat.js';
 import { HAIR_VIEWS, HairLayer } from './hair_layer.js';
@@ -49,7 +49,9 @@ let talk = null;
 // ?ambient=0 turns the room's ambient motion off (layer-separation check, docs/stage.md)
 const ambient = params.get('ambient') === '0' ? [] : AMBIENT_ANIMS;
 const { map: catalog, rejected } = buildCatalog([...CATALOG, ...GADGET_ANIMS, ...ambient]);
-const STEPS = [...BASE_STEPS, ...GADGET_STEPS, ...MOTION_STEPS];
+const STEPS = [...BASE_STEPS, ...GADGET_STEPS, ...MOTION_STEPS, ...GRANT_STEPS];
+// the autoplay loops over the steps of before; the goal grant's life (the last ones) is played with G
+const AUTO_STEPS = STEPS.length - GRANT_STEPS.length;
 if (rejected.length) console.warn('stage: rejected catalog entries', rejected);
 const animator = new Animator(catalog, Number(params.get('seed')) || 341);
 const drift = new DriftMonitor();
@@ -132,6 +134,27 @@ function breakerLine(ev) {
   if (talk) talk.systemLine(text);
 }
 
+// Demo: a step that carries a dummy GET /api/activity answer (director.js GRANT_STEPS) is drawn
+// on the board by activity.js, exactly as a live answer is; any other step rolls that board
+// up. Nothing is requested and nothing can be operated from it.
+function demoBoard(step) {
+  if (!board) return;
+  if (!step.activity) {
+    if (board.showingActivity) board.close();
+    return;
+  }
+  const t = (k, v) => S.t(k, v);
+  const body = step.activity;
+  const m = activityModel({ body, items: body.items, offline: false }, body.server_time, t);
+  board.showActivity(renderActivity(document, m, t), { foot: S.t('stage.mode_demo'), announce: m.grant ? m.grant.announce : undefined });
+}
+// the standalone page has no shell to translate the board's fixed labels
+function labelBoard() {
+  if (!board) return;
+  board.relabel();
+  if (!shellI18n) for (const n of boardEl.querySelectorAll('[data-i18n]')) n.textContent = S.t(n.dataset.i18n);
+}
+
 function playStep(i) {
   stepIndex = (i + STEPS.length) % STEPS.length;
   const step = STEPS[stepIndex];
@@ -139,6 +162,7 @@ function playStep(i) {
   for (const ev of step.events) dispatch(ev);
   ui.say(step.say[lang]);
   ui.showChoices(step.choices, lang);
+  demoBoard(step);
   stepClock = 0;
   document.documentElement.dataset.step = step.id;
   if (step.choices) ui.focusChoice();
@@ -181,6 +205,8 @@ function setLang(l) {
   const step = STEPS[stepIndex];
   ui.say(step.say[l]);
   if (step.choices && state.approval) ui.showChoices(step.choices, l);
+  labelBoard();
+  if (step.activity && board && board.showingActivity) demoBoard(step);
 }
 setRaw(params.get('raw') === '1');
 debug.hidden = params.get('debug') !== '1';
@@ -221,6 +247,11 @@ document.addEventListener('keydown', (e) => {
   } else if (/^[a-z]$/.test(e.key) && STEPS.some((s) => s.key === e.key)) {
     autoplay = false;
     playStep(STEPS.findIndex((s) => s.key === e.key));
+  } else if (e.key === 'G') {
+    // the goal grant's life: each press plays its next state (from any other step: the first)
+    autoplay = false;
+    const at = GRANT_STEPS.indexOf(STEPS[stepIndex]);
+    playStep(STEPS.indexOf(GRANT_STEPS[(at + 1) % GRANT_STEPS.length]));
   } else if (e.key === '0') {
     autoplay = true;
     playStep(stepIndex + 1);
@@ -471,8 +502,8 @@ function loop(t) {
   scene.setSplit(forceSplit || Boolean(board && board.visible && boardGeo && !boardGeo.front));
   if (autoplay) {
     stepClock += dt;
-    if (stepClock > AUTOPLAY_SECONDS && !state.approval) playStep(stepIndex + 1);
-    if (stepClock > AUTOPLAY_SECONDS * 1.6) playStep(stepIndex + 1);
+    if (stepClock > AUTOPLAY_SECONDS && !state.approval) playStep((stepIndex + 1) % AUTO_STEPS);
+    if (stepClock > AUTOPLAY_SECONDS * 1.6) playStep((stepIndex + 1) % AUTO_STEPS);
   }
   // parallax follows the pointer only; once it has caught up it is exactly still
   for (const k of ['x', 'y']) {
@@ -560,7 +591,7 @@ Promise.all([
     layout();
     window.addEventListener('resize', layout);
     if (window.visualViewport) window.visualViewport.addEventListener('resize', layout);
-    if (board) board.relabel();
+    if (board) labelBoard();
     if (inShell && typeof ResizeObserver !== 'undefined') {
       // the side menu opening/closing and the composer growing resize the Stage
       let pending = false;

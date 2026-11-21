@@ -249,20 +249,22 @@ def test_chat_ui_exposes_all_four_hitl_actions_and_api_contract():
     assert "args_hash: request.args_hash" in js
 
 
-def test_stira_keeps_write_tools_visible_only_for_critical_hitl(tmp_path):
+def test_stira_keeps_write_tools_visible_at_critical_with_or_without_hitl(tmp_path):
+    """#259: the list does not depend on the breaker; the call decides (refused / card)."""
     from dashboard.stira_server import _stira_tools
     from stiracore.tools import MemoryStore, create_memory_tools
 
     store = MemoryStore(tmp_path / "memory", "stira-test")
     bound_tools = tuple(create_memory_tools(store))
     write_names = {"memory_write"}
-    hidden = {tool.tool_name for tool in _stira_tools(bound_tools, write_names, "critical")}
+    plain = {tool.tool_name for tool in _stira_tools(bound_tools, write_names, "critical")}
     gated = {
         tool.tool_name
         for tool in _stira_tools(bound_tools, write_names, "critical", hitl_enabled=True)
     }
-    assert "memory_write" not in hidden
+    assert "memory_write" in plain
     assert "memory_write" in gated
+    assert plain == gated
 
 
 def test_hitl_http_rejects_invalid_or_stale_decisions():

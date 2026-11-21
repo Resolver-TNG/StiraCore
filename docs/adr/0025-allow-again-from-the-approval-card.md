@@ -233,7 +233,7 @@ reachable.
 | Case | Reason code |
 |---|---|
 | exec class (`shell`, `batch`, `cron`, `use_agent`, `think`, `swarm`, `graph`, …) | `exec` |
-| `PERSON_TOOLS` (`diagram`, `delegate`, `page_check`, `propose_procedure`, `run_checks`) | `person_only` |
+| `PERSON_TOOLS` (`diagram`, `delegate`, `page_check`, `page_look` — ADR 0015 rev 6 S3, `propose_procedure`, `run_checks`) | `person_only` |
 | MCP tools and any unclassified tool | `unclassified` |
 | a path outside the workspace / write roots, not decidable, or through a symlink below the class directory | `scope_outside` / `scope_unknown` |
 | path reads (`file_read`, `view_image`, `image_reader`, `lsp_*`, `editor view`) | `read_unbound` |

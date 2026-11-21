@@ -38,13 +38,35 @@ note), 2 usage error.
 ## What is printed
 
 The number of failures, what the largest `--top` patterns sum to (count and share of all
-failures), and per pattern its count, share, first and last time and at most `--examples`
+failures), and per pattern its count, share, scope, first and last time and at most `--examples`
 representative events, newest first: `event_id` and `turn_id` for a tool call, `event_id`
 and `subject_id` (the grant id) for a grant, which has no turn.
 
 **Codes, counts, times and ids only.** `turns.db` also holds masked previews and tool
 names; each row is reduced to an allow-list (`failure_digest.TOOL_FIELDS`) as it is read.
 The tool name is not read either: for an unknown tool it is text the model chose.
+
+### Scope (`invariant` / `domain` / `unknown`)
+
+Each pattern carries one scope, read from a fixed table in the code
+(`failure_digest.SCOPE_BY_ERROR_CLASS`, `SCOPE_BY_DENY_CODE`, `SCOPE_BY_REASON_CODE`). No
+model reads anything (#730).
+
+| Scope | Meaning | Codes |
+|---|---|---|
+| `invariant` | a fault of procedure that does not depend on the task's subject | `unknown_tool`, `invalid_input`, a refusal with `rule_never`; `iteration_tool_refused`, `iteration_no_action`, `blocked_loop_detected` |
+| `domain` | the call or the step was well formed and the task's own subject stopped it | `tool_failed`; `blocked_needs_decision`, `blocked_out_of_scope`, `blocked_missing_input` |
+| `unknown` | the code does not say which, or it is neither (the harness's own state) | every other code, `unclassified`, and any value outside the tables |
+
+A refusal (`refused`, or a row without a class) is decided by its `deny_code`; any other
+tool row by its `error_class`. A test fails when a code is added without a place in the table.
+
+**This is an adaptation, and it is not verified.** The split follows the diagnosis of
+Harness2 (arXiv 2610.14224), which separates procedural faults from missing domain
+knowledge with a model. Here it is a static table over codes that were not designed for
+it, so one code can hold both kinds (`tool_failed` is counted as `domain`, and also covers
+an outside service that is down). Whether the column helps an operator has not been
+measured, and the paper's effect sizes are no evidence for it.
 
 ## Limits
 
@@ -54,8 +76,14 @@ The tool name is not read either: for an unknown tool it is text the model chose
   copy torn by a concurrent checkpoint is reported as `turns_db_unreadable` (run it again).
 * **Counts are a lower bound.** A turn event that could not be recorded was dropped; the
   counter of those drops (`TurnEventRecorder.drop_counts`) lives in the running server
-  process and cannot be read by this command. A rotated lifecycle segment is gone, and
+  process and cannot be read by this command. Its reasons: `no_active_turn`,
+  `invalid_event`, `record_failed`, `no_call_id`, `sink_failed` (the conversion of a tool
+  or model event raised) and `payload_failed` (a tool payload was not kept; its event is
+  still written). A rotated lifecycle segment is gone, and
   `tick_skipped_*` is written once per grant and reason in a process.
+* The turn-event sink never writes the tool statuses `pending` or `timeout`, and a tool
+  call that ends as a retry stays `running`. A call whose last status is `running` is
+  not finished; it is not counted as a failure.
 * One incident can appear as more than one pattern (an iteration's end and its goal's block).
 * The pure function is `stiracore.observability.failure_digest.build`; it reads no clock
   and no store, so a caller that has the drop counts can pass them (`drop_counts=`).

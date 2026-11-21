@@ -204,6 +204,9 @@ def test_nxp_breaker_blocks_dynamic_mcp_writes(monkeypatch):
         state=NeuralState(stability=0.4),
     )
     allowed, _ = wrapper._prepare_turn(wrapper.engine.pre_turn())
-    assert "unlisted_dynamic_write" not in {tool.tool_name for tool in allowed}
+    # #259: offered (fixed list), but the call is refused by name at the guard.
+    assert "unlisted_dynamic_write" in {tool.tool_name for tool in allowed}
+    refusal = wrapper.identity_guard.check_tool_call("unlisted_dynamic_write", {})
+    assert not refusal.allowed and "breaker_write_refused" in refusal.reason
     wrapper.engine.post_turn(stimulus=None)
     tool_registry.close_mcp_tools(provider)

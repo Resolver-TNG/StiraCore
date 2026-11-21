@@ -119,6 +119,53 @@ def test_a_connection_from_the_server_process_itself_is_refused(channel):
 
 
 @posix_only
+def test_ask_reads_the_refusal_when_the_server_closed_before_the_send(monkeypatch):
+    """The server answers a refused peer and closes without reading the request. A send
+    that runs after that close fails (EPIPE); the answer already queued is still read."""
+    import socket
+    import tempfile
+    import threading
+
+    short = tempfile.TemporaryDirectory(prefix="hc")  # a socket path has a length limit
+    path = Path(short.name) / "s"
+    listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    listener.bind(str(path))
+    listener.listen(1)
+    closed = threading.Event()
+
+    def refuse(reply):
+        conn, _ = listener.accept()
+        if reply:
+            conn.send(b'{"ok": false, "code": "host_peer_refused"}\n')
+        conn.close()
+        closed.set()
+
+    class LateSend(socket.socket):
+        def sendall(self, data, *args):
+            assert closed.wait(10)
+            return super().sendall(data, *args)
+
+    monkeypatch.setattr(host_channel.socket, "socket", LateSend)
+    try:
+        for reply in (True, False):
+            closed.clear()
+            server = threading.Thread(target=refuse, args=(reply,))
+            server.start()
+            try:
+                if reply:
+                    answer = host_channel.ask(path, {"cmd": "pending"})
+                    assert answer == {"ok": False, "code": "host_peer_refused"}
+                else:  # no answer at all: the send's own error, as before
+                    with pytest.raises(BrokenPipeError):
+                        host_channel.ask(path, {"cmd": "pending"})
+            finally:
+                server.join(10)
+    finally:
+        listener.close()
+        short.cleanup()
+
+
+@posix_only
 def test_a_child_of_the_server_process_is_refused(channel):
     _, server = channel()  # own pid = this process: the client below is its child
     assert _client(server.path, {"cmd": "pending"})["code"] == "host_peer_refused"

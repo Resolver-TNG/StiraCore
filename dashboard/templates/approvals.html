@@ -20,6 +20,10 @@
     <h1><span data-i18n="approvals.title">承認</span></h1>
     <p class="approvals-lead"><span data-i18n="approvals.lead">書き込み系の操作は、内容（対象・引数・期限）に束縛された承認がないと実行されません。応答がない・切断・期限切れはすべて拒否として扱われます。</span></p>
     <p class="approvals-related"><a class="approval-page-link" href="/settings#sec-tools"><span data-i18n="approvals.policy_link">承認を求めるツール（常に許可・毎回確認・使わない）を変える: 設定 › 安全 › ツールの許可</span></a></p>
+    {# #809: only when this server registered the Stage (its menu item exists) #}
+    {% if shell_nav is defined and (shell_nav | selectattr(0, 'equalto', 'stage') | list | length > 0) %}
+    <p class="approvals-related"><a class="approval-page-link" id="approvals-open-stage" href="/stage/"><span data-i18n="approvals.stage_link">Stage で見る: 承認カードが場面に出て、稼働状況に目標グラントの状態が出ます</span></a></p>
+    {% endif %}
   </header>
 
   <section class="card approvals-section" aria-labelledby="pending-title">

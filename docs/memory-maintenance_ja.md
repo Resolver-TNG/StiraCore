@@ -312,7 +312,14 @@ stira memory jobs | removed | restore <id> --data-dir .local/stira
 ### 保持期限: ストアごとの扱い
 
 上限は `agent-config.json` の `memory_retention` に書く
-（[設定 §4](configuration_ja.md#4-agent-configjsonagentconfig-確認済み)）。書かなければ上限は全て未設定で、候補は 0（例外は記憶ジョブの計画ファイル: 既定で 90 日。それでも消すのは `--apply` だけ）。例:
+（[設定 §4](configuration_ja.md#4-agent-configjsonagentconfig-確認済み)）。書かなければ上限は全て未設定で、候補は 0（例外は記憶ジョブの計画ファイル: 既定で 90 日。それでも消すのは `--apply` だけ）。
+
+上限は設定画面の「**記憶の保持期限**」でも編集できる（#474）。整数は 1〜1,000,000（`*_bytes` は 10^15 まで）、
+空欄は上限なし。設定ハブ経由で保存する（検証・変更履歴・取り消し）。保存しても何も消えない。同じ欄の
+**ドライラン**（「件数を数える」）は、**保存済み**の上限で `--apply` が退避して消すものを**件数だけ**で出す
+（エピソード・ターンのイベント・ツール payload・checkpoint・感情記録・計画ファイル、調べられなかったストアの数）。
+キー・パス・記憶の本文は出さない（`GET /api/config/memory-retention/dry-run`）。**適用は CLI のまま**で、
+画面から `--apply` を実行する手段は無い。例:
 
 ```json
 {"memory_retention": {
@@ -480,6 +487,11 @@ Episodic の front-matter だけは信用しない: `episodic/` はエージェ�
 **既定: 変わらない。** タグの無いエントリは基準の半減期 30 日の `derived` として扱い、選ばれる
 ものは今までとまったく同じ（30/90/180 日、365 日で stale）。タグを自動で付けるものは無く、
 新しい自動削除も無い。
+
+**見る場所（#652）。** チャットサーバーの記憶ページ（`/memory`）は、森の下に各エントリのキー・重要度・
+保持期限の表を出す（層ごとに新しい順 50 件まで。読み取り専用、`GET /api/memory/entries`）。本文は出さない。
+誰も確認していない Episodic の front matter の値（サーバーの書込み器が記録していない重要度、人が束縛して
+いない `retention`）は、値を出さずに「未確認」と表示する。
 
 front matter の 2 項目:
 

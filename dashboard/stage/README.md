@@ -16,8 +16,10 @@ python3 -m http.server 8765 -d dashboard   # then open http://127.0.0.1:8765/sta
 ```
 
 Keys: `Tab` raw view, `D` debug, `L` ja/en; demo: `Enter` next, `1`–`9` states,
-`c t y u s r g m k h x a n` gadget states (coding, tests, subagents, memory, forgetting,
-scheduler, tool failure, approval seals), `0` autoplay.
+`c t y u s r g m f k h x a n` gadget states (coding, tests, subagents, memory, forgetting,
+scheduler, tool failure, approval seals), `G` the goal grant's life on the board (one state
+per press: issued, running, approval card, claim, confirmed, kill switch, TTL, breaker,
+budget, no progress), `0` autoplay.
 
 Rebuild (offline tools; the outputs are committed):
 

@@ -69,6 +69,13 @@ _TABLE: dict[str, tuple[str, str, str]] = {
     # ADR 0015 §9: Ask in development, Never in minimal (never Always in phase 1); only
     # listed when a browser is found (YOLO keeps it a card: tiers.PERSON_TOOLS)
     "page_check": (_N, _K, _K),
+    # ADR 0015 rev 6 (S3): workspace file targets only; Ask or Never, no profile writes
+    # Always (YOLO keeps it a card: tiers.PERSON_TOOLS)
+    "page_look": (_N, _K, _K),
+    # ADR 0015 rev 6 (S6): sends this process's own screenshots to the ``visual_review``
+    # model; Ask or Never, only registered while that task is configured (YOLO keeps it a
+    # card: tiers.PERSON_TOOLS)
+    "page_review": (_N, _K, _K),
     # ADR 0019: runs the agent's code in a throwaway copy; only registered when the
     # gateway section turns it on (YOLO keeps it a card: tiers.PERSON_TOOLS). No profile
     # makes it Always (a person may, effective only on a verified sandbox host).

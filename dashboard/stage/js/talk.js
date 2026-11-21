@@ -99,6 +99,24 @@ export function resendAllowed(unsettled, state) {
   return Boolean(unsettled && state && state.canSend);
 }
 
+// #680: the Stage's "■ Stop the turn" — POST /api/chat/cancel, the chat page's own stop (the
+// server stops at the SDK's next safe point; a tool call already running finishes). "■ Stop
+// the display" (stage-stop) only stops this page's reading and stays as it is.
+// This page's own turn: once its id is known. A turn running from another page, from before a
+// reload or after "stop the display": by its id, only when the server lists it as stoppable.
+// -> { turnId } | null (no button).
+export function stopTurnTarget({ busy, ownTurnId, live }) {
+  if (busy) return typeof ownTurnId === 'string' && ownTurnId ? { turnId: ownTurnId } : null;
+  if (live && live.turnOpen && live.turnStoppable && typeof live.turnId === 'string' && live.turnId) return { turnId: live.turnId };
+  return null;
+}
+
+// One press: the shared chat_core.cancelTurn (CSRF through the page's fetch). -> { ok, code, error }
+export async function requestStopTurn(core, fetch, target, t) {
+  if (!target || !core || typeof core.cancelTurn !== 'function') return { ok: false, code: null, error: null };
+  return core.cancelTurn(fetch, target.turnId, t);
+}
+
 // Discarding an unknown outcome is its own confirmed step: the send may already have been
 // processed. Without the dialog nothing is discarded (fail closed).
 export async function confirmDiscard(confirm, unsettled, t) {
@@ -162,7 +180,7 @@ export function startTalk(ctx) {
     resend: $('stage-resend'), discard: $('stage-discard'), asked: $('asked'), more: $('line-more'),
     logBtn: $('btn-log'), backlog: $('backlog'), list: $('backlog-list'), close: $('backlog-close'),
     gauge: $('ctx-gauge'), newBtn: $('btn-new'), newReason: $('btn-new-reason'),
-    historyReload: $('stage-history-reload'),
+    historyReload: $('stage-history-reload'), stopTurn: $('stage-stop-turn'),
   };
   const starter = core.createSessionStarter ? core.createSessionStarter({ fetch: ctx.fetch, t }) : null;
   const st = { ready: false, busy: false, reading: false, composing: false, attachments: [], history: [], notes: [], liveTurn: null, pin: null, more: false, error: '', sig: '', refill: null, inputGen: 0, turnOfKey: new Map(), confirming: false, stoppedTurn: null, noteSeq: 0, sendSeq: 0, reply: null, gaugeTurn: null, gaugeSig: '', session: null, starting: false, historyStale: false };
@@ -222,6 +240,11 @@ export function startTalk(ctx) {
     return composerState({ ready: st.ready, busy: st.busy, reading: st.reading, unsettled: Boolean(sender.unsettled), resetUnknown: Boolean(starter && starter.pendingKey), starting: st.starting, historyStale: st.historyStale, ...live, turnStopped });
   }
 
+  // #680: what "■ Stop the turn" would stop now, or null (stopTurnTarget).
+  function stopTarget() {
+    return stopTurnTarget({ busy: st.busy, ownTurnId: st.liveTurn && st.liveTurn.turnId, live: ctx.live ? ctx.live.status() : null });
+  }
+
   // Why "new conversation" cannot run now (catalog key) or null; fail closed without the API.
   function newBlock() {
     if (!starter || !core.newSessionBlock) return 'chat.new_blocked_loading';
@@ -232,13 +255,20 @@ export function startTalk(ctx) {
   function update() {
     const c = status();
     const nb = newBlock();
-    const reason = st.error || (c.reason ? t(c.reason) : '');
+    const target = stopTarget();
+    if (!target || target.turnId !== st.stopTurnPending) st.stopTurnPending = null;
+    const stopping = Boolean(target && st.stopTurnPending);
+    const reason = st.error || (stopping ? t('chat.stopping_turn') : c.reason ? t(c.reason) : '');
     const boardOpen = Boolean(board && board.open);
-    const sig = `${st.historyStale}|${nb}|${document.body.classList.contains('portrait')}|${c.canSend}|${c.stop}|${reason}|${Boolean(sender.unsettled) && !st.busy}|${st.more && !ui.typing}|${S().title}|${boardOpen}|${st.reply ? st.reply.mode : ''}|${Boolean(st.pin)}|${ui.typing}`;
+    const sig = `${st.historyStale}|${nb}|${document.body.classList.contains('portrait')}|${c.canSend}|${c.stop}|${reason}|${Boolean(sender.unsettled) && !st.busy}|${st.more && !ui.typing}|${S().title}|${boardOpen}|${st.reply ? st.reply.mode : ''}|${Boolean(st.pin)}|${ui.typing}|${target ? target.turnId : ''}|${stopping}`;
     if (sig === st.sig) return;
     st.sig = sig;
     const hadFocus = document.activeElement === el.send || document.activeElement === el.stop;
     if (el.historyReload) el.historyReload.hidden = !st.historyStale;
+    if (el.stopTurn) {
+      el.stopTurn.hidden = !target;
+      el.stopTurn.disabled = stopping;
+    }
     if (el.newBtn) {
       // disabled with the reason as its description (title for the pointer, the hidden text for
       // screen readers)
@@ -633,6 +663,23 @@ export function startTalk(ctx) {
       st.error = '';
       el.note.textContent = t('stage.note_stopping');
     }
+  });
+  // #680: one press stops the running turn on the server (POST /api/chat/cancel)
+  if (el.stopTurn) el.stopTurn.addEventListener('click', async () => {
+    const target = stopTarget();
+    if (!target || st.stopTurnPending === target.turnId) return;
+    st.stopTurnPending = target.turnId;
+    st.error = '';
+    st.sig = '';
+    update();
+    const result = await requestStopTurn(core, ctx.fetch, target, t);
+    // "no_turn": it had just ended — nothing to say
+    if (!result.ok && result.code !== 'no_turn') {
+      st.stopTurnPending = null;
+      st.error = result.error && result.error.message ? result.error.message : t('chat.connection_failed');
+    }
+    st.sig = '';
+    update();
   });
   el.input.addEventListener('compositionstart', () => {
     st.composing = true;
