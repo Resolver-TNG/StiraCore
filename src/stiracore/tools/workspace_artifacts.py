@@ -313,6 +313,7 @@ def _read_regular(
     """
     flags = (
         os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
         | getattr(os, "O_NOFOLLOW", 0)
         | getattr(os, "O_NONBLOCK", 0)
         | getattr(os, "O_CLOEXEC", 0)
@@ -495,7 +496,13 @@ class WorkspaceArtifacts:
             self.hash_only += 1
             return False
         temporary = self.blobs / f".{digest}.{os.getpid()}.{threading.get_ident()}.tmp"
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
         try:
             fd = os.open(temporary, flags, 0o600)
             with os.fdopen(fd, "wb") as handle:

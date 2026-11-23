@@ -242,6 +242,7 @@ def test_reports_are_not_read_through_a_symlinked_out_directory(tmp_path):
     assert run_checks._ruff(run / "out" / "0" / "ruff.json") is None
 
 
+@posix_only
 def test_regular_reports_are_still_read(tmp_path):
     out = tmp_path / "run" / "out" / "0"
     out.mkdir(parents=True)

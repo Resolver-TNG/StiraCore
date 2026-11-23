@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 import threading
 import traceback
@@ -24,6 +25,12 @@ from tests.provider_fakes import FakeModel, text_turn
 # summary, limit, audit and compatibility tests run without it.
 needs_pypdf = pytest.mark.skipif(
     importlib.util.find_spec("pypdf") is None, reason="the optional extra [pdf] is not installed"
+)
+# Windows has neither POSIX resource.setrlimit nor the ps RSS watchdog, so pdf_extract
+# intentionally fails closed with pdf_limits_unavailable.
+needs_pdf_limits = pytest.mark.skipif(
+    os.name == "nt",
+    reason="PDF parser memory limit enforcement requires POSIX resource.setrlimit or ps watchdog",
 )
 TEXT = " ".join(f"Advisory line {i}: patch CVE-2026-{1000 + i} before Friday." for i in range(60))
 
@@ -76,6 +83,7 @@ def _text_body(http, body: str = TEXT, url: str | None = None):
 
 
 @needs_pypdf
+@needs_pdf_limits
 def test_a_text_pdf_of_thirty_pages_returns_its_text(http):
     result = web_fetch(http[1].url)
     assert result["status"] == "success"
@@ -85,6 +93,7 @@ def test_a_text_pdf_of_thirty_pages_returns_its_text(http):
 
 
 @needs_pypdf
+@needs_pdf_limits
 def test_a_pdf_sent_as_a_generic_binary_is_recognised_by_its_magic_bytes(http):
     http[1].headers = {"Content-Type": "application/octet-stream"}
     assert "Advisory page 3" in web_fetch(http[1].url)["content"][0]["text"]
@@ -93,6 +102,7 @@ def test_a_pdf_sent_as_a_generic_binary_is_recognised_by_its_magic_bytes(http):
 
 
 @needs_pypdf
+@needs_pdf_limits
 @pytest.mark.parametrize(
     ("make", "code"),
     [
@@ -113,6 +123,7 @@ def test_each_pdf_failure_has_its_code(http, audit, make, code):
 
 
 @needs_pypdf
+@needs_pdf_limits
 def test_too_many_pages_and_too_many_bytes_are_too_large(http, audit, monkeypatch):
     monkeypatch.setattr(pdf_extract, "MAX_PDF_PAGES", 10)
     monkeypatch.setattr(
@@ -129,6 +140,7 @@ def test_too_many_pages_and_too_many_bytes_are_too_large(http, audit, monkeypatc
     assert [row["reason_code"] for row in audit] == ["too_large", "too_large"]
 
 
+@needs_pdf_limits
 def test_a_missing_pdf_library_is_a_classified_error(http, monkeypatch):
     # The child cannot import pypdf (an install without the extra).
     monkeypatch.setattr(
@@ -141,6 +153,7 @@ def test_a_missing_pdf_library_is_a_classified_error(http, monkeypatch):
     assert "stiracore[pdf]" in result["content"][0]["text"]
 
 
+@needs_pdf_limits
 def test_a_slow_extraction_is_stopped_by_the_time_limit(monkeypatch):
     monkeypatch.setattr(pdf_extract, "_CHILD", "import time\ntime.sleep(30)\n" + pdf_extract._CHILD)
     result = pdf_extract.extract_text(text_pdf(["x"]), timeout=0.5)
@@ -148,6 +161,7 @@ def test_a_slow_extraction_is_stopped_by_the_time_limit(monkeypatch):
 
 
 @needs_pypdf
+@needs_pdf_limits
 def test_the_parser_runs_in_a_child_without_the_server_environment(monkeypatch):
     monkeypatch.setenv("STIRA_TEST_SECRET_FOR_CHILD", "do-not-pass")
     seen = {}
@@ -299,6 +313,7 @@ def test_the_parser_never_runs_when_no_memory_limit_can_be_guaranteed(monkeypatc
         assert parsed == []  # no reliable child limit here: not even started
 
 
+@needs_pdf_limits
 def test_the_memory_limit_stops_a_real_child(monkeypatch):
     # #1: a real child that allocates past the limit is stopped (RLIMIT_AS on Linux, the
     # parent's RSS watchdog on macOS), with a code, before it can finish.
@@ -410,6 +425,7 @@ def test_a_failing_chat_model_getter_is_summary_failed(http, audit, monkeypatch)
 
 
 @needs_pypdf
+@needs_pdf_limits
 def test_a_pdf_longer_than_the_extraction_cap_reports_its_full_length(
     http, summarizer, monkeypatch
 ):

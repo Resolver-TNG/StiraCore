@@ -543,7 +543,19 @@ def test_the_executors_own_subtree_check(tmp_path):
         assert it.stop_code == "tool_refused"
 
 
+def _require_symlinks(tmp_path) -> None:
+    """Skip on the main thread if symlinks cannot be created (e.g. unprivileged Windows),
+    before a worker-thread probe attempts ``os.symlink``."""
+    probe_target = tmp_path / ".symlink-probe-target"
+    probe_link = tmp_path / ".symlink-probe-link"
+    probe_target.mkdir(exist_ok=True)
+    os.symlink(probe_target, probe_link, target_is_directory=True)
+    probe_link.unlink()
+    probe_target.rmdir()
+
+
 def test_a_symlink_swapped_in_between_authorize_and_consume_is_refused(tmp_path):
+    _require_symlinks(tmp_path)
     fired = []
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
@@ -1027,6 +1039,7 @@ def test_the_subtree_itself_retargeted_after_issue_is_refused_and_blocks(tmp_pat
 
 @pytest.mark.parametrize("tool", ["editor", "run_checks"])
 def test_the_subtree_retargeted_mid_iteration_is_refused_at_the_consume(tmp_path, tool):
+    _require_symlinks(tmp_path)
     fired = []
     elsewhere = tmp_path / "ws" / "elsewhere"
 
@@ -1643,6 +1656,10 @@ def test_a_parent_of_the_subtree_swapped_for_a_symlink_is_refused_at_admission(t
     assert not list(other.rglob("*.md"))
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows refuses to rename a directory while a file handle inside it is open",
+)
 @pytest.mark.xfail(
     reason="same-user filesystem actor, out of scope: another process of the server's user "
     "renames the authorized directory between the sandbox's final check and the write (the "

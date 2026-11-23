@@ -438,7 +438,7 @@ def test_random_sequences_match_the_model(tmp_path, monkeypatch, seed):
         finally:
             unreadable["on"] = False
         disk = {str(env.sub / name): (env.sub / name).read_text() for name in _FILES}
-        changed = [p for p in dict.fromkeys(written) if disk[p] != start[p.rsplit("/", 1)[-1]]]
+        changed = [p for p in dict.fromkeys(written) if disk[p] != start[os.path.basename(p)]]
         expected = oracle.step(disk, changed, written, rows, unknown)
         g = grant(env)
         assert (g.goal_status, g.goal_reason) == expected, (seed, n, _state(env))

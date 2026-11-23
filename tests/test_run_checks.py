@@ -5,6 +5,7 @@ registration, defaults, YOLO, doctor, log and audit. The real runs are in
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import subprocess
 from pathlib import Path
@@ -255,7 +256,16 @@ def test_the_harness_builds_every_argv(tmp_path):
     assert "-p" in argv and argv[argv.index("-p") + 1] == "no:cacheprovider"
 
 
-def test_card_shows_the_plan_and_binds_it(tmp_path):
+def _pin_sandboxed_on_windows(monkeypatch):
+    """Windows has no sandbox: pin the host there so the card text is the same as on a sandboxed
+    POSIX host. On POSIX nothing is pinned: the card reflects the real host detection."""
+    if os.name == "nt":
+        monkeypatch.setattr(rc, "platform_code", lambda: None)
+        monkeypatch.setitem(rc._HOST, "status", SANDBOXED)
+
+
+def test_card_shows_the_plan_and_binds_it(tmp_path, monkeypatch):
+    _pin_sandboxed_on_windows(monkeypatch)
     policy = _ws(tmp_path, {"p/mod.py": "x = 1\n"})
     prepared = rc.prepare_input({"path": "p", "kinds": ["auto"], "plan": {"binding": "x"}}, policy)
     card = prepared["plan"]
@@ -281,6 +291,7 @@ def test_card_says_why_it_asks_on_limits_only(tmp_path, monkeypatch):
 
 
 def test_calls_per_turn(tmp_path, monkeypatch):
+    _pin_sandboxed_on_windows(monkeypatch)
     policy = _ws(tmp_path, {"p/mod.py": "x = 1\n"})
     monkeypatch.setattr(rc, "_count_call", lambda: False)
     prepared = rc.prepare_input({"path": "p"}, policy)

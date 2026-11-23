@@ -83,8 +83,9 @@ def test_pending_request_survives_reopen_with_owner_only_files(tmp_path):
     assert (record.args_hash, record.tool_use_id, record.expires_at) == (DIGEST, "ext-1", 2000.0)
     assert record.origin == {"kind": "turn", "id": "turn-1"}
     assert record.correlation_id == "turn-1"
-    for file in (path, path.with_name(path.name + ".head")):
-        assert stat.S_IMODE(os.stat(file).st_mode) == 0o600
+    if os.name != "nt":
+        for file in (path, path.with_name(path.name + ".head")):
+            assert stat.S_IMODE(os.stat(file).st_mode) == 0o600
 
 
 def test_arguments_are_stored_masked_and_hash_bound(tmp_path):

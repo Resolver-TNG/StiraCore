@@ -64,7 +64,9 @@ def _tools(policy: WritePathPolicy | None) -> dict[str, AgentTool]:
 def test_relative_read_finds_the_file_written_into_the_workspace(
     workspace: Path, policy: WritePathPolicy, elsewhere: Path
 ) -> None:
-    (workspace / "stira_slash_test.txt").write_text("a / b 日本語\n", encoding="utf-8")
+    (workspace / "stira_slash_test.txt").write_text(
+        "a / b 日本語\n", encoding="utf-8", newline="\n"
+    )
     # The bare tool looks in the cwd and fails (the report in #306) ...
     assert file_read("stira_slash_test.txt")["status"] == "error"
     # ... the registered tool anchors to the workspace, as file_write does.

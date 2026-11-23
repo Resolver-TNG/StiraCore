@@ -614,6 +614,16 @@ def workspace_file_bytes(policy: Any, path: str | os.PathLike) -> bytes | None:
     return read_workspace_file(policy, path)[1]
 
 
+def _is_windows_drive_path(text: str) -> bool:
+    return (
+        os.name == "nt"
+        and len(text) >= 3
+        and text[0].isalpha()
+        and text[1] == ":"
+        and text[2] in ("\\", "/")
+    )
+
+
 def _file_url_path(url: str) -> str | None:
     """Local path of a ``file://`` URL (``None`` for another host or a bad URL)."""
     try:
@@ -622,7 +632,16 @@ def _file_url_path(url: str) -> str | None:
         return None
     if parts.scheme.lower() != "file" or parts.netloc not in ("", "localhost"):
         return None
-    return unquote(parts.path)
+    path = unquote(parts.path)
+    if (
+        os.name == "nt"
+        and len(path) >= 3
+        and path[0] == "/"
+        and path[1].isalpha()
+        and path[2] == ":"
+    ):
+        path = path[1:]
+    return path
 
 
 def check_target(target: Any, policy: Any) -> tuple[Path, str]:
@@ -635,7 +654,7 @@ def check_target(target: Any, policy: Any) -> tuple[Path, str]:
     if type(target) is not str or not target.strip() or "\0" in target or len(target) > 4096:
         raise PageCheckRefused("invalid_target", "target must be a workspace file path")
     text = target.strip()
-    if _SCHEME.match(text):
+    if _SCHEME.match(text) and not _is_windows_drive_path(text):
         local = _file_url_path(text)
         if local is None:
             raise PageCheckRefused(
@@ -2255,7 +2274,7 @@ def _save_screenshot(
     except Exception:  # noqa: BLE001, S110
         pass
     _prune_runs(workspace / SHOT_DIR)
-    return str(target.relative_to(workspace)), None
+    return target.relative_to(workspace).as_posix(), None
 
 
 def run_page_check(
@@ -2457,7 +2476,7 @@ def target_for_log(target: Any, workspaces: Any = None) -> str:
     text = target.strip()
     if is_local_url(text):
         return local_target_for_log(text)
-    if _SCHEME.match(text):
+    if _SCHEME.match(text) and not _is_windows_drive_path(text):
         local = _file_url_path(text)
         if local is None:
             return "refused:scheme_refused"

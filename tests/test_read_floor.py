@@ -61,7 +61,7 @@ READABLE = [
 
 def _touch(path: Path, text: str = SECRET) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    path.write_text(text, encoding="utf-8", newline="\n")
     return path
 
 
@@ -207,7 +207,10 @@ def test_case_and_unicode_variants_are_refused(tools, data_dir):
     _assert_floor(_run(tools["file_read"], {"path": str(upper)}))
     _assert_floor(_run(tools["file_read"], {"path": "../TOOL-CONFIG.json"}))
     # A workspace spelled differently is not the (exact) exception: refused, never followed.
-    _assert_floor(_run(tools["file_read"], {"path": str(data_dir / "WORKSPACE" / "notes.md")}))
+    # On Windows NTFS, Path.resolve() calls GetFinalPathNameByHandleW which canonicalizes an
+    # existing case-insensitive directory to its true on-disk name (``workspace``).
+    if os.name != "nt":
+        _assert_floor(_run(tools["file_read"], {"path": str(data_dir / "WORKSPACE" / "notes.md")}))
     nfc = _touch(data_dir / "データ.md")
     nfd = unicodedata.normalize("NFD", str(nfc))
     assert nfd != str(nfc)
@@ -265,7 +268,10 @@ def test_a_parent_swapped_for_a_symlink_before_the_open_is_refused(tools, data_d
     real_open = os.open
 
     def swap_then_open(path, flags, *args, **kwargs):
-        if str(path).endswith("sub/tool-config.json") and (workspace / "sub").is_dir():
+        if (
+            str(path).replace("\\", "/").endswith("sub/tool-config.json")
+            and (workspace / "sub").is_dir()
+        ):
             (workspace / "sub").rename(workspace / "sub-old")
             (workspace / "sub").symlink_to(data_dir, target_is_directory=True)
         return real_open(path, flags, *args, **kwargs)
@@ -335,7 +341,7 @@ def test_image_reader_reopen_is_checked(tools, data_dir, monkeypatch):
 
     def swap(path):
         result = real_exists(path)
-        if str(path).endswith("workspace/ok.png"):
+        if str(path).replace("\\", "/").endswith("workspace/ok.png"):
             os.replace(data_dir / "workspace" / "ok.png", data_dir / "workspace" / "ok-old.png")
             (data_dir / "workspace" / "ok.png").symlink_to(data_dir / "secret.png")
         return result
@@ -639,6 +645,69 @@ def test_listing_opens_the_directory_and_checks_its_identity(data_dir, monkeypat
             names = []
     assert "0123456789abcdef0123456789abcdef.json" not in names
     assert names in ([], ["harmless.md"])
+
+
+def _list_by_name(monkeypatch):
+    """Force the path-based listing the Windows host uses (no descriptor scandir)."""
+    from stiracore.tools import file_editor_tool
+
+    monkeypatch.setattr(file_editor_tool, "_LIST_BY_DESCRIPTOR", False)
+
+
+def test_path_based_listing_still_lists_a_plain_directory(data_dir, monkeypatch):
+    from stiracore.tools.file_editor_tool import StiraWriteSandbox
+
+    policy, _ = build_policy(AgentConfig(), data_dir)
+    _touch(data_dir / "workspace" / "sub" / "harmless.md", "harmless")
+    _list_by_name(monkeypatch)
+    with read_floor(policy):
+        names = [
+            e.name
+            for e in asyncio.run(
+                StiraWriteSandbox().list_files(str(data_dir / "workspace" / "sub"))
+            )
+        ]
+    assert names == ["harmless.md"]
+
+
+def test_path_based_listing_refuses_a_directory_swapped_in_before_the_scan(data_dir, monkeypatch):
+    """The fallback judges a directory by name and scans by name: when the name is swapped for a
+    link to the data directory in between, nothing the scan saw may be returned (PR #847 review)."""
+    from stiracore.tools import file_editor_tool
+    from stiracore.tools.file_editor_tool import StiraWriteSandbox
+
+    policy, _ = build_policy(AgentConfig(), data_dir)
+    sub, saved = data_dir / "workspace" / "sub", data_dir / "workspace" / "sub-saved"
+    _touch(sub / "harmless.md", "harmless")
+    _list_by_name(monkeypatch)
+    real_scandir = os.scandir
+
+    def swap_then_scandir(where=None):
+        if (
+            not isinstance(where, int)
+            and str(where).endswith("workspace/sub")
+            and not sub.is_symlink()
+        ):
+            sub.rename(saved)
+            sub.symlink_to(data_dir, target_is_directory=True)
+        return real_scandir(where)
+
+    monkeypatch.setattr(file_editor_tool.os, "scandir", swap_then_scandir)
+    with read_floor(policy), pytest.raises(PermissionError):
+        asyncio.run(StiraWriteSandbox().list_files(str(sub)))
+
+
+def test_path_based_listing_refuses_a_reparse_point(data_dir, monkeypatch):
+    """A Windows junction is a directory to ``lstat``: its reparse attribute refuses the listing."""
+    from stiracore.tools import file_editor_tool
+    from stiracore.tools.file_editor_tool import StiraWriteSandbox
+
+    policy, _ = build_policy(AgentConfig(), data_dir)
+    _touch(data_dir / "workspace" / "sub" / "harmless.md", "harmless")
+    _list_by_name(monkeypatch)
+    monkeypatch.setattr(file_editor_tool, "_is_reparse_point", lambda info: True)
+    with read_floor(policy), pytest.raises(PermissionError):
+        asyncio.run(StiraWriteSandbox().list_files(str(data_dir / "workspace" / "sub")))
 
 
 def test_listing_never_names_protected_entries_and_follows_no_symlink(data_dir):

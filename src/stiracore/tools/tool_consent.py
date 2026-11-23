@@ -277,7 +277,19 @@ def claim_gate(
 
 def _stdin_state() -> str:
     try:
-        return "a terminal" if os.isatty(0) else "not a terminal"
+        if not os.isatty(0):
+            return "not a terminal"
+        if os.name == "nt":
+            # Windows UCRT _isatty() returns True for NUL (DEVNULL) because it is a
+            # character device; verify fd 0 is actually attached to a console.
+            import ctypes
+            import msvcrt
+
+            handle = msvcrt.get_osfhandle(0)
+            mode = ctypes.c_uint32()
+            if not ctypes.windll.kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+                return "not a terminal"
+        return "a terminal"
     except OSError:
         return "closed"
 
@@ -403,6 +415,10 @@ def _guarded_open(tool_name: str):
                 pass
             else:
                 grant.opened.append((info.st_dev, info.st_ino))
+        if len(args) < 4 and "newline" not in kwargs:
+            # Preserve exact newlines on Windows so written bytes match requested_bytes
+            # (and [Stira file observation] hashes) without CRLF/CRCRLF translation.
+            kwargs = {**kwargs, "newline": ""}
         return os.fdopen(descriptor, mode, *args, **kwargs)
 
     guarded.stira_consent_bridge = tool_name

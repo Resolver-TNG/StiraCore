@@ -209,6 +209,14 @@ class OwnerLockFile:
                 raise self._unsafe("a symbolic link") from None
             if error.errno == errno.EISDIR:
                 raise self._unsafe("a directory") from None
+            if error.errno == errno.EACCES:
+                # Windows raises PermissionError (EACCES) rather than EISDIR when
+                # os.open(..., O_RDWR | O_CREAT) targets an existing directory.
+                try:
+                    if stat.S_ISDIR(os.lstat(self.path).st_mode):
+                        raise self._unsafe("a directory") from None
+                except OSError:
+                    pass
             raise
         try:
             problem = _check_descriptor(fd)

@@ -37,6 +37,8 @@ from stiracore.durable_dir import fsync_dir
 
 from .epoch_store import Identity, _flush, _unsafe, identity, install
 
+O_BINARY = getattr(os, "O_BINARY", 0)
+
 __all__ = ["ReadResult", "Replaced", "append_line", "read", "replace"]
 
 
@@ -60,7 +62,7 @@ def read(path: Path, *, max_bytes: int, prefix: str) -> ReadResult:
         return ReadResult("bad", reason=f"{prefix}_unsafe")
     if info.st_size > max_bytes:
         return ReadResult("bad", reason=f"{prefix}_malformed")
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    flags = os.O_RDONLY | O_BINARY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     try:
         fd = os.open(path, flags)
     except OSError as error:
@@ -100,7 +102,7 @@ def replace(directory: Path, name: str, body: bytes) -> Identity:
     after the rename). The caller checks the current file first (:func:`read`)."""
     directory = Path(directory)
     tmp = directory / f".{name}.{os.getpid()}.{os.urandom(4).hex()}.tmp"
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | O_BINARY | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(tmp, flags, 0o600)
     try:
         try:
@@ -130,7 +132,13 @@ def append_line(path: Path, line: bytes, expected: Identity | None) -> Identity:
     created ``0600``). A different, unsafe or vanished file raises :class:`Replaced`;
     any I/O failure raises ``OSError``. Returns the file's identity after the append."""
     path = Path(path)
-    base = os.O_WRONLY | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    base = (
+        os.O_WRONLY
+        | os.O_APPEND
+        | O_BINARY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
     created = expected is None
     try:
         fd = os.open(path, base | (os.O_CREAT | os.O_EXCL if created else 0), 0o600)

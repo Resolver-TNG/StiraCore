@@ -29,12 +29,30 @@ def taint_view(settings: Any, observer: Any) -> dict[str, Any]:
         "sources": list(labels.SOURCES),
         "trusted_sources": sorted(labels.TRUSTED_SOURCES),
         "flow_codes": list(labels.FLOW_CODES),
+        "address_codes": list(labels.ADDRESS_CODES),
         "observation": observer.snapshot() if enabled and observer is not None else None,
     }
 
 
 def _count(value: Any) -> bool:
     return type(value) is int and 0 <= value < 10**9
+
+
+def _clean_address(value: Any) -> dict[str, Any] | None:
+    """The ``agent_address`` part of a row: two counts and fixed codes (``labels.ADDRESS_CODES``)."""
+    if (
+        not isinstance(value, Mapping)
+        or not _count(value.get("scanned"))
+        or not _count(value.get("flagged"))
+    ):
+        return None
+    codes = value.get("codes")
+    codes = codes if isinstance(codes, Mapping) else {}
+    return {
+        "scanned": value["scanned"],
+        "flagged": value["flagged"],
+        "codes": {k: v for k, v in codes.items() if k in labels.ADDRESS_CODES and _count(v)},
+    }
 
 
 def clean_summary(value: Any) -> dict[str, Any] | None:
@@ -50,7 +68,7 @@ def clean_summary(value: Any) -> dict[str, Any] | None:
         return None
     inputs = {k: v for k, v in inputs.items() if k in labels.SOURCES and _count(v)}
     held = {k: v for k, v in held.items() if k in labels.FLOW_CODES and _count(v)}
-    return {
+    out = {
         "context_trust": trust,
         "context_sensitive": value["context_sensitive"],
         "input_labels": inputs,
@@ -59,6 +77,10 @@ def clean_summary(value: Any) -> dict[str, Any] | None:
         "flow_would_hold": held,
         "observe_only": True,
     }
+    address = _clean_address(value.get("agent_address"))
+    if address is not None:
+        out["agent_address"] = address
+    return out
 
 
 def create_taint_blueprint(provider: Callable[[], dict[str, Any]]) -> Blueprint:

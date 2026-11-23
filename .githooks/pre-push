@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Enabled by scripts/install_hooks.sh (git config core.hooksPath .githooks). Skip once: git push --no-verify
+all_zero=1
+while read -r _lref lsha _rref _rsha; do [ -n "${lsha:-}" ] && [ "${lsha//0/}" != "" ] && all_zero=0; done
+[ "$all_zero" = 1 ] && exit 0          # deleting a remote branch: nothing to check
+exec "$(git rev-parse --show-toplevel)/scripts/prepush_check.sh"

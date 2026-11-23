@@ -4,6 +4,7 @@ approval fail-closed, chained log and restart consistency."""
 from __future__ import annotations
 
 import json
+import os
 import threading
 from datetime import UTC
 
@@ -724,7 +725,8 @@ def test_events_replay_consistently_after_restart(tmp_path):
     _tick_at(scheduler, clock, T0 + 300)
     before = (scheduler.jobs(), scheduler.runs(), scheduler.notifications())
     scheduler.stop()
-    assert (tmp_path / "scheduler-events.jsonl").stat().st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        assert (tmp_path / "scheduler-events.jsonl").stat().st_mode & 0o777 == 0o600
     restarted, _ = _make(tmp_path, clock)
     assert (restarted.jobs(), restarted.runs(), restarted.notifications()) == before
     ok, error = restarted.log.verify()
@@ -1203,7 +1205,7 @@ def test_same_size_rewrite_of_the_tail_is_detected_while_running(tmp_path):
     scheduler.create_job(_job(), by=HUMAN, confirm=True)
     log = tmp_path / "scheduler-events.jsonl"
     data = log.read_text(encoding="utf-8")
-    log.write_text(data.replace('"name":"probe"', '"name":"prob3"'))
+    log.write_text(data.replace('"name":"probe"', '"name":"prob3"'), encoding="utf-8", newline="\n")
     assert log.stat().st_size == len(data.encode())
     _tick_at(scheduler, clock, T0 + 300)
     assert probe.calls == []

@@ -26,7 +26,9 @@ import stat
 import sys
 from pathlib import Path
 
-__all__ = ["fchmod_private", "geteuid_or_none", "is_posix", "utime_nofollow"]
+__all__ = ["O_BINARY", "fchmod_private", "geteuid_or_none", "is_posix", "utime_nofollow"]
+
+O_BINARY: int = getattr(os, "O_BINARY", 0)
 
 
 def is_posix() -> bool:

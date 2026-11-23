@@ -93,8 +93,10 @@ def _inside(path: Path, directory: Path) -> bool:
 
 def _write_new(path: Path, text: str) -> None:
     """Create ``path`` (it must not exist; mode 0600) and write ``text``."""
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+    descriptor = os.open(
+        path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600
+    )
+    with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as handle:
         handle.write(text)
 
 

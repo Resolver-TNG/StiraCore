@@ -70,7 +70,7 @@ def test_pyright_positions(source, monkeypatch):
     assert seen == {
         "executable": "pyright-langserver",
         "path": source,
-        "text": source.read_text(),
+        "text": source.read_bytes().decode("utf-8"),
         "timeout": 30,
     }
     assert result["backend"] == "pyright"

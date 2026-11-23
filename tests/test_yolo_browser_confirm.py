@@ -12,6 +12,7 @@ not the person's own press in the page.
 
 from __future__ import annotations
 
+import os
 import secrets
 import threading
 
@@ -223,6 +224,9 @@ def test_a_stale_target_after_the_browser_confirmation_applies_nothing(make_app)
     assert "http_request" not in _ask_tools(client)
 
 
+@pytest.mark.skipif(
+    os.name == "nt", reason="YOLO host command channel requires POSIX AF_UNIX (#540)"
+)
 def test_with_the_host_channel_set_the_browser_cannot_confirm(make_app):
     client = make_app(host_confirm="command").test_client()
     operation = _operation(post(client, RULES, LOOSEN))
@@ -530,6 +534,9 @@ def test_a_latch_set_while_a_press_writes_its_row_survives_the_press():
 # --- review of phase 2, major 1: target read, check, consume and change are one step ---
 
 
+@pytest.mark.skipif(
+    os.name == "nt", reason="YOLO host command channel requires POSIX AF_UNIX (#540)"
+)
 def test_a_scheduler_change_cannot_slip_between_the_target_check_and_the_resume(make_app):
     from stiracore.control.harvest_job import ACTION_NAME
 

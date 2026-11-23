@@ -103,6 +103,10 @@ def _gated(tool, tool_input: dict, use_id: str = "t1") -> dict:
 
 def _raw(name: str, tool_input: dict) -> dict:
     """The upstream tool outside Stira's wrapper; the SDK turns exceptions into errors."""
+    if name == "editor" and isinstance(tool_input.get("path"), str):
+        from stiracore.tools.file_editor_tool import to_editor_path
+
+        tool_input = {**tool_input, "path": to_editor_path(tool_input["path"])}
     try:
         return asyncio.run(_collect(_tool(name).wrapped, _use(name, tool_input)))
     except tool_consent.ToolConsentError as error:
@@ -136,6 +140,7 @@ _CHILD = textwrap.dedent(
     from test_subagent import ScriptedModel
     from stiracore.agent.nxp_agent import NXPAgent
     from stiracore.tools import tool_consent, tool_registry as registry
+    from stiracore.tools.file_editor_tool import to_editor_path
 
     work, names = sys.argv[1], json.loads(sys.argv[2])
     calls = [("file_write", {"path": f"{work}/a.md", "content": "hello"})] if "file_write" in names else []
@@ -166,10 +171,13 @@ _CHILD = textwrap.dedent(
     raw, direct = [], []
     for name in names:
         tool = registry.WRITE_TOOLS[name]
-        args = ({"path": f"{work}/raw-{name}.md", "content": "x"} if name == "file_write"
-                else {"command": "create", "path": f"{work}/raw-{name}.md", "file_text": "x"})
+        raw_path = f"{work}/raw-{name}.md"
+        args = ({"path": raw_path, "content": "x"} if name == "file_write"
+                else {"command": "create", "path": to_editor_path(raw_path), "file_text": "x"})
         raw.append(stream(tool.wrapped, name, args))
-        direct.append(stream(tool, name, {**args, "path": f"{work}/direct-{name}.md"}))
+        direct_args = ({"path": f"{work}/direct-{name}.md", "content": "x"} if name == "file_write"
+                       else {"command": "create", "path": f"{work}/direct-{name}.md", "file_text": "x"})
+        direct.append(stream(tool, name, direct_args))
     print("RESULT " + json.dumps({"gated": gated, "raw": raw, "direct": direct}))
     """
 )

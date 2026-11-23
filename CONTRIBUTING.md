@@ -48,6 +48,10 @@ npm install --no-save --no-package-lock jsdom axe-core
 STIRA_REQUIRE_AXE=1 python -m pytest tests/test_a11y_axe.py tests/test_ui_contrast.py -q
 ```
 
+The cheap half of this list also runs on every push once you enable the repository hook (`scripts/install_hooks.sh`):
+ruff, ruff format, and the Stage node tests that match the changed files (`git push --no-verify` skips it once).
+The Linux gate (`ci/linux/gate.sh <ref>`) is the full run; merge only on its `PASS` (see `ci/linux/README.md`).
+
 ## Design rules
 
 - **Behaviour that costs or widens is off by default.** Anything that spends tokens or widens

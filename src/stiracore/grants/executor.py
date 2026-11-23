@@ -41,7 +41,7 @@ reservation.
 
 **Context**: the iteration's model input ends with one ephemeral block, appended to a
 copy of the latest user message for that call only: the trusted playbook
-(``dev_playbook.md``, a file only a person edits, loaded read-only; its SHA-256 is the
+(``dev_playbook.md``, a file only a person edits, loaded read-only; its SHA-256, taken after CRLF is turned into LF, is the
 ``playbook_<12 hex>`` code of the iteration's start event) and the goal as the trailing
 part (#254: the cached prefix is untouched). The goal is never in the child's history,
 the main session, a checkpoint, an event, an error or a log line.
@@ -279,7 +279,7 @@ class Playbook:
 def load_playbook(path: Path | str = PLAYBOOK_FILE) -> Playbook | None:
     """Read the playbook once, read-only, without following a symlink; ``None`` when it
     is missing, too large, not UTF-8 or empty (the executor then admits nothing)."""
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
         fd = os.open(path, flags)
     except OSError:
@@ -292,6 +292,10 @@ def load_playbook(path: Path | str = PLAYBOOK_FILE) -> Playbook | None:
         os.close(fd)
     if len(raw) > PLAYBOOK_MAX_BYTES:
         return None
+    # Line endings are normalised BEFORE decoding and hashing, on every platform: a checkout
+    # with CRLF (Windows ``core.autocrlf``) and one with LF are the same playbook, the model
+    # reads the same text, and ``sha256`` is the hash of exactly the bytes the text came from.
+    raw = raw.replace(b"\r\n", b"\n")
     try:
         text = raw.decode("utf-8").strip()
     except UnicodeDecodeError:

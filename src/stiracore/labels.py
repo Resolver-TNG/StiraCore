@@ -69,6 +69,9 @@ SENSITIVE_RESULT_TOOLS = frozenset({"oauth_api_call"})  # §5 S2
 _BY_REFERENCE = frozenset({"auth_env_var", "aws_auth"})
 FLOW_CODES = ("secret_in_args", "credential_by_reference", "sensitive_context",
               "untrusted_send", "long_payload")  # fmt: skip
+# ``middleware/agent_address.py``: fixed codes for "this untrusted text addresses the agent" (observe only).
+ADDRESS_CODES = ("agent_heading", "override", "authority_tag", "no_confirmation",
+                 "exfil_request", "hidden_carrier", "obfuscated")  # fmt: skip
 _SEND_ALWAYS = frozenset({"webhook_send", "speak"})
 # Tools outside the external class that send data out all the same: ``page_review`` sends
 # screenshots to the reviewer model's provider (ADR 0015 rev 6, S6). Counted as a send.

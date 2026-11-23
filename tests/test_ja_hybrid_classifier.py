@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -325,12 +326,18 @@ def test_default_selection_is_unchanged_and_does_not_import_mlask():
         "print(type(c).__name__, 'mlask_official' in sys.modules, "
         "'stiracore.agent.ja_hybrid' in sys.modules)\n"
     )
-    env_path = f"{ROOT / 'src'}:{ROOT}"
+    env_path = os.pathsep.join([str(ROOT / "src"), str(ROOT)])
+    sub_env = {"PYTHONPATH": env_path, "PATH": "/usr/bin:/bin", "PYTHONUTF8": "1"}
+    if os.name == "nt":
+        for key in ("SYSTEMROOT", "WINDIR"):
+            if key in os.environ:
+                sub_env[key] = os.environ[key]
     out = subprocess.run(
         [sys.executable, "-c", code],
         capture_output=True,
         text=True,
-        env={"PYTHONPATH": env_path, "PATH": "/usr/bin:/bin"},
+        encoding="utf-8",
+        env=sub_env,
         check=True,
     ).stdout.split()
     assert out[-3:] == ["RuleBasedClassifier", "False", "False"]

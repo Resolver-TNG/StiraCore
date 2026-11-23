@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import os
 import socket
 import subprocess
 import sys
@@ -233,13 +234,19 @@ def test_no_in_process_call_reaches_the_servers_own_port(tmp_path, monkeypatch, 
             "        assert r.status == 200, (path, r.status)\n"
             "print('ok')\n"
         )
+        sub_env = {"PATH": "", "NO_PROXY": "*", "PYTHONUTF8": "1"}
+        if os.name == "nt":
+            for key in ("SYSTEMROOT", "WINDIR"):
+                if key in os.environ:
+                    sub_env[key] = os.environ[key]
         done = subprocess.run(
             [sys.executable, "-c", client_code, f"http://127.0.0.1:{port}"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=60,
             check=False,
-            env={"PATH": "", "NO_PROXY": "*"},
+            env=sub_env,
         )
         assert done.returncode == 0 and done.stdout.strip() == "ok", done.stderr[-800:]
         # The stop, still armed: the server's own shutdown and the app's bounded stops.

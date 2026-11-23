@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from strands import tool
 
@@ -93,7 +94,8 @@ def test_data_dir_stash_is_on_when_the_workspace_is_moved(tmp_path):
     stored = entry.read_bytes()
     assert b"line 1500: value-10500" in stored
     assert SECRET.encode() not in stored and b"api_key=***" in stored  # masked (#185)
-    assert (stash / "stira").stat().st_mode & 0o077 == 0
+    if os.name != "nt":
+        assert (stash / "stira").stat().st_mode & 0o077 == 0
     # The offloader's own location; the agent's file tools still may not write there.
     assert not policy.within_roots(stash / "stira" / "x")
     assert policy.check(str(stash / "stira" / "offloader" / "tu-1_0")).code == (

@@ -1,4 +1,4 @@
-<#
+﻿<#
   stira_ctl.ps1 - stira_server (StiraCore 3.11+sokudan) の起動/確認/停止を1コマンドに。
 
   使い方:
@@ -108,20 +108,27 @@ function Stop-Stira {
         Write-Host "stira: already down"
         return
     }
+    $killed = @()
     foreach ($procId in $pids) {
         # Re-query immediately before termination, including port-derived PIDs.
         # Fail closed when identity/command line cannot be read.
         $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId=$procId" -ErrorAction SilentlyContinue
+        if (-not $processInfo) {
+            # Already exited (e.g. child killed by an earlier taskkill /T).
+            continue
+        }
         if (-not (Test-StiraProcess $processInfo)) {
             Write-Warning "Skipping pid ${procId}: not a verified chat server process for this checkout."
             continue
         }
-        # /T = プロセスツリー一括。親子ラッパ連鎖を取りこぼさない。
+        # /T = process tree kill so uv wrapper + real python exit together.
         taskkill /PID $procId /T /F 2>$null | Out-Null
+        $killed += $procId
     }
     Start-Sleep -Seconds 2
     if (Get-PortOwner) { Write-Host "stira: STOP failed (port still held)" }
-    else { Write-Host "stira: STOPPED (killed: $($pids -join ', '))" }
+    elseif ($killed.Count -gt 0) { Write-Host "stira: STOPPED (killed: $($killed -join ', '))" }
+    else { Write-Host "stira: STOPPED" }
 }
 
 function Start-Stira {
@@ -136,7 +143,7 @@ function Start-Stira {
     # 投げっぱなしで即戻る。health/Neural State は別途 'status' で確認する
     # (health待ちループを持たせると 1 ツール呼びが最大数十秒ブロックして「無限に待つ」ように見えるため)。
     Write-Host "stira: launch requested on port $Port (3.11+sokudan)."
-    Write-Host "  sokudan の初回ロードで health まで ~10-30s。確認は: stira_ctl.ps1 status"
+    Write-Host "  First sokudan load takes ~10-30s until health is ready. Check with: stira_ctl.ps1 status"
 }
 
 function Invoke-Distillation {

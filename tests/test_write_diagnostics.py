@@ -643,10 +643,18 @@ def test_diagnostics_never_runs_or_changes_os_protections():
         "os.chown",
         "Popen",
     )
+    # ``repo_inspect.py`` (#671) is the one module that must run ``git`` (fixed argument lists, no shell,
+    # docs/repo-inspection.md): it alone may name ``subprocess`` / ``Popen``. Everything else in this
+    # package, and every other banned word in that module too, stays banned.
+    spawning = {"repo_inspect.py": {"subprocess", "Popen"}}
     for source in package.glob("*.py"):
         text = source.read_text(encoding="utf-8")
         for word in banned:
+            if word in spawning.get(source.name, ()):
+                continue
             assert word not in text, f"{source.name} uses {word}"
+    inspect_text = (package / "repo_inspect.py").read_text(encoding="utf-8")
+    assert "shell=True" not in inspect_text and "os.system" not in inspect_text
 
 
 # --- C. Permission cards ---------------------------------------------------------
@@ -789,7 +797,10 @@ def test_gateway_status_carries_the_doctor_summary_and_cards(stira_app, tmp_path
     assert (second.status_code, second.get_json()["code"]) == (409, "already_retried")
     assert client.post("/api/diagnostics/write-failures/nothex/retry").status_code == 404
     report = client.get("/api/diagnostics/doctor").get_json()
-    assert report["roots"][0]["write_test"] == {"ok": True}
+    if os.name == "nt":
+        assert report["roots"][0]["write_test"] == {"ok": None, "skipped": "unsupported"}
+    else:
+        assert report["roots"][0]["write_test"] == {"ok": True}
     assert str(tmp_path) not in json.dumps(report) or str(Path.home()) not in str(tmp_path)
     assert client.post("/api/diagnostics/doctor").get_json()["ok"] is True
 
@@ -825,8 +836,22 @@ def test_the_start_up_doctor_checks_the_saved_classifier_choice(
     assert [(c["code"], c["level"]) for c in report["checks"]] == [(code, level)]
     summary = client.get("/api/gateway/status").get_json()["diagnostics"]["doctor"]
     assert summary["ok"] is True
+    non_check_warnings = (
+        sum(
+            1
+            for f in (
+                *(finding for r in report["roots"] for finding in r.get("findings", ())),
+                *report.get("notes", ()),
+            )
+            if f.get("level") == "warning"
+        )
+        if os.name == "nt"
+        else 0
+    )
+    expected_warnings = (1 if level == "warning" else 0) + non_check_warnings
     assert (summary["warnings"], code in summary["codes"]) == (
-        (1, True) if level == "warning" else (0, False)
+        expected_warnings,
+        level == "warning",
     )
 
 

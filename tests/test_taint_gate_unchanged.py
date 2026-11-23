@@ -46,12 +46,15 @@ def _run(level, tools, script, *, hitl=None, action="halt", observer=None):
 
 
 def _seen(agent, model, side):
+    import re
+
     requests = json.dumps(
         [(r["messages"], r["system_prompt"], r["tool_names"]) for r in model.requests],
         sort_keys=True,
         default=str,
     )
-    return requests.replace(f"/{side}/", "/<root>/"), agent.engine.breaker_status().level
+    normalized = re.sub(rf"(/|\\+){re.escape(side)}(/|\\+)", r"\1<root>\2", requests)
+    return normalized, agent.engine.breaker_status().level
 
 
 @pytest.mark.parametrize(

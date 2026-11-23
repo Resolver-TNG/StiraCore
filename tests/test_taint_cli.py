@@ -65,3 +65,43 @@ def test_clean_summary_refuses_odd_rows():
     assert clean_summary("x") is None
     cleaned = clean_summary({**_row(), "input_labels": {"operator": 1, "url": "x"}})
     assert cleaned["input_labels"] == {"operator": 1}
+
+
+def test_summary_adds_the_agent_address_counts(tmp_path, capsys):
+    store = SQLiteEventStore(tmp_path / "events.db")
+    base = datetime(2026, 10, 20, 9, 0, tzinfo=UTC)
+    flagged = {
+        **_row(),
+        "agent_address": {
+            "scanned": 3,
+            "flagged": 2,
+            "codes": {"override": 2, "agent_heading": 1, "bogus": 9},
+        },
+    }
+    quiet = {**_row(), "agent_address": {"scanned": 1, "flagged": 0, "codes": {}}}
+    try:
+        for when, attributes in (
+            (base, flagged),
+            (base.replace(hour=10), quiet),
+            (base.replace(hour=11), _row()),
+        ):
+            store.emit(
+                ObservabilityEvent(
+                    event_type="taint.observed", timestamp=when, attributes=attributes
+                )
+            )
+    finally:
+        store.close()
+    assert (
+        taint_cli.main(
+            ["--data-dir", str(tmp_path), "summary", "--now", "2026-10-22T00:00:00+00:00"]
+        )
+        == 0
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert out["totals"]["address_turns"] == 2 and out["totals"]["address_turns_flagged"] == 1
+    assert (
+        out["totals"]["address_results_scanned"] == 4
+        and out["totals"]["address_results_flagged"] == 2
+    )
+    assert out["agent_address_codes"] == {"agent_heading": 1, "override": 2}

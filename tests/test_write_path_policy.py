@@ -63,7 +63,9 @@ class FakeWriteTool(AgentTool):
         return "python"
 
     async def stream(self, tool_use: dict, invocation_state: dict, **kwargs: Any):
-        path = tool_use["input"]["path"]
+        from stiracore.tools.file_editor_tool import from_editor_path
+
+        path = from_editor_path(tool_use["input"]["path"])
         command = tool_use["input"].get("command")
         self.paths.append(path)
         if not (self._name == "editor" and command in ("view", "find_line")):

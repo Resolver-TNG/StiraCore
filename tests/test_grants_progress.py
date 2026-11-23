@@ -230,7 +230,8 @@ def test_read_files_reads_the_current_bytes_and_marks_a_missing_file(tmp_path):
     a.write_bytes(b"one")
     os.utime(a, ns=(10**18, 10**18))  # settled: its digest is cached
     digests, cache = pg.read_files([str(a), str(gone)], {})
-    assert str(a) in cache
+    if os.name != "nt":
+        assert str(a) in cache
     assert digests[str(gone)] == pg.ABSENT and str(gone) not in cache
     assert digests[str(a)] == pg.file_digest(str(a))
     a.write_bytes(b"two")  # a change: the cache never answers for it
@@ -238,6 +239,9 @@ def test_read_files_reads_the_current_bytes_and_marks_a_missing_file(tmp_path):
     assert again[str(a)] != digests[str(a)]
 
 
+@pytest.mark.skipif(
+    os.name == "nt", reason="stat cache disabled on Windows (st_ctime is creation time)"
+)
 def test_read_files_reuses_the_digest_only_for_an_unchanged_stat(tmp_path, monkeypatch):
     a = tmp_path / "a"
     a.write_bytes(b"one")
@@ -260,9 +264,10 @@ def test_read_files_is_unknown_when_anything_is_unreadable(tmp_path):
     a.write_bytes(b"x")
     d.mkdir()
     assert pg.read_files([str(a), str(d)], {}) is None
-    fifo = tmp_path / "fifo"
-    os.mkfifo(fifo)
-    assert pg.read_files([str(fifo)], {}) is None
+    if hasattr(os, "mkfifo"):
+        fifo = tmp_path / "fifo"
+        os.mkfifo(fifo)
+        assert pg.read_files([str(fifo)], {}) is None
 
 
 def test_the_fingerprint_is_independent_of_the_write_order():

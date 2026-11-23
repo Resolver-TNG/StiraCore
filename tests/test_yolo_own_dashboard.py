@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import http.server
 import ipaddress
+import os
 import socket
+import sys
 import threading
 import urllib.request
 
@@ -195,9 +197,18 @@ def test_guarded_integration_fetch_was_already_refusing_loopback(armed):
     ids=["bytes", "bytearray", "short", "bytes_name", "empty"],
 )
 def test_every_host_form_to_the_dashboard_port_is_refused(armed, host):
+    expected = (
+        (OwnDashboardRefused, socket.gaierror)
+        if os.name == "nt" and host == "127.1"
+        else OwnDashboardRefused
+    )
     for call in ("connect", "connect_ex"):
-        with socket.socket() as sock, pytest.raises(OwnDashboardRefused):
+        with socket.socket() as sock, pytest.raises(expected):
             getattr(sock, call)((host, armed))
+    if os.name == "nt" and host == "127.1":
+        # Even though Winsock fails getaddrinfo before the audit hook fires, _refuses still
+        # rejects the short form fail-closed.
+        assert own_dashboard._refuses(host, armed, own_dashboard.armed())
 
 
 def test_unknown_host_type_or_encoding_to_the_dashboard_port_is_refused(armed):
@@ -287,7 +298,11 @@ def test_other_loopback_services_work_in_every_form_while_armed(armed):
                 assert reply.json()["result"]["echo"] == {"x": 1}
             with urllib.request.urlopen(f"http://localhost:{port}/", timeout=5) as response:
                 assert response.read() == b"dashboard says hello"
-            for host in (b"127.0.0.1", "localhost", bytearray(b"127.0.0.1"), ""):
+            hosts = (b"127.0.0.1", "localhost", bytearray(b"127.0.0.1"))
+            if os.name != "nt":
+                # Windows connect_ex(("" / 0.0.0.0, port)) fails with WSAEADDRNOTAVAIL (10049).
+                hosts = (*hosts, "")
+            for host in hosts:
                 with socket.socket() as sock:
                     sock.settimeout(5)
                     assert sock.connect_ex((host, port)) == 0, host
@@ -486,3 +501,41 @@ def test_a_socket_subclass_cannot_hide_its_family(armed):
 
     with Disguised() as sock, pytest.raises(OwnDashboardRefused):
         sock.connect(("127.0.0.1", armed))
+
+
+def test_windows_proactor_connect_hook_is_idempotent_and_refuses_before_connecting(monkeypatch):
+    """Simulates Windows: a stand-in ``IocpProactor`` whose ``connect`` never audits (like
+    ConnectEx). The installed guard raises the audit event first, once, with the same arguments
+    a selector loop would pass to ``sock.connect`` (PR #847 review)."""
+    import asyncio
+    import types
+
+    from stiracore.yolo import own_dashboard
+
+    reached = []
+
+    class IocpProactor:
+        def connect(self, conn, address):
+            reached.append(address)
+            return "future"
+
+    fake = types.ModuleType("asyncio.windows_events")
+    fake.IocpProactor = IocpProactor
+    monkeypatch.setitem(sys.modules, "asyncio.windows_events", fake)
+    monkeypatch.setattr(asyncio, "windows_events", fake, raising=False)
+    monkeypatch.setattr(own_dashboard.os, "name", "nt")
+    own_dashboard._install_windows_asyncio_hook()
+    first = IocpProactor.connect
+    own_dashboard._install_windows_asyncio_hook()
+    assert IocpProactor.connect is first  # idempotent
+    monkeypatch.setattr(own_dashboard.os, "name", "posix")
+    own_dashboard.arm("127.0.0.1", 59797)
+    try:
+        with socket.socket() as sock:
+            with pytest.raises(own_dashboard.OwnDashboardRefused):
+                IocpProactor().connect(sock, ("127.0.0.1", 59797))
+            assert reached == []  # refused before the original connect ran
+            assert IocpProactor().connect(sock, ("127.0.0.1", 59798)) == "future"
+            assert reached == [("127.0.0.1", 59798)]
+    finally:
+        own_dashboard.disarm()

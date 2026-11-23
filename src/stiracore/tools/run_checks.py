@@ -1481,7 +1481,9 @@ def _dir_size(root: str, cap: int = 50_000) -> int:
                         if entry.is_dir(follow_symlinks=False):
                             stack.append(entry.path)
                         else:
-                            total += entry.stat(follow_symlinks=False).st_blocks * 512
+                            st = entry.stat(follow_symlinks=False)
+                            blocks = getattr(st, "st_blocks", None)
+                            total += blocks * 512 if blocks is not None else st.st_size
                     except OSError:
                         continue
         except OSError:

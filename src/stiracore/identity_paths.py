@@ -367,7 +367,13 @@ def _secret_table(
         with contextlib.suppress(OSError, RuntimeError):
             homes.add(found.resolve())
     paths = [found / relative for found in sorted(homes) for relative in SECRET_HOME_PATHS]
-    paths.extend(Path(p) for p in SECRET_ABSOLUTE_PATHS)
+    for p in SECRET_ABSOLUTE_PATHS:
+        candidate = Path(p)
+        paths.append(candidate)
+        if not candidate.is_absolute():
+            # On Windows, root-relative POSIX paths (e.g. /etc/shadow) anchor against the
+            # base drive; include that form so path_key matches resolved checks.
+            paths.append(Path(base_dir) / candidate)
     names = []
     for entry in extra:
         text = entry.replace("\\", "/")
@@ -417,10 +423,14 @@ class IdentityPathPolicy:
         self._floor_tree = None if floor_tree is None else self._absolute(floor_tree)
         writable = []
         for raw in floor_tree_writable:
-            relative = Path(str(raw).replace("\\", "/"))
+            text = str(raw).replace("\\", "/")
+            relative = Path(text)
             if (
                 not str(raw).strip()
                 or relative.is_absolute()
+                or relative.anchor
+                or relative.drive
+                or text.startswith("/")
                 # "." has no parts at all: it would make the whole tree an exception.
                 or not relative.parts
                 or any(part in ("", ".", "..") for part in relative.parts)
@@ -529,6 +539,11 @@ class IdentityPathPolicy:
                     budget.spend()
                     child = f"{relative}/{entry.name}" if relative else entry.name
                     found = entry.stat(follow_symlinks=False)
+                    if not _FD_WALK and found.st_ino == 0:
+                        # On Windows, DirEntry.stat() returns WIN32_FIND_DATA (st_ino=0,
+                        # st_dev=0). Query lstat() for the real file identity so directory
+                        # swap checks and hard-link floor identities work on NTFS.
+                        found = os.lstat(entry.path)
                     if stat_module.S_ISDIR(found.st_mode):
                         if child not in exceptions:
                             subdirectories.append((entry.name, child, found))

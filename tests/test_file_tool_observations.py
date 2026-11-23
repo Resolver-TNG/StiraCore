@@ -184,7 +184,7 @@ def test_write_observation_matches_a_local_computation(policy, ws):
     assert "File written successfully to " in result["content"][0]["text"]
     observed = _block(result, OBSERVATION_MARKER)
     encoded = BODY.encode("utf-8")
-    assert observed == {
+    expected = {
         "path": shown_path(str(ws / "obs" / "日本語.txt")),
         "bytes": len(encoded),
         "chars": len(BODY),
@@ -193,8 +193,11 @@ def test_write_observation_matches_a_local_computation(policy, ws):
         "newline": "mixed",
         "trailing_newline": False,
         "source": "requested_bytes",
-        "verified": True,
+        "verified": hasattr(os, "O_NOFOLLOW"),
     }
+    if not hasattr(os, "O_NOFOLLOW"):
+        expected["verify_error"] = "unverifiable_no_nofollow"
+    assert observed == expected
     read = _run(tools["file_read"], {"path": "obs/日本語.txt"}, "u2")
     assert _block(read, OBSERVATION_MARKER)["sha256"] == hashlib.sha256(encoded).hexdigest()
     assert read["content"][0]["text"] == BODY
@@ -505,8 +508,10 @@ def test_secret_looking_paths_never_come_back_raw(policy, ws, tmp_path):
 
 def test_home_is_shown_as_tilde(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
+    if os.name == "nt":
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
     result = file_read(str(tmp_path / "missing.txt"))
-    assert _block(result, DIAGNOSIS_MARKER)["resolved_path"] == "~/missing.txt"
+    assert _block(result, DIAGNOSIS_MARKER)["resolved_path"].replace("\\", "/") == "~/missing.txt"
     assert str(tmp_path) not in _everything(result)
 
 
@@ -555,6 +560,10 @@ def _recreate_with_the_same_bytes(target: Path) -> None:
     target.write_text("mine", encoding="utf-8")
 
 
+@pytest.mark.skipif(
+    not hasattr(os, "O_NOFOLLOW"),
+    reason="post-write verification requires O_NOFOLLOW (returns unverifiable_no_nofollow otherwise)",
+)
 @pytest.mark.parametrize(
     ("swap", "reason"),
     [
@@ -575,6 +584,10 @@ def test_other_swaps_are_not_verified(policy, ws, monkeypatch, swap, reason):
     assert (observed["verified"], observed["verify_error"]) == (False, reason)
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Win32 collapses missing/.. lexically before checking parent existence",
+)
 def test_missing_dotdot_existing_still_fails_and_reveals_nothing(tmp_path):
     """Non-strict realpath would turn ``missing/../x`` into ``x``; the OS (and the old
     is_file() check) refuse it, and so does the read now — without saying x exists."""

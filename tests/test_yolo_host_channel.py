@@ -106,7 +106,11 @@ def test_peer_checks_are_kernel_integers_and_refuse_the_server_tree():
         with pytest.raises(PeerRefused):
             check_peer(bad, 501, own_pid=300, own_uid=501, parent=parent)
     assert descends_from(os.getpid(), os.getpid())
-    assert not descends_from(os.getpid(), NOT_IN_ANY_TREE)
+    if os.name == "nt":
+        # Windows has no POSIX ``ps`` parent lookup, so descends_from fails closed (True).
+        assert descends_from(os.getpid(), NOT_IN_ANY_TREE)
+    else:
+        assert not descends_from(os.getpid(), NOT_IN_ANY_TREE)
 
 
 @posix_only

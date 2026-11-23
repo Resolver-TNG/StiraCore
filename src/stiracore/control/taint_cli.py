@@ -69,6 +69,7 @@ def summarize(rows: Sequence[tuple[float, dict]], *, since: float, until: float)
     by_day: dict[str, Counter] = {}
     sources: Counter = Counter()
     held: Counter = Counter()
+    address: Counter = Counter()
     totals: Counter = Counter()
     for at, row in rows:
         day = datetime.fromtimestamp(at, UTC).date().isoformat()
@@ -84,12 +85,22 @@ def summarize(rows: Sequence[tuple[float, dict]], *, since: float, until: float)
             totals["egress_calls"] += calls
         sources.update({k: 1 for k in row["input_labels"]})  # turns in which a source appeared
         held.update(row["flow_would_hold"])
+        found = row.get("agent_address")
+        if (
+            found
+        ):  # ``agent_address``: external results read / flagged in the turn, and the fixed codes
+            totals["address_turns"] += 1
+            totals["address_results_scanned"] += found["scanned"]
+            totals["address_results_flagged"] += found["flagged"]
+            totals["address_turns_flagged"] += found["flagged"] > 0
+            address.update(found["codes"])
     return {
         "since": datetime.fromtimestamp(since, UTC).isoformat(),
         "until": datetime.fromtimestamp(until, UTC).isoformat(),
         "totals": dict(sorted(totals.items())),
         "turns_with_source": dict(sorted(sources.items())),
         "flow_would_hold": dict(sorted(held.items())),
+        "agent_address_codes": dict(sorted(address.items())),
         "by_day": {day: dict(sorted(c.items())) for day, c in sorted(by_day.items())},
         "observe_only": True,
     }

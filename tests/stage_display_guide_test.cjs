@@ -12,7 +12,7 @@ const ROOT = path.join(__dirname, '..');
 const load = (name) => import(pathToFileURL(path.join(ROOT, 'dashboard', 'stage', 'js', name)).href);
 
 function guide() {
-  const md = fs.readFileSync(path.join(ROOT, 'docs', 'stage-main-ui.md'), 'utf8');
+  const md = fs.readFileSync(path.join(ROOT, 'docs', 'stage-main-ui.md'), 'utf8').replace(/\r\n/g, '\n');
   const parts = md.split('<!-- stage-display-guide:begin -->');
   assert.equal(parts.length, 2, 'one guide block');
   const body = parts[1].split('<!-- stage-display-guide:end -->')[0].trim();

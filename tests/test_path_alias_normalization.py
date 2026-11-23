@@ -166,11 +166,21 @@ def test_an_unexpanded_short_alias_of_the_protected_directory_is_refused(
 ) -> None:
     policy = _policy(tmp_path, windows=True)
     (tmp_path / "memory" / "procedural").mkdir()
+    short_alias = tmp_path / "memory" / "PROCED~1"
+    if os.name == "nt" and short_alias.exists():
+        # On NTFS with 8.3 short names enabled, PROCED~1 is already the real kernel alias
+        # for ``procedural``: Path.resolve() expands it to ``procedural`` (floor), and an
+        # unexpanded hidden short name is refused as invalid.
+        assert policy.check("memory/PROCED~1/x.md").code == "floor"
+        (tmp_path / "memory" / "OTHER~1").mkdir()
+        _hide_from_listing(monkeypatch, "OTHER~1")
+        assert policy.check("memory/OTHER~1/x.md").code == "invalid"
+        return
     # Stand-in for the short name of ``procedural``: a second name of the same directory.
-    (tmp_path / "memory" / "PROCED~1").symlink_to("procedural")
+    short_alias.symlink_to("procedural")
     assert policy.check("memory/PROCED~1/x.md").code == "floor"
-    (tmp_path / "memory" / "PROCED~1").unlink()
-    (tmp_path / "memory" / "PROCED~1").mkdir()
+    short_alias.unlink()
+    short_alias.mkdir()
     _hide_from_listing(monkeypatch, "PROCED~1")
     assert policy.check("memory/PROCED~1/x.md").code == "invalid"
 

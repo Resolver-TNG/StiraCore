@@ -26,6 +26,7 @@ from strands.hooks import (
 )
 
 from stiracore import labels
+from stiracore.middleware import agent_address
 
 __all__ = ["RECALL_MARKERS", "TaintObserver", "TaintObserverHook", "injected_sources"]
 
@@ -81,13 +82,26 @@ class TaintObserver:
             if code in labels.FLOW_CODES:
                 self._held[code] += 1
 
-    def finish(self, label: labels.ContextLabel) -> dict[str, Any]:
+    def finish(
+        self, label: labels.ContextLabel, address: Mapping[str, Any] | None = None
+    ) -> dict[str, Any]:
         with self._lock:
             row = {
                 **label.as_row(),
                 "egress_calls": self._egress_calls,
                 "flow_would_hold": dict(sorted(self._held.items())),
             }
+            if address is not None:  # counts and fixed codes of agent_address.scan_results
+                row["agent_address"] = {
+                    "scanned": int(address.get("scanned", 0)),
+                    "flagged": int(address.get("flagged", 0)),
+                    "codes": dict(address.get("codes", {})),
+                }
+                self.totals["address.results_scanned"] += row["agent_address"]["scanned"]
+                self.totals["address.results_flagged"] += row["agent_address"]["flagged"]
+                self.totals["address.turns_flagged"] += int(row["agent_address"]["flagged"] > 0)
+                for code, count in row["agent_address"]["codes"].items():
+                    self.totals[f"address.{code}"] += count
             self.last = row
             self.totals["turns"] += 1
             self.totals[f"trust.{label.trust}"] += 1
@@ -145,6 +159,11 @@ class TaintObserverHook(HookProvider):
 
     def finish(self, event: AfterInvocationEvent) -> None:
         try:
-            self.observer.finish(self._label(event.agent))
+            try:
+                address = agent_address.scan_results(getattr(event.agent, "messages", None))
+            except Exception as error:  # noqa: BLE001 - a failed scan loses the signal, not the row
+                _LOG.warning("taint: agent-address scan failed (%s)", type(error).__name__)
+                address = None
+            self.observer.finish(self._label(event.agent), address)
         except Exception as error:  # noqa: BLE001
             _LOG.warning("taint: finish failed (%s)", type(error).__name__)

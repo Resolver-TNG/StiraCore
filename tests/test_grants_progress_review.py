@@ -22,6 +22,7 @@ import subprocess
 import sys
 import threading
 
+import pytest
 from grants_exec_helpers import grant, make_env, run_one, use
 from test_grants_progress_exec import _checks_call, _create, _replace, _report, _result, _results
 
@@ -280,6 +281,7 @@ def test_an_unchanged_file_still_has_its_digest(tmp_path):
 # --- B6: a FIFO never blocks --------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="os.mkfifo is POSIX-only")
 def test_a_fifo_with_no_writer_returns_at_once(tmp_path):
     fifo = tmp_path / "fifo"
     os.mkfifo(fifo)
@@ -301,6 +303,7 @@ def test_a_fifo_with_no_writer_returns_at_once(tmp_path):
         process.wait()
 
 
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="os.mkfifo is POSIX-only")
 def test_a_fifo_swapped_in_before_the_final_digest_never_holds_the_executor(tmp_path, monkeypatch):
     env = make_env(tmp_path)
     real_digest = pg.file_digest

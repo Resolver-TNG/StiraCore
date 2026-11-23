@@ -144,8 +144,11 @@ def _probe_owner_lock(data_dir: Path) -> int | None:
     Windows (``msvcrt.locking`` on a read-only descriptor): unverified.
     """
     path = Path(data_dir) / LOCK_FILENAME
-    flags = os.O_RDONLY
-    for name in ("O_NOFOLLOW", "O_NONBLOCK", "O_NOCTTY", "O_CLOEXEC"):
+    # On Windows, msvcrt.locking requires a writable descriptor (O_RDONLY fails with
+    # EACCES / PermissionError). Opening O_RDWR without O_CREAT never creates a missing
+    # file and writes nothing.
+    flags = os.O_RDWR if os.name == "nt" else os.O_RDONLY
+    for name in ("O_BINARY", "O_NOFOLLOW", "O_NONBLOCK", "O_NOCTTY", "O_CLOEXEC"):
         flags |= getattr(os, name, 0)
     try:
         fd = os.open(path, flags)

@@ -717,6 +717,10 @@ def _unreached(layout: DataLayout, needles: tuple[str, ...]) -> list[dict[str, A
         relative = layout.relative(path)
         if _handled(layout, relative) or _is_stray_place(layout, relative):
             continue
+        if os.name == "nt" and relative == "server.lock":
+            # On Windows, _locked() holds a mandatory msvcrt lock on server.lock (PID only),
+            # so reading it via a second descriptor fails with EACCES.
+            continue
         try:
             data = read_bytes(layout, path)
         except UnsafePathError:
@@ -749,14 +753,16 @@ def residual(
     found = []
     errors: list[str] = []
     for path, _info in walk_files(layout, layout.data_dir, errors):
+        relative = layout.relative(path)
+        if os.name == "nt" and relative == "server.lock":
+            continue
         try:
             data = read_bytes(layout, path)
         except UnsafePathError:
-            errors.append(layout.relative(path))
+            errors.append(relative)
             continue
         if data is None or not contains(data.decode("utf-8", "replace"), needles):
             continue
-        relative = layout.relative(path)
         if relative.startswith(f"{layout.relative(layout.archive_dir)}/removed-") or (
             relative.startswith(f"{layout.relative(layout.archive_dir)}/")
             and not relative.endswith("forgetting-log.jsonl")

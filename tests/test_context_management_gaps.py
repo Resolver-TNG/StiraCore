@@ -17,6 +17,7 @@ import asyncio
 import contextlib
 import importlib.util
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import Mock
@@ -93,9 +94,18 @@ def test_parent_segments_are_refused_and_absolute_keys_stay_inside_the_stash(tmp
             asyncio.run(store.delete(key))
 
     # An absolute key is taken relative to the stash: it never names the file outside.
-    assert asyncio.run(store.read(str(target))) is None
-    asyncio.run(store.write(str(tmp_path / "outside" / "new_0"), PLAIN))
-    asyncio.run(store.delete(str(target)))
+    if os.name == "nt":
+        # On Windows, native paths contain backslashes which LocalFileStorage rejects outright.
+        with pytest.raises(Exception, match="Invalid storage key"):
+            asyncio.run(store.read(str(target)))
+        abs_read = "/outside/secret_0"
+        abs_write = "/outside/new_0"
+    else:
+        abs_read = str(target)
+        abs_write = str(tmp_path / "outside" / "new_0")
+    assert asyncio.run(store.read(abs_read)) is None
+    asyncio.run(store.write(abs_write, PLAIN))
+    asyncio.run(store.delete(abs_read))
     assert _tree(tmp_path / "outside") == before
     assert target.read_bytes() == _frame(OUTSIDE.encode(), "text/plain")
     (written,) = [path for path in (tmp_path / "stash").rglob("*") if path.is_file()]

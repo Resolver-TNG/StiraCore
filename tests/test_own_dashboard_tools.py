@@ -148,7 +148,12 @@ def test_a_leading_zero_form_follows_the_system_resolver():
     """``0177.0.0.1`` is octal 127.0.0.1 for glibc but decimal 177.0.0.1 on macOS
     (measured): the check resolves like the HTTP client does, so it agrees with it."""
     target = own_dashboard.target_for("127.0.0.1", 5797)
-    resolved = {info[4][0] for info in socket.getaddrinfo("0177.0.0.1", None)}
+    try:
+        resolved = {info[4][0] for info in socket.getaddrinfo("0177.0.0.1", None)}
+    except socket.gaierror:
+        # Windows Winsock rejects octal IPv4 literals as unresolvable; fail closed.
+        assert url_refusal("http://0177.0.0.1:5797/", target) is not None
+        return
     local = any(ipaddress.ip_address(a).is_loopback for a in resolved)
     assert (url_refusal("http://0177.0.0.1:5797/", target) is not None) == local
 

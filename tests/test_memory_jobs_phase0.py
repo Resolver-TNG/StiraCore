@@ -11,6 +11,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import os
 import threading
 from pathlib import Path
 
@@ -202,7 +203,8 @@ def test_every_kind_writes_a_plan_file_and_nothing_else(tmp_path, kind):
     assert plan["applied"] is False and plan["phase"] == 0 and plan["kind"] == kind
     assert plan["run_id"] == run["run_id"]
     path = store.memory_dir / memory_jobs.PLANS_DIRNAME / kind / f"{run['run_id']}.json"
-    assert path.stat().st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        assert path.stat().st_mode & 0o777 == 0o600
     assert plan_counts(executor.plans_dir)[kind] == 1
     assert executor.status.status()["last_runs"][kind]["plan_written"] is True
     scheduler.stop()

@@ -1149,6 +1149,10 @@ def _rolled_back_ledger_replay(tmp_path, second_answer):
     second["input"]["value"] = "v2"
     _pause_then_shut_down(tmp_path, service, calls=[CALL, second], approve_first=True)
     assert [r for r, _v, _k in service.applied] == ["r1"]  # r1 ran, r2 paused
+    if os.name == "nt":
+        import gc
+
+        gc.collect()
     for suffix in ("", "-wal", "-shm"):
         (tmp_path / f"operations.db{suffix}").unlink(missing_ok=True)
     shutil.copy2(tmp_path / "backup-operations.db", tmp_path / "operations.db")

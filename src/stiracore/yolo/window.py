@@ -95,7 +95,15 @@ def durable_write(path: Path, data: bytes) -> None:
     """temporary file → flush → rename → directory flush (§11 durable order)."""
     directory = path.parent
     tmp = directory / f".{path.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp"
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    fd = os.open(
+        tmp,
+        os.O_WRONLY
+        | os.O_CREAT
+        | os.O_EXCL
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
+    )
     try:
         try:
             view = memoryview(data)
@@ -168,7 +176,10 @@ class WindowMarker:
         if info.st_size > _MAX_BYTES:
             return MarkerRead("bad", problem="marker_malformed")
         try:
-            fd = os.open(self.path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            fd = os.open(
+                self.path,
+                os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0),
+            )
             try:
                 raw = os.read(fd, _MAX_BYTES + 1)
             finally:

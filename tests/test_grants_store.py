@@ -31,7 +31,9 @@ def test_the_store_is_0600_chained_and_holds_the_goal(tmp_path):
     _service, *_ = _issue(tmp_path)
     path = _file(tmp_path)
     info = os.lstat(path)
-    assert stat.S_IMODE(info.st_mode) == 0o600 and info.st_nlink == 1
+    if os.name != "nt":
+        assert stat.S_IMODE(info.st_mode) == 0o600
+    assert info.st_nlink == 1
     records = json.loads(path.read_text())
     assert [r["seq"] for r in records] == list(range(1, len(records) + 1))
     for before, after in itertools.pairwise(records):
@@ -87,7 +89,13 @@ def _poisoned(tmp_path, damage):
             lambda p: p.write_text(p.read_text().replace("refactor", "rEfactor")),
             "grant_store_hash_mismatch",
         ),
-        (lambda p: os.chmod(p, 0o644), "grant_store_unsafe"),
+        pytest.param(
+            lambda p: os.chmod(p, 0o644),
+            "grant_store_unsafe",
+            marks=pytest.mark.skipif(
+                os.name == "nt", reason="POSIX mode bits unavailable on Windows"
+            ),
+        ),
         (lambda p: os.link(p, p.with_name("hard")), "grant_store_unsafe"),
     ],
 )
@@ -117,6 +125,7 @@ def test_a_symlinked_or_fifo_store_is_unsafe(tmp_path):
     assert GrantStore(fifo_dir).load().reason == "grant_store_unsafe"
 
 
+@pytest.mark.skipif(not hasattr(os, "getuid"), reason="POSIX uid unavailable on Windows")
 def test_a_foreign_owner_is_unsafe(tmp_path, monkeypatch):
     _issue(tmp_path)
     monkeypatch.setattr(os, "getuid", lambda: os.stat(_file(tmp_path)).st_uid + 1)

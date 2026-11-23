@@ -29,7 +29,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from stiracore._platform import fchmod_private
+from stiracore._platform import O_BINARY, fchmod_private
 from stiracore.core.approval import canonical_json
 
 __all__ = ["GENESIS_HASH", "SchedulerEventLog", "SchedulerLogError"]
@@ -300,7 +300,7 @@ class SchedulerEventLog:
                 # as "head without a log" (unhealthy for good). The head's directory
                 # fsync below makes both names durable.
                 self.path.parent.mkdir(parents=True, exist_ok=True)
-                flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT
+                flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | O_BINARY
                 fd = os.open(self.path, flags, 0o600)
                 try:
                     self._write_head(

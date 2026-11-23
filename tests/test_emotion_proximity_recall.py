@@ -538,6 +538,8 @@ def _scan(root: Path, needles, skip_dir: Path) -> list[str]:
     for path in root.rglob("*"):
         if not path.is_file() or skip_dir in path.parents:
             continue
+        if os.name == "nt" and path.name.endswith(".lock"):
+            continue
         data = path.read_bytes()
         hits += [f"{path.name}:{n}" for n in needles if n.encode() in data]
     return hits

@@ -335,6 +335,17 @@ def _read_limited(response: Any, limit: int, deadline_s: float | None = None) ->
         abandoned.set()
         with contextlib.suppress(Exception):
             shutdown()
+        if os.name == "nt":
+            # On Windows (Winsock2), shutdown(SD_RECEIVE) does not unblock a concurrent
+            # recv() in the reader thread, so the caller's response.close() would stall
+            # waiting for the BufferedReader lock until the peer closes. Closing the
+            # underlying socket directly interrupts recv() immediately.
+            sock = getattr(
+                getattr(getattr(response, "raw", None), "_sock_shutdown", None), "__self__", None
+            )
+            if sock is not None and hasattr(sock, "_real_close"):
+                with contextlib.suppress(Exception):
+                    sock._real_close()
         raise FetchError(FETCH_TIMEOUT)
     if "error" in outcome:
         raise outcome["error"]

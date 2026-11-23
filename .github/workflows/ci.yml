@@ -69,8 +69,9 @@ jobs:
         shell: pwsh
         run: ./tests/stira_ctl_test.ps1
 
-      - name: Test chat indicator lifecycle
-        run: node --test tests/breaker_reasons_test.cjs tests/chat_indicator_test.cjs tests/chat_images_test.cjs tests/neural_viz_test.cjs tests/turn_delta_visibility_test.cjs tests/turn_ribbon_test.cjs tests/tool_cards_test.cjs tests/approvals_test.cjs tests/neural_trend_test.cjs tests/chat_resend_test.cjs tests/stage_model_test.cjs tests/stage_gadgets_test.cjs tests/stage_layers_test.cjs tests/stage_hair_test.cjs tests/stage_bg_test.cjs tests/stage_adapter_test.cjs tests/stage_motion_test.cjs tests/stage_back_view_test.cjs tests/chat_core_test.cjs tests/stage_talk_test.cjs tests/stage_board_test.cjs tests/stage_face_test.cjs tests/stage_pacer_test.cjs tests/stage_art_lint_test.cjs tests/stage_desk_test.cjs tests/stage_extras_test.cjs tests/stage_fx_test.cjs tests/stage_poses_test.cjs tests/stage_expr_test.cjs tests/stage_hands_test.cjs tests/stage_body_test.cjs tests/stage_svg_test.cjs tests/stage_emotion_rows_test.cjs
+      - name: Node tests (every tests/*_test.cjs)
+        # every tests/*_test.cjs, by glob: a hand-written list let 33 test files go unrun for weeks (one had a stale assertion)
+        run: node --test tests/*_test.cjs
 
       - name: Accessibility gate (axe + contrast)
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'

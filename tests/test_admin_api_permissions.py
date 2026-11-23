@@ -16,6 +16,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import logging
+import os
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -650,7 +651,7 @@ def _tree_digest(root: Path) -> dict:
     return {
         str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
         for p in sorted(root.rglob("*"))
-        if p.is_file()
+        if p.is_file() and not (os.name == "nt" and p.name.endswith(".lock"))
     }
 
 

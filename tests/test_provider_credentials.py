@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import ClassVar
 
@@ -278,7 +279,7 @@ class ProviderClient(FakeModel):
 
 def _walk_files(root: Path):
     for path in root.rglob("*"):
-        if path.is_file():
+        if path.is_file() and not (os.name == "nt" and path.name.endswith(".lock")):
             yield path
 
 

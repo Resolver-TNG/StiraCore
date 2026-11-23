@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
@@ -210,9 +211,10 @@ def test_the_hub_state_shows_each_profile_before_it_is_applied(tmp_path):
         assert profile["saved"] is False
     dev = {row["name"]: row for row in _profile(state, "dev")["rows"]}
     # shell needs the exec variable (not set in tests): said on its row, and YOLO cannot
-    # approve it until then; cron stays Never.
-    assert dev["shell"]["policy"] == K and dev["shell"]["needs_env"] is True
-    assert dev["shell"]["env_set"] is False and dev["shell"]["yolo"] == "exec_not_exposed"
+    # approve it until then; cron stays Never. (shell is unavailable on Windows.)
+    if os.name != "nt":  # on POSIX the shell row MUST exist: a vanished row is a failure
+        assert dev["shell"]["policy"] == K and dev["shell"]["needs_env"] is True
+        assert dev["shell"]["env_set"] is False and dev["shell"]["yolo"] == "exec_not_exposed"
     assert dev["cron"]["needs_env"] is False and dev["file_write"]["needs_env"] is False
     assert dev["file_write"]["yolo"] == "internal" and dev["file_read"]["yolo"] is None
     # file_write, editor, journal, lsp_* (and memory_write when registered); shell is not

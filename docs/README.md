@@ -85,6 +85,7 @@ button, static SVG on the Stage board) is shown by default ([ADR 0012 addendum
 | Chat and business integrations / チャット・業務連携 | [chat-integrations.md](chat-integrations.md), [business-integrations.md](business-integrations.md) |
 | Optional tools / 任意のツール | [tools/perplexity.md](tools/perplexity.md), [tools/web-fetch.md](tools/web-fetch.md) (failure codes / 失敗コード), [lsp-neural-viz.md](lsp-neural-viz.md) |
 | Stage: pixel-art view of activity and emotion (spike, standalone) / Stage: 活動と感情のピクセルアート表示（spike・単体） | [stage.md](stage.md) |
+| Repository inspection (workbench stage 1: a read-only library, no UI, no network) / リポジトリの検査（作業机の第 1 段階: 読み取り専用のライブラリ。UI・通信なし） | [repo-inspection.md](repo-inspection.md) |
 | Stage as the main page: layout design, phases 1–2 implemented (whiteboard, `/new`, context gauge, `ui.home`) / Stage を主画面に: 画面構成の設計（フェーズ1・2 実装済み。ボード・`/new`・コンテキストゲージ・`ui.home` の切替） | [stage-main-ui.md](stage-main-ui.md) |
 | Dashboard colour theme (tokens, contrast table, how to swap the palette) / ダッシュボードの配色（トークン・コントラスト表・差し替え方） | [ui-theme.md](ui-theme.md) |
 | Japanese rule stimulus classifier (ML-Ask + discourse patterns) / 日本語ルール刺激分類器 | [ja-rules-classifier.md](ja-rules-classifier.md) / [ja-rules-classifier_ja.md](ja-rules-classifier_ja.md) |

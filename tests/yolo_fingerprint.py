@@ -51,7 +51,8 @@ def _strip(value):
 
 
 def _mask(text: str, base: Path) -> str:
-    text = text.replace(str(base.resolve()), "<base>").replace(str(base), "<base>")
+    for raw in (str(base.resolve()), str(base)):
+        text = text.replace(json.dumps(raw)[1:-1], "<base>").replace(raw, "<base>")
     return _EPOCH.sub("<t>", _STAMP.sub("<ts>", text))
 
 

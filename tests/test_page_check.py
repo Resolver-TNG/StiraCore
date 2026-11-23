@@ -73,7 +73,9 @@ def test_path_lookup_and_mac_bundle():
         euid=501,
         home="/Users/x",
         which=lambda n: None,
-        executable=lambda p: p == "/Users/x/Applications/Chromium.app/Contents/MacOS/Chromium",
+        executable=lambda p: (
+            p.replace("\\", "/") == "/Users/x/Applications/Chromium.app/Contents/MacOS/Chromium"
+        ),
     )
     assert mac.available and mac.path.endswith("Chromium")
 
@@ -230,6 +232,8 @@ def ws(tmp_path):
     ],
 )
 def test_targets_refused_before_launch(ws, target, code, monkeypatch):
+    if target == "file:///etc/hosts" and os.name == "nt":
+        target = (ws.parent / "outside.html").as_uri()
     monkeypatch.setattr(pc, "_Browser", None)  # a launch would fail loudly
     result = pc.run_page_check(target, _policy(ws), browser="/nonexistent")
     assert (result["status"], result["reason"]) == ("refused", code)
@@ -911,7 +915,8 @@ def _subprocess_registry(env_extra):
 
 def test_not_registered_without_a_browser():
     seen = _subprocess_registry({pc.BROWSER_ENV: "/nonexistent/chrome"})
-    assert seen == {"registered": False, "rule": None, "status": "page_check_no_browser"}
+    expected_status = "page_check_platform" if os.name == "nt" else "page_check_no_browser"
+    assert seen == {"registered": False, "rule": None, "status": expected_status}
 
 
 @needs_browser

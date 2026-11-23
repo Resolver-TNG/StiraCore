@@ -256,17 +256,26 @@ def test_case_and_unicode_variants_stay_on_the_floor(tmp_path, monkeypatch):
     policy = captured["write_policy"]
     _touch(data_dir / "events.db")
     nfd = unicodedata.normalize("NFD", str(data_dir))
-    for path in (
+    cases = [
         str(data_dir / "EVENTS.DB"),
         str(data_dir / "Events.db.HEAD"),
         str(data_dir / "Checkpoints" / "x.json"),
         nfd + "/events.db",
         nfd + "/checkpoints/x.json",
         str(data_dir / "WORKSPACE" / ".." / "events.db"),
-        # The exception is matched exactly: a case variant of it is not writable.
-        str(data_dir / "Workspace" / "x.md"),
-        str(data_dir / "memory" / "agents" / "stira" / "memory" / "EPISODIC" / "x.md"),
-    ):
+    ]
+    if os.name != "nt":
+        # On POSIX (including case-insensitive APFS), realpath preserves input case so the
+        # exact-string exception check also refuses case variants of the exception itself.
+        # On Windows NTFS, Path.resolve() calls GetFinalPathNameByHandleW which canonicalizes
+        # existing case-insensitive directories to their true on-disk name.
+        cases.extend(
+            [
+                str(data_dir / "Workspace" / "x.md"),
+                str(data_dir / "memory" / "agents" / "stira" / "memory" / "EPISODIC" / "x.md"),
+            ]
+        )
+    for path in cases:
         assert not policy.check(path).allowed, path
 
 
@@ -473,8 +482,10 @@ def test_stira_doctor_cli_mirrors_the_server_floor(tmp_path, monkeypatch, capsys
     assert report["roots"][0]["findings"][0]["code"] == "floor"
     assert cli.main(["doctor", "--json"]) == 0
     report = json.loads(capsys.readouterr().out)
-    assert report["roots"][0]["root"] == "@workspace" and report["roots"][0]["status"] == "ok"
-    assert report["workspace"].endswith("stira/workspace")
+    expected_status = "warning" if os.name == "nt" else "ok"
+    assert report["roots"][0]["root"] == "@workspace"
+    assert report["roots"][0]["status"] == expected_status
+    assert report["workspace"].replace("\\", "/").endswith("stira/workspace")
     assert list((data_dir / "workspace").iterdir()) == []  # the probe was removed
 
 

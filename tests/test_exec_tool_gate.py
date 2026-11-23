@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 import pytest
 
@@ -41,14 +42,16 @@ def test_default_excludes_exec_tools(fake_registry):
 def test_include_exec_true_exposes_and_warns(fake_registry, caplog):
     with caplog.at_level(logging.WARNING, logger=tool_registry.__name__):
         names = _names(tool_registry.get_tools(include_exec=True))
-    assert tool_registry.EXEC_TOOL_NAMES <= names
+    expected = tool_registry.EXEC_TOOL_NAMES - ({"shell"} if os.name == "nt" else set())
+    assert expected <= names
     assert "Exec-class tools are enabled" in caplog.text
 
 
 def test_env_var_enables_exec(fake_registry, monkeypatch):
     monkeypatch.setenv(tool_registry.EXEC_ENV_VAR, "1")
-    assert "shell" in _names(tool_registry.get_tools())
-    assert "shell" not in _names(tool_registry.get_tools(include_exec=False))
+    probe = "batch" if os.name == "nt" else "shell"
+    assert probe in _names(tool_registry.get_tools())
+    assert probe not in _names(tool_registry.get_tools(include_exec=False))
 
 
 @pytest.mark.parametrize("value", ["", "0", "false", "no", "off", "maybe"])

@@ -56,7 +56,7 @@ def test_an_absolute_directory_is_resolved_through_symlinks(tmp_path):
     [
         ("relative/data", "must be an absolute path"),
         ("~/data", "must be an absolute path"),
-        ("/", "filesystem root, the home directory"),
+        (str(Path(Path.home().anchor)), "filesystem root, the home directory"),
         (str(Path.home()), "filesystem root, the home directory"),
         (str(Path.home().parent), "filesystem root, the home directory"),
     ],

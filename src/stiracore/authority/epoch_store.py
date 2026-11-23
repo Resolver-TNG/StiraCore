@@ -280,7 +280,12 @@ def load(data_dir: Path) -> LoadResult:
         return LoadResult("bad", reason="epoch_store_unsafe")
     if info.st_size > _MAX_BYTES:
         return LoadResult("bad", reason="epoch_store_malformed")
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
     try:
         fd = os.open(path, flags)
     except OSError as error:
@@ -332,7 +337,13 @@ def write(data_dir: Path, records: tuple[EpochRecord, ...]) -> Identity:
         {"v": 1, "records": [record.as_dict() for record in kept]}, sort_keys=True
     ).encode("ascii")
     tmp = directory / f".{EPOCH_FILE}.{os.getpid()}.{os.urandom(4).hex()}.tmp"
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    flags = (
+        os.O_WRONLY
+        | os.O_CREAT
+        | os.O_EXCL
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
     fd = os.open(tmp, flags, 0o600)
     try:
         try:

@@ -11,6 +11,8 @@ the accessibility gate on 3.12, the provider extras).
 | `images.sh` | `list`, `build [3.11 3.12] [--no-cache]`, `prune` for the `stira-ci:py3.11` / `py3.12` images |
 | `run_sharded.sh` | `run_sharded.sh <py> <source dir> [shards=4]` — runs the shards + misc and prints one result table |
 | `normalize_modes.sh` | sets every tracked file to the mode git records (a NAS file system with inherited ACLs made all files executable and ruff EXE002 failed) |
+| `gate.sh` | `gate.sh <ref> [--py both]` — one gate run: one new log per run, a lock (one gate at a time on the NAS), a `=== done rc=N` end marker, then `gate_verdict.py`; prints `GATE <sha> <ref>: PASS/FAIL/INCOMPLETE` and exits 0 / 1 / 2 (3 = another gate is running) |
+| `gate_verdict.py` | judges a gate log: PASS only if the run has ended, there is one result block per Python version, every shard and `misc` is rc 0, the coverage guard agrees, no `step failed`, and the tested commit is the expected one. A green 3.11 block while 3.12 (where ruff runs) is still running is INCOMPLETE, not PASS |
 | `nas_run.sh` | from your machine: `nas_run.sh [--py 3.11\|3.12\|both] [--ref origin/main] [--shards 4]` — clones the ref, ships it to the Docker host over ssh, runs it |
 
 ## Quick start
@@ -59,3 +61,8 @@ CPU stays around 80% and memory under 20% on the host with 4 shards (1 CPU, 3 GB
 
 macOS and Windows cannot run in a Linux container. `ci.yml` keeps macOS; Windows is out of CI for now (#662, #677).
 Coverage (`--cov`) of the 3.12 job is not collected here.
+
+## Reading a result (do not read the first PASS)
+
+`--py both` prints a block for 3.11 and then one for 3.12; ruff and the format check run only in the 3.12 `misc` container. A merge on the first
+`LINUX CI: PASS` (2026-11-21) left main red a few minutes later. Use `gate.sh` (or `gate_verdict.py <log> --versions 2 --sha <sha>`) and merge only on `PASS`.

@@ -56,6 +56,7 @@ def _home(tmp_path, monkeypatch):
     (home / ".ssh").mkdir(parents=True)
     (home / ".ssh" / "authorized_keys").write_text("ssh-ed25519 AAAA ok\n", encoding="utf-8")
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     return home
 
 

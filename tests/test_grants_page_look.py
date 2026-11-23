@@ -957,6 +957,10 @@ def test_page_tools_stop_when_the_subtree_root_was_replaced(tmp_path, monkeypatc
             return look(2)
         return [use("view_image", {"path": env.shots[-1]})]
 
+    if os.name == "nt":
+        probe = tmp_path / "_symlink_probe"
+        probe.mkdir()
+        (tmp_path / "_symlink_probe_link").symlink_to(probe, target_is_directory=True)
     env = issued(page_env(tmp_path, monkeypatch, [look(), swapped, [{"text": "x"}]]))
     view = run_one(env)
     assert view["end"] == "workspace_changed" and view["tool_calls"] == 1

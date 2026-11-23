@@ -299,7 +299,8 @@ def test_delete_leaves_no_copy_in_index_archive_history_or_summaries(tmp_path):
     job_file = data / ARCHIVE / f"delete-{result['job']['id']}.json"
     job = json.loads(job_file.read_text())
     assert job["state"] == "completed" and job["steps"] == [] and job["attempts"] == 1
-    assert stat.S_IMODE(job_file.stat().st_mode) == 0o600
+    if os.name != "nt":
+        assert stat.S_IMODE(job_file.stat().st_mode) == 0o600
 
 
 def test_a_failed_delete_job_resumes_without_bringing_anything_back(tmp_path, monkeypatch):
@@ -546,7 +547,8 @@ def test_retention_apply_archives_over_limit_items_and_restore_undoes_it(tmp_pat
     kinds = [json.loads(line)["kind"] for line in layout.audit_log.read_text().splitlines()]
     assert kinds[-2:] == ["remove.started", "remove.applied"]
     record = data / ARCHIVE / f"removed-{result['removal_id']}.json"
-    assert stat.S_IMODE(record.stat().st_mode) == 0o600
+    if os.name != "nt":
+        assert stat.S_IMODE(record.stat().st_mode) == 0o600
 
     undone = restore(layout, result["removal_id"])
 
@@ -1109,6 +1111,7 @@ def test_an_unfinished_job_keeps_digests_only_and_resume_needs_the_same_ids(tmp_
 # -- round 4: nothing secret in the job file or its output; unreadable dirs ------
 
 
+@pytest.mark.skipif(os.name == "nt", reason="os.chmod(dir, 0o500) does not deny unlinks on Windows")
 def test_a_secret_in_a_file_name_never_reaches_the_job_file_or_the_output(tmp_path, capsys):
     """A real PermissionError names the file; the residual names it too. Neither the
     job file nor the CLI output may hold it (codes, fixed labels and digests only)."""
@@ -1140,6 +1143,9 @@ def test_a_secret_in_a_file_name_never_reaches_the_job_file_or_the_output(tmp_pa
     assert _holding(data) == NOT_REACHED
 
 
+@pytest.mark.skipif(
+    os.name == "nt", reason="os.chmod(dir, 0o000) does not deny directory reads on Windows"
+)
 def test_an_unreadable_directory_is_never_skipped_silently(tmp_path, capsys):
     """os.walk would skip it: the plan reports it, --apply is refused, retention too."""
     data, _store, _keys = _build(tmp_path, removal_record=False)
@@ -1177,6 +1183,9 @@ def test_an_unreadable_directory_is_never_skipped_silently(tmp_path, capsys):
 # -- round 5: refusals print codes, areas and digests; derived targets survive resume --
 
 
+@pytest.mark.skipif(
+    os.name == "nt", reason="os.chmod(dir, 0o000) does not deny directory reads on Windows"
+)
 def test_a_refused_retention_apply_prints_no_path(tmp_path, capsys):
     data, _store, _keys = _build(tmp_path, removal_record=False)
     sealed = data / "checkpoints" / CANARY

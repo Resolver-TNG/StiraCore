@@ -158,7 +158,7 @@ test('hostile values: codes only, a bad id is no id, unknown codes are shown as 
   assert.equal(g.outcomes[0].ok, null);
   assert.ok(g.outcomes[2].text.includes('other, editor'), 'a bad tool name is "other"');
   const many = A.grantView(grant({ outcomes: [{ what: 'done', tools: Array(20).fill('editor') }] }), NOW, NOW, t);
-  assert.equal(many.outcomes[0].text.split('editor').length - 1, 8, 'at most 8 tool names');
+  assert.equal(many.outcomes[0].text.split('editor').length - 1, 10, 'at most 10 tool names (outcomeView: slice(0, 10))');
 });
 
 test('#791: a self-development grant has a badge in words with a tooltip; the flag is a boolean only', async () => {

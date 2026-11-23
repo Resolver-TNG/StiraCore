@@ -73,6 +73,43 @@ if not getattr(FlaskClient.open, "_stira_csrf_wrapped", False):
 
 import pytest
 
+# --- Windows symlinks without Developer Mode / SeCreateSymbolicLinkPrivilege (#662) ----
+# Product code never creates symlinks (only refuses them); tests create symlinks to verify
+# refusal paths (sometimes inside monkeypatched hooks where product code catches OSError).
+# On Windows hosts without Developer Mode or elevated privilege, convert WinError 1314 from
+# non-pytest callers into pytest.skip so pytest's own tmp_path internals stay untouched
+# while symlink-dependent tests skip cleanly (and run normally when symlinks work).
+if os.name == "nt" and not getattr(os.symlink, "_stira_win1314_wrapped", False):
+    import sys as _sys
+
+    _real_os_symlink = os.symlink
+
+    def _called_from_pytest_internal() -> bool:
+        frame = _sys._getframe(2)
+        for _ in range(4):
+            if frame is None:
+                return False
+            filename = frame.f_code.co_filename.replace("\\", "/")
+            if "/_pytest/" in filename or "/pytest/" in filename:
+                return True
+            if "/tests/" in filename:
+                return False
+            frame = frame.f_back
+        return False
+
+    def _win_symlink(*args, **kwargs):
+        try:
+            return _real_os_symlink(*args, **kwargs)
+        except OSError as error:
+            if getattr(error, "winerror", None) == 1314 and not _called_from_pytest_internal():
+                pytest.skip(
+                    "symbolic links require Windows Developer Mode or privilege (WinError 1314)"
+                )
+            raise
+
+    _win_symlink._stira_win1314_wrapped = True
+    os.symlink = _win_symlink
+
 
 @pytest.fixture(autouse=True)
 def _block_aws_network(request, monkeypatch):

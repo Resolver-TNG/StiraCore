@@ -283,7 +283,15 @@ def test_owner_lock_is_refused_across_processes(tmp_path):
         with pytest.raises(HeartbeatLockError):
             HeartbeatOwnerLock(tmp_path).acquire()
     finally:
-        holder.kill()
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(holder.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        else:
+            holder.kill()
         holder.wait(10)
         holder.stdout.close()
     # The kernel released the dead owner's lock: no stale lock file problem.

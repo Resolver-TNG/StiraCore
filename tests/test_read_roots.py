@@ -209,6 +209,17 @@ def test_adding_a_read_root_makes_it_readable(data_dir, outside):
 
 
 def test_a_root_of_slash_reads_etc_hosts(data_dir):
+    if os.name == "nt":
+        hosts = (
+            Path(os.environ.get("SYSTEMROOT", r"C:\Windows"))
+            / "System32"
+            / "drivers"
+            / "etc"
+            / "hosts"
+        )
+        tools = _tools(data_dir, read_roots=[hosts.anchor])
+        assert _run(tools["file_read"], {"path": str(hosts)})["status"] == "success"
+        return
     tools = _tools(data_dir, read_roots=["/"])
     assert _run(tools["file_read"], {"path": "/etc/hosts"})["status"] == "success"
 

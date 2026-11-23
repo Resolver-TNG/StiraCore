@@ -24,12 +24,36 @@ Phase 0 **only observes**: no prompt, tool result, gate decision or cached promp
   `credential_by_reference`, `sensitive_context`, `untrusted_send`, `long_payload`. No
   destination list exists yet, so none is listed. Nothing is held.
 
+* **`agent_address`** (a signal, not a gate): the results of `external` tools in the context
+  are read for text that *talks to the agent* (`stiracore/middleware/agent_address.py`, rules in
+  Japanese and English, no model call). Per turn the row carries `scanned` (external results
+  with text that were read), `flagged` (results with at least one code) and `codes`
+  (`agent_heading`, `override`, `authority_tag`, `no_confirmation`, `exfil_request`,
+  `hidden_carrier`, `obfuscated`; counts of results). Only external results are read (not the
+  workspace, memory, program or child results, whose text is not a stranger's by origin).
+  Limits per turn: the newest 200 results, 500,000 characters (an oversize result is skipped, not a
+  stop), and **only the first 50,000 characters of one result**. A weak sign (a role name,
+  `curl | sh`) counts only next to a strong one; text that *discusses* injection (two words of the
+  topic close together, no heading aimed at the agent) is not flagged.
+  **It can be switched off on purpose:** adding two words of the topic anywhere in the result
+  (within 400 characters of each other; a footer will do) or an example-quotation frame next
+  to a plain request, writing it in another style or language, padding the first 50,000 characters,
+  or hiding the payload behind more than five base64-looking runs gives no code. A hidden
+  carrier, a spacing / width / zero-width disguise and a decoded base64 hit are not suppressed by
+  the discussion filter, and a reading that runs out of budget (more hidden places than it reads)
+  counts as a hidden carrier instead of staying silent. It also does not say whether the author can be trusted (the label says
+  that), and it misses a request written as plain prose with no marker. Measured: on 114
+  hand-written cases (the regression corpus, which the rules were tuned on) 58 of 60 addressed and
+  0 of 54 ordinary texts were flagged; on 5,373 machine-written, machine-checked samples (not tuned
+  on) about 51% of the addressed and 6.5% of the ordinary ones. Nothing is held and no approval
+  card changes; a later phase can show it to the person.
+
 ## Where to read it
 
-* One `taint.observed` event per turn: codes and counts only (no text, argument, URL or host).
+* One `taint.observed` event per turn: codes and counts only (no text, argument, URL or host), including the `agent_address` counts.
 * `turn.summary` gains `taint` (same fields).
 * `GET /api/taint` (read only): the switch, the vocabulary, the last turn and totals.
-* Weekly summary: `python -m stiracore.control.taint_cli --data-dir DIR summary [--days 7]`.
+* Weekly summary: `python -m stiracore.control.taint_cli --data-dir DIR summary [--days 7]` (adds `agent_address_codes` and the `address_*` totals).
 
 ## Known limits of phase 0
 

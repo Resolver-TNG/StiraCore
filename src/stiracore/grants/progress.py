@@ -160,6 +160,7 @@ def _sample_digest(path: str) -> bytes | None:
 def _read_digest(path: str, *, sampled: bool) -> bytes | None:
     flags = (
         os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
         | getattr(os, "O_NOFOLLOW", 0)
         | getattr(os, "O_NONBLOCK", 0)
         | getattr(os, "O_CLOEXEC", 0)
@@ -483,7 +484,13 @@ def read_files(
         if digest is None:
             return None
         digests[path] = digest
-        settled = key != ABSENT and key[3] <= (_now() - CACHE_SETTLE_SEC) * 1_000_000_000
+        # On Windows st_ctime_ns is creation time, not inode change time, so a same-size
+        # edit with restored mtime keeps the same stat key; never rely on the stat cache there.
+        settled = (
+            os.name != "nt"
+            and key != ABSENT
+            and key[3] <= (_now() - CACHE_SETTLE_SEC) * 1_000_000_000
+        )
         if settled and len(digest) == 32 and _stat_key(path) == key:
             kept[path] = (key, digest)
     return digests, kept

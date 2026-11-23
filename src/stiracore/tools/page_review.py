@@ -325,7 +325,12 @@ def _refused(code: str, message: str) -> Outcome:
 def _read_shot(path: str, size: int, sha256: str) -> bytes | None:
     """The file's bytes when it is still what Stira wrote: a regular file, opened without
     following a link, of the recorded size and SHA-256. Anything else: ``None``."""
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
     try:
         fd = os.open(path, flags)
     except OSError:

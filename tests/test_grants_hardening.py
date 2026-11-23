@@ -343,6 +343,9 @@ def test_a_same_bytes_rewrite_in_an_unknown_iteration_then_reading_is_no_progres
 # --- #632-4: an unknown iteration keeps the validated stat cache --------------------------------
 
 
+@pytest.mark.skipif(
+    os.name == "nt", reason="stat cache disabled on Windows (st_ctime is creation time)"
+)
 def test_a_tracked_set_within_the_budget_heals_after_one_unknown_iteration(tmp_path, monkeypatch):
     monkeypatch.setattr(pg, "DIGEST_BUDGET", 100 * 1024)  # scaled: 5 x 30 KiB > 100 KiB
     env = make_env(tmp_path, max_iterations=20)
@@ -359,6 +362,9 @@ def test_a_tracked_set_within_the_budget_heals_after_one_unknown_iteration(tmp_p
     assert seen == [1, 0, 0], seen  # unknown once (over the budget), then healed
 
 
+@pytest.mark.skipif(
+    os.name == "nt", reason="stat cache disabled on Windows (st_ctime is creation time)"
+)
 def test_an_unknown_iteration_keeps_the_cache_entries_it_validated(tmp_path, monkeypatch):
     env = make_env(tmp_path, max_iterations=20)
     for n in range(3):

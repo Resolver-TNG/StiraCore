@@ -151,7 +151,13 @@ def _load_or_create_key(directory: Path) -> bytes:
     if key is not None:
         return key
     key = secrets.token_bytes(32)
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    flags = (
+        os.O_WRONLY
+        | os.O_CREAT
+        | os.O_EXCL
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
     try:
         fd = os.open(path, flags, 0o600)
     except FileExistsError:  # another start wrote it first: that one is the install's key

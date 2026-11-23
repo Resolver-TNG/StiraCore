@@ -81,8 +81,12 @@ def test_the_standard_matrix_matches_with_the_observer(
             hitl=callback, action=action, observer=observer,
         )  # fmt: skip
         outcome = _outcome(agent, model, calls, "file_write", callback)
+        import re
+
         side = "observed" if observed else "reference"
-        text = json.dumps(_results(agent)).replace(f"/{side}/", "/<root>/")
+        text = re.sub(
+            rf"(/|\\+){re.escape(side)}(/|\\+)", r"\1<root>\2", json.dumps(_results(agent))
+        )
         measured.append((outcome, text, agent.engine.breaker_status().level, path.exists()))
         if observer is not None and expected == "blocked:identity":
             assert observer.snapshot()["codes"].get("write_floor") == 1, case

@@ -35,7 +35,10 @@ class FakeWriteTool(AgentTool):
         return "python"
 
     async def stream(self, tool_use: dict, invocation_state: dict, **kwargs: Any):
-        Path(tool_use["input"]["path"]).write_text("injected", encoding="utf-8")
+        from stiracore.tools.file_editor_tool import from_editor_path
+
+        path = from_editor_path(tool_use["input"]["path"])
+        Path(path).write_text("injected", encoding="utf-8")
         yield {
             "tool_result": {
                 "toolUseId": tool_use["toolUseId"],

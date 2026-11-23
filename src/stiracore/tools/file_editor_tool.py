@@ -170,6 +170,18 @@ class StiraWriteSandbox(Sandbox):
         yield  # pragma: no cover - marks this as an async generator
 
 
+# Chosen once at import: a wrapper around ``os.scandir`` (instrumentation, a test patch) must not
+# silently switch a POSIX host from the descriptor path to the path-based fallback.
+_LIST_BY_DESCRIPTOR = os.scandir in os.supports_fd and hasattr(os, "O_DIRECTORY")
+# Windows reparse points (junctions, mount points, cloud placeholders, symlinks) are never
+# listed through the fallback: lstat reports a junction as a plain directory.
+_FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+
+
+def _is_reparse_point(info: os.stat_result) -> bool:
+    return bool(getattr(info, "st_file_attributes", 0) & _FILE_ATTRIBUTE_REPARSE_POINT)
+
+
 def _list_under_floor(floor: Any, target: Path, shown: str) -> list[FileInfo]:
     """List ``target`` under the read floor (#312/#316), by descriptor, never by name.
 
@@ -182,20 +194,40 @@ def _list_under_floor(floor: Any, target: Path, shown: str) -> list[FileInfo]:
     plain entry, never followed or walked. A path the floor refuses by name whose
     descriptor is not a floor directory (a swap), or a walk that fails, is refused.
     """
-    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
-    try:
-        descriptor = os.open(target, flags)
-    except FileNotFoundError as error:
-        raise SandboxPathNotFoundError(shown) from error
-    except NotADirectoryError as error:
-        # macOS reports a final symlink under O_DIRECTORY|O_NOFOLLOW as ENOTDIR.
-        if os.path.islink(target):
+    use_fd = _LIST_BY_DESCRIPTOR
+    descriptor: int | None = None
+    if use_fd:
+        flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            descriptor = os.open(target, flags)
+        except FileNotFoundError as error:
+            raise SandboxPathNotFoundError(shown) from error
+        except NotADirectoryError as error:
+            # macOS reports a final symlink under O_DIRECTORY|O_NOFOLLOW as ENOTDIR.
+            if os.path.islink(target):
+                raise PermissionError(f"{READ_FLOOR_ERROR}: listing refused") from error
+            raise SandboxPathNotFoundError(shown) from error
+        except OSError as error:
             raise PermissionError(f"{READ_FLOOR_ERROR}: listing refused") from error
-        raise SandboxPathNotFoundError(shown) from error
-    except OSError as error:
-        raise PermissionError(f"{READ_FLOOR_ERROR}: listing refused") from error
+    else:
+        try:
+            opened = os.lstat(target)
+        except FileNotFoundError as error:
+            raise SandboxPathNotFoundError(shown) from error
+        except NotADirectoryError as error:
+            raise SandboxPathNotFoundError(shown) from error
+        except OSError as error:
+            raise PermissionError(f"{READ_FLOOR_ERROR}: listing refused") from error
+        if stat_module.S_ISLNK(opened.st_mode) or _is_reparse_point(opened):
+            raise PermissionError(f"{READ_FLOOR_ERROR}: listing refused")
+        if not stat_module.S_ISDIR(opened.st_mode):
+            raise SandboxPathNotFoundError(shown)
+        if opened.st_ino == 0:
+            # No usable file identity (some FAT/SMB volumes): the floor cannot judge it.
+            raise PermissionError(f"{READ_FLOOR_ERROR}: listing refused")
     try:
-        opened = os.fstat(descriptor)
+        if descriptor is not None:
+            opened = os.fstat(descriptor)
         try:
             protected, names = floor.listing((opened.st_dev, opened.st_ino))
         except OSError as error:
@@ -206,7 +238,14 @@ def _list_under_floor(floor: Any, target: Path, shown: str) -> list[FileInfo]:
                 reason = decision.reason if decision.code != "invalid" else READ_FLOOR_ERROR
                 raise PermissionError(f"{reason}: listing refused")
         results: list[FileInfo] = []
-        with os.scandir(descriptor) as entries:
+        scan_target: Any = descriptor if descriptor is not None else target
+        try:
+            scanner = os.scandir(scan_target)
+        except FileNotFoundError as error:
+            raise SandboxPathNotFoundError(shown) from error
+        except OSError as error:
+            raise PermissionError(f"{READ_FLOOR_ERROR}: listing refused") from error
+        with scanner as entries:
             for entry in sorted(entries, key=lambda e: e.name):
                 if names is not None and entry.name not in names:
                     continue
@@ -214,6 +253,8 @@ def _list_under_floor(floor: Any, target: Path, shown: str) -> list[FileInfo]:
                     continue  # the secret-name floor (#457): never says such a file exists
                 try:
                     info = entry.stat(follow_symlinks=False)
+                    if not use_fd and info.st_ino == 0:
+                        info = os.lstat(entry.path)
                 except OSError:
                     continue
                 is_dir = stat_module.S_ISDIR(info.st_mode)
@@ -222,9 +263,23 @@ def _list_under_floor(floor: Any, target: Path, shown: str) -> list[FileInfo]:
                 if (info.st_dev, info.st_ino) in protected:
                     continue
                 results.append(FileInfo(name=entry.name, is_dir=is_dir, size=info.st_size))
+        if descriptor is None:
+            # The path-based fallback judged ``opened`` by name and listed whatever the name
+            # points to at scan time: refuse when the directory is no longer the one judged.
+            try:
+                again = os.lstat(target)
+            except OSError as error:
+                raise PermissionError(f"{READ_FLOOR_ERROR}: listing refused") from error
+            if (
+                stat_module.S_ISLNK(again.st_mode)
+                or _is_reparse_point(again)
+                or (again.st_dev, again.st_ino) != (opened.st_dev, opened.st_ino)
+            ):
+                raise PermissionError(f"{READ_FLOOR_ERROR}: listing refused")
         return results
     finally:
-        os.close(descriptor)
+        if descriptor is not None:
+            os.close(descriptor)
 
 
 def _os_error(error: FileReadError) -> OSError:

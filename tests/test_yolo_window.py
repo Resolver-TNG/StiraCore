@@ -606,7 +606,9 @@ def test_the_marker_write_is_durable_in_order(tmp_path, monkeypatch):
         )[1],
     )
     WindowMarker(tmp_path).write("open", "a" * 32, "b" * 64)
-    assert calls == ["flush", "rename", "flush"]  # file, rename, directory
+    # Windows cannot open/fsync a directory descriptor (fsync_dir is a no-op there, #543).
+    expected = ["flush", "rename"] if os.name == "nt" else ["flush", "rename", "flush"]
+    assert calls == expected  # file, rename[, directory]
     assert [p.name for p in tmp_path.iterdir()] == [MARKER_NAME]
 
 

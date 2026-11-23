@@ -26,6 +26,10 @@ INPUT = {"path": "notes/a.txt", "content": "hello"}
 
 
 def _build(tmp_path, monkeypatch, allowance, scheduler=False, host_confirm="command"):
+    import os
+
+    if os.name == "nt" and allowance not in (None, "off") and host_confirm == "command":
+        pytest.skip("YOLO host command channel requires POSIX AF_UNIX (#540)")
     from dashboard import stira_server
     from stiracore.agent import nxp_agent, stimulus_classifier
     from stiracore.agent.stimulus_classifier import StimulusResult

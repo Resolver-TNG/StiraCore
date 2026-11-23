@@ -41,7 +41,10 @@ def test_only_the_listed_descriptions_change_and_schemas_are_identical():
     tools = tool_registry.get_tools(None, include_exec=True)
     sent = {t.tool_name: t.tool_spec for t in tools}
     compacted = set(COMPACT_DESCRIPTIONS) & set(sent)
-    assert {"current_time", "shell", "think", "use_agent", "swarm", "graph", "cron"} <= compacted
+    expected = {"current_time", "shell", "think", "use_agent", "swarm", "graph", "cron"}
+    if os.name == "nt":
+        expected.discard("shell")
+    assert expected <= compacted
     for tool in tools:
         name, spec, upstream = tool.tool_name, tool.tool_spec, _upstream_spec(tool)
         if name in compacted:

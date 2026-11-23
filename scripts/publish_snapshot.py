@@ -104,7 +104,7 @@ def check_report(report: dict, tree: Path, allow_no_smoke: bool) -> list[str]:
 
 def remote_matches(url: str, expect: str) -> bool:
     def norm(s: str) -> str:
-        s = s.strip().rstrip("/")
+        s = s.strip().replace("\\", "/").rstrip("/")
         return s.removesuffix(".git").lower()
 
     u, e = norm(url), norm(expect)

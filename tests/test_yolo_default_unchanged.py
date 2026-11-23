@@ -152,7 +152,12 @@ def test_without_the_allowance_no_yolo_refusal_exists(prints):
     # Phase 2: the same loosening after the call — applied as on main without the
     # allowance; with it, only a host confirmation applies it (428, nothing saved).
     assert off["loosening_after_tool_call"] == [200, None]
-    assert on["loosening_after_tool_call"] == [428, "host_confirmation_required"]
+    expected_loosening = (
+        [503, "host_channel_unavailable"]
+        if os.name == "nt"
+        else [428, "host_confirmation_required"]
+    )
+    assert on["loosening_after_tool_call"] == expected_loosening
     # (OFF already applied it during the call above: the rule is Ask there.) ON: nothing.
     assert "http_request" in json.loads(off["rules_after"])["ask_tools"]
     assert on["rules_after"] == on["rules_before"]

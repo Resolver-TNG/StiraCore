@@ -99,7 +99,8 @@ def test_upstream_editor_cache_overwrites_an_external_change(tmp_path, upstream_
 def test_upstream_editor_relative_create_fails(tmp_path, monkeypatch, upstream_editor):
     monkeypatch.chdir(tmp_path)
     result = upstream_editor(command="create", path="rel.txt", file_text="x")
-    assert result["status"] == "error" and "No such file or directory: ''" in _text(result)
+    expected = ": ''" if os.name == "nt" else "No such file or directory: ''"
+    assert result["status"] == "error" and expected in _text(result)
 
 
 @pytest.mark.skipif(not DARWIN, reason="uchg is a BSD/macOS file flag")
@@ -329,7 +330,9 @@ def test_sandbox_runs_nothing_and_removes_nothing(ws):
 
 def test_raw_editor_without_the_wrapper_cannot_write(ws):
     raw = tool_registry.WRITE_TOOLS["editor"].wrapped
-    result = _call(raw, {"command": "create", "path": str(ws / "raw.txt"), "file_text": "x"})
+    result = _call(
+        raw, {"command": "create", "path": to_editor_path(str(ws / "raw.txt")), "file_text": "x"}
+    )
     assert result["status"] == "error" and NOT_APPROVED in _text(result)
     assert not (ws / "raw.txt").exists()
 

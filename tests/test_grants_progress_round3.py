@@ -111,8 +111,11 @@ def test_a_persons_edit_of_a_cached_file_is_seen(tmp_path):
     _iterate(env, _create(env, "a.txt", "v1"))
     path = env.sub / "a.txt"
     os.utime(path, ns=(10**18, 10**18))
-    _iterate(env, _checks_call(env))  # reads a.txt settled: cached
-    assert env.executor._trackers.find(env.grant_id).cache()
+    _iterate(
+        env, _checks_call(env)
+    )  # reads a.txt settled: cached on POSIX (never cached on Windows)
+    if os.name != "nt":
+        assert env.executor._trackers.find(env.grant_id).cache()
     path.write_text("v2")  # a person edits it (same size) and puts the mtime back
     os.utime(path, ns=(10**18, 10**18))
     _iterate(env, _checks_call(env, 2))
@@ -216,7 +219,8 @@ def test_a_digest_under_two_seconds_old_is_not_cached(tmp_path, monkeypatch):
     assert not cache
     monkeypatch.setattr(pg, "_now", lambda: mtime / 1e9 + 3.0)  # 3 s after
     _, cache = pg.read_files([str(a)], {})
-    assert cache
+    if os.name != "nt":
+        assert cache
 
 
 def test_the_digest_byte_budget_is_per_iteration(tmp_path, monkeypatch):
@@ -241,6 +245,7 @@ def test_an_iteration_over_the_byte_budget_is_unknown(tmp_path, monkeypatch):
     assert grant(env).no_progress == 1 and list(tracker.ring) == []
 
 
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="os.mkfifo is POSIX-only")
 def test_a_file_about_to_leave_the_identity_is_not_read(tmp_path, monkeypatch):
     monkeypatch.setattr(pg, "FILES_KEPT", 2)
     env = make_env(tmp_path)

@@ -54,6 +54,7 @@ from __future__ import annotations
 import _socket
 import ipaddress
 import logging
+import os
 import socket
 import sys
 import threading
@@ -368,6 +369,34 @@ def is_wildcard(host: str) -> bool:
     return address is not None and address.is_unspecified
 
 
+def _install_windows_asyncio_hook() -> None:
+    """Emit ``socket.connect`` audit events for Windows ProactorEventLoop connects.
+
+    On Windows, ``asyncio.windows_events.IocpProactor.connect`` calls
+    ``_overlapped.Overlapped.ConnectEx`` / ``WSAConnect`` directly without raising
+    CPython's ``socket.connect`` audit event, which would otherwise bypass ``_hook``.
+    """
+    if os.name != "nt":
+        return
+    try:
+        import asyncio.windows_events as win_events
+    except Exception as error:  # noqa: BLE001
+        # Not silent: without this hook a ProactorEventLoop connect is not audited.
+        _LOG.warning("%s: the asyncio connect guard is not installed: %s", REASON_CODE, error)
+        return
+    proactor = getattr(win_events, "IocpProactor", None)
+    if proactor is None or getattr(proactor.connect, "_stira_own_dashboard_hooked", False):
+        return
+    original_connect = proactor.connect
+
+    def _guarded_connect(self, conn, address):
+        sys.audit("socket.connect", conn, address)
+        return original_connect(self, conn, address)
+
+    _guarded_connect._stira_own_dashboard_hooked = True
+    proactor.connect = _guarded_connect
+
+
 def arm(host: str, port: int, *, wildcard: bool = False, also_ports=()) -> Target:
     """Refuse own-dashboard connections from now on (idempotent; re-arm replaces).
 
@@ -387,6 +416,7 @@ def arm(host: str, port: int, *, wildcard: bool = False, also_ports=()) -> Targe
     with _INSTALL_LOCK:
         if not _INSTALLED:
             sys.addaudithook(_hook)
+            _install_windows_asyncio_hook()
             _INSTALLED = True
         _TARGET = target
     return target

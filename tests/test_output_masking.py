@@ -121,7 +121,9 @@ def run(tmp_path_factory):
         payload = client.get(f"/api/turns/{turns[-1]['turn_id']}/tools/use-1/output")
         history = client.get("/api/chat/history").get_data(as_text=True)
         files = {
-            str(path.relative_to(data)): _dump(path) for path in data.rglob("*") if path.is_file()
+            path.relative_to(data).as_posix(): _dump(path)
+            for path in data.rglob("*")
+            if path.is_file() and not (os.name == "nt" and path.name.endswith(".lock"))
         }
     finally:
         for handler in handlers:

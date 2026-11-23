@@ -126,7 +126,8 @@ def test_events_form_a_chain_anchored_by_an_owner_only_head(tmp_path):
         assert prev_hash == prev
         prev = digest
     head_path = tmp_path / "events.db.head"
-    assert stat.S_IMODE(os.stat(head_path).st_mode) == 0o600
+    if os.name != "nt":
+        assert stat.S_IMODE(os.stat(head_path).st_mode) == 0o600
     previous, latest = read_head(head_path, "observability")
     assert (latest.seq, latest.hash) == (3, prev)
     assert previous.seq == 2
@@ -811,7 +812,7 @@ def test_kill_9_between_head_and_commit_is_recovered(tmp_path):
     _store(tmp_path, 2).close()
     proc = _writer(path, "k", 1, mode="kill-before-commit")
     proc.communicate(timeout=60)
-    assert proc.returncode == -9
+    assert proc.returncode == (9 if os.name == "nt" else -9)
     store = _reopen(tmp_path)
     assert store.healthy, store.error
     assert store.recovery is not None and store.recovery["head_seq"] == 3
@@ -826,7 +827,10 @@ def test_kill_9_at_an_arbitrary_point_never_leaves_an_unverifiable_chain(tmp_pat
     _store(tmp_path).close()
     proc = _writer(path, "r", 100000, mode="loop")
     assert proc.stdout.readline().strip() == "ready"
-    proc.send_signal(signal.SIGKILL)
+    if hasattr(signal, "SIGKILL"):
+        proc.send_signal(signal.SIGKILL)
+    else:
+        proc.kill()
     proc.communicate(timeout=60)
     store = _reopen(tmp_path)
     assert store.healthy, store.error  # consistent, or recovered (head one ahead)
@@ -922,7 +926,7 @@ def test_kill_9_after_migration_head_before_commit_migrates_on_reopen(tmp_path):
     proc = subprocess.run(
         [sys.executable, "-c", _MIGRATION_KILLER, str(path)], env=env, timeout=60, check=False
     )
-    assert proc.returncode == -9
+    assert proc.returncode == (9 if os.name == "nt" else -9)
     head = read_head(tmp_path / "events.db.head", "observability")
     assert head is not None and head[0] is None  # migration head, never committed
     store = SQLiteEventStore(path)
