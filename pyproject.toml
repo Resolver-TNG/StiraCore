@@ -16,7 +16,7 @@ authors = [
 dependencies = [
     # Upper bound = the newest minor this repository was last tested against (weekly canary:
     # .github/workflows/canary.yml, #673). Raise it after the canary passes on the newer one.
-    "strands-agents>=1.57.1,<1.65",
+    "strands-agents>=1.57.1,<1.66",
     # Held below 0.8.10: the exec bridge refuses a release it was not audited against
     # (tool_consent.VERIFIED_EXEC_UPSTREAM = 0.8.9). Raise only together with an audit.
     "strands-agents-tools>=0.8.0,<0.8.10",
@@ -58,9 +58,9 @@ bedrock = [
 ]
 # Model providers other than Bedrock (#204). Each maps onto the Strands extra;
 # llama.cpp needs none (its client is httpx, a core dependency).
-anthropic = ["strands-agents[anthropic]>=1.57.1,<1.65"]
-openai = ["strands-agents[openai]>=1.57.1,<1.65"]
-ollama = ["strands-agents[ollama]>=1.57.1,<1.65"]
+anthropic = ["strands-agents[anthropic]>=1.57.1,<1.66"]
+openai = ["strands-agents[openai]>=1.57.1,<1.66"]
+ollama = ["strands-agents[ollama]>=1.57.1,<1.66"]
 gemini = ["strands-agents[gemini]>=1.57.1"]
 litellm = ["strands-agents[litellm]>=1.57.1"]
 mistral = ["strands-agents[mistral]>=1.57.1"]
